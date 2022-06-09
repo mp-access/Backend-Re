@@ -73,7 +73,7 @@ sonarqube {
  */
 bootBuildImage {
     if (project.hasProperty('username')) {
-        imageName = 'sealuzh/access-frontend:re'
+        imageName = 'sealuzh/access-backend:re'
         publish = true
         docker.publishRegistry.username = project.property('username')
         docker.publishRegistry.password = project.property('password')
