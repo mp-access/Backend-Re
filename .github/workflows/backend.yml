@@ -24,5 +24,5 @@ jobs:
     - name: Create Docker Image
       uses: gradle/gradle-build-action@v2.1.4
       with:
-        arguments: bootBuildImage -Pusername=$DOCKERHUB_USERNAME -Ppassword=$DOCKER_PASSWORD
+        arguments: bootBuildImage -Pusername=${{ secrets.DOCKERHUB_USERNAME }} -Ppassword=${{ secrets.DOCKERHUB_PASSWORD }}
         cache-disabled: true
