@@ -21,6 +21,9 @@ public class Task {
 
     private String title;
 
+    @Column(nullable = false)
+    private String url;
+
     @Enumerated(EnumType.STRING)
     private Extension extension;
 
@@ -30,7 +33,7 @@ public class Task {
     @Column(columnDefinition = "text")
     private String description;
 
-    private String gradingSetup;
+    private String gradingCommand;
 
     private Double maxPoints;
 
@@ -45,6 +48,10 @@ public class Task {
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
     private List<TaskFile> files = new ArrayList<>();
+
+    private String solution;
+
+    private String hint;
 
     @Transient
     private String userId;

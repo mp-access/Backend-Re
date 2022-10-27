@@ -2,10 +2,12 @@ package ch.uzh.ifi.access.service;
 
 import ch.uzh.ifi.access.model.*;
 import ch.uzh.ifi.access.model.constants.Extension;
-import ch.uzh.ifi.access.model.constants.FilePermission;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import ch.uzh.ifi.access.model.dto.*;
-import ch.uzh.ifi.access.model.projections.*;
+import ch.uzh.ifi.access.model.projections.AssignmentOverview;
+import ch.uzh.ifi.access.model.projections.CourseOverview;
+import ch.uzh.ifi.access.model.projections.TaskOverview;
+import ch.uzh.ifi.access.model.projections.TaskWorkspace;
 import ch.uzh.ifi.access.repository.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.common.base.CharMatcher;
@@ -19,6 +21,8 @@ import org.eclipse.jgit.api.Git;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
+import org.springframework.security.data.repository.query.SecurityEvaluationContextExtension;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -31,6 +35,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -57,7 +62,19 @@ public class CourseService {
 
     private JsonMapper jsonMapper;
 
-    private AuthService authService;
+    private SecurityEvaluationContextExtension security;
+
+    private String getUserId() {
+        return Objects.requireNonNull(security.getRootObject()).getAuthentication().getName();
+    }
+
+    private String verifyUserId(@Nullable String userId) {
+        return Optional.ofNullable(userId).orElseGet(this::getUserId);
+    }
+
+    private boolean isAssistant(String courseURL) {
+        return Objects.requireNonNull(security.getRootObject()).hasRole(courseURL + "-assistant");
+    }
 
     public Course getCourseByURL(String courseURL) {
         return courseRepository.getByUrl(courseURL).orElseThrow(() ->
@@ -74,71 +91,90 @@ public class CourseService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID " + fileId));
     }
 
-    public List<CourseOverview> getCoursesWithUserProgress(String userId) {
-        List<CourseOverview> courses = courseRepository.findCoursesBy();
-        courses.forEach(course -> course.setUserId(userId));
-        return courses;
+    public List<CourseOverview> getCourses() {
+        return courseRepository.findCoursesBy();
     }
 
-    public CourseWorkspace getCourseWithUserProgress(String courseURL, String userId) {
-        CourseWorkspace course = courseRepository.findByUrl(courseURL).orElseThrow(() ->
+    public CourseOverview getCourse(String courseURL) {
+        return courseRepository.findByUrl(courseURL).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));
-        course.setUserId(userId);
-        return course;
     }
 
-    public List<AssignmentOverview> getAssignmentsWithUserProgress(String courseURL, String userId) {
-        List<AssignmentOverview> assignments = assignmentRepository.findByCourse_UrlOrderByOrdinalNumDesc(courseURL);
-        assignments.forEach(assignment -> assignment.setUserId(userId));
-        return assignments;
+    public List<AssignmentOverview> getAssignments(String courseURL) {
+        return assignmentRepository.findByCourse_UrlOrderByOrdinalNumDesc(courseURL);
     }
 
-    public List<TaskOverview> getTasksWithUserProgress(String courseURL, String assignmentURL, String userId) {
-        List<TaskOverview> tasks = taskRepository.findByAssignment_Course_UrlAndAssignment_UrlOrderByOrdinalNum(courseURL, assignmentURL);
-        tasks.forEach(task -> task.setUserId(userId));
-        return tasks;
+    public AssignmentOverview getAssignment(String courseURL, String assignmentURL) {
+        return assignmentRepository.findByCourse_UrlAndUrl(courseURL, assignmentURL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No assignment found with the URL " + assignmentURL));
     }
 
-    public TaskWorkspace getTaskWorkspace(String courseURL, String assignmentURL, Integer taskNum, String userId) {
-        TaskWorkspace workspace = taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndOrdinalNum(courseURL, assignmentURL, taskNum)
+    public List<TaskOverview> getTasks(String courseURL, String assignmentURL) {
+        return taskRepository.findByAssignment_Course_UrlAndAssignment_UrlOrderByOrdinalNum(courseURL, assignmentURL);
+    }
+
+    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL) {
+        return taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "No task found with the URL: %s/%s/%s".formatted(courseURL, assignmentURL, taskNum)));
+                        "No task found with the URL: %s/%s/%s".formatted(courseURL, assignmentURL, taskURL)));
+    }
+
+    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId) {
+        TaskWorkspace workspace = getTask(courseURL, assignmentURL, taskURL);
         workspace.setUserId(userId);
         return workspace;
     }
 
-    public TaskWorkspace getTaskWorkspace(String courseURL, String assignmentURL, Integer taskNum, String userId, Long submissionId) {
-        TaskWorkspace workspace = getTaskWorkspace(courseURL, assignmentURL, taskNum, userId);
+    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId, Long submissionId) {
+        TaskWorkspace workspace = getTask(courseURL, assignmentURL, taskURL, userId);
         workspace.setSubmissionId(submissionId);
         return workspace;
     }
 
-    public Submission createSubmission(Long taskId, SubmissionDTO submissionDTO) {
-        Submission newSubmission = modelMapper.map(submissionDTO, Submission.class);
-        newSubmission.setTask(getTaskById(taskId));
-        if (newSubmission.getTask().isText() && !newSubmission.isGraded())
-            throw new NotAllowedException("Text tasks can only be evaluated for grading");
-        if (newSubmission.getType().equals(SubmissionType.RUN)) {
-            if (ObjectUtils.isEmpty(submissionDTO.getFileId()))
-                throw new NotFoundException("Submission of 'RUN' type must include the ID of the task file to run");
-            newSubmission.setExecutableFile(getTaskFileById(submissionDTO.getFileId()));
-        }
-        if (newSubmission.isGraded())
-            newSubmission.setOrdinalNum(getSubmissionsCount(taskId, submissionDTO.getUserId()) + 1);
-        submissionDTO.getFiles().forEach(fileDTO -> {
-            SubmissionFile newSubmissionFile = new SubmissionFile();
-            newSubmissionFile.setSubmission(newSubmission);
-            newSubmissionFile.setContent(fileDTO.getContent());
-            newSubmissionFile.setTaskFile(getTaskFileById(fileDTO.getTaskFileId()));
-            newSubmission.getFiles().add(newSubmissionFile);
-        });
-        return submissionRepository.save(newSubmission);
+    public List<TaskFile> getTaskFiles(Long taskId, Long submissionId, String userId) {
+        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdOrderByPermissionAscNameAsc(taskId);
+        permittedFiles.forEach(file ->
+                Optional.ofNullable(submissionId)
+                        .map(id -> submissionFileRepository.findByTaskFile_IdAndSubmission_Id(file.getId(), submissionId))
+                        .orElseGet(() -> submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), verifyUserId(userId)))
+                        .ifPresent(latestSubmissionFile -> file.setContent(latestSubmissionFile.getContent())));
+        return permittedFiles;
+    }
 
+    public boolean isSubmissionOwner(Long submissionId, String userId) {
+        Submission submission = submissionRepository.findById(submissionId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No submission found with the ID " + submissionId));
+        return submission.getUserId().equals(userId);
+    }
+
+    public List<Submission> getSubmissions(String courseURL, Long taskId, String userId) {
+        boolean isAssistant = isAssistant(courseURL);
+        List<Submission> submissions = submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(taskId, verifyUserId(userId));
+        submissions.stream().filter(submission -> isAssistant || !submission.isGraded())
+                .forEach(submission -> Optional.of(submission.getLogs()).ifPresent(submission::setHint));
+        return submissions;
+    }
+
+    public Integer getSubmissionsCount(Long taskId, String userId) {
+        return submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrue(taskId, verifyUserId(userId), SubmissionType.GRADE);
+    }
+
+    public Integer getRemainingAttempts(Task task, String userId) {
+        return task.getMaxAttempts() - getSubmissionsCount(task.getId(), userId);
+    }
+
+    public boolean isSubmissionAllowed(Long taskId) {
+        Task task = getTaskById(taskId);
+        return task.getAssignment().isActive() && (!task.isGraded() || getRemainingAttempts(task, null) > 0);
+    }
+
+    public Integer countActiveAssignments(String courseURL) {
+        return assignmentRepository.countByCourse_UrlAndStartDateBeforeAndEndDateAfter(courseURL, now(), now());
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {
-        return submissionRepository.findFirstByTask_IdAndUserIdAndPointsNotNullOrderByPointsDesc(taskId, userId)
-                .map(Submission::getPoints).orElse(0.0);
+        return submissionRepository.findFirstByTask_IdAndUserIdAndPointsNotNullOrderByPointsDesc(
+                taskId, verifyUserId(userId)).map(Submission::getPoints).orElse(0.0);
     }
 
     public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
@@ -149,35 +185,43 @@ public class CourseService {
         return assignments.stream().mapToDouble(assignment -> calculateAssignmentPoints(assignment.getTasks(), userId)).sum();
     }
 
-    public Integer getSubmissionsCount(Long taskId, String userId) {
-        return submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrue(taskId, userId, SubmissionType.GRADE);
-    }
-
-    public Integer getRemainingAttempts(Task task, String userId) {
-        return task.getMaxAttempts() - getSubmissionsCount(task.getId(), userId);
-    }
-
-    public boolean isSubmissionAllowed(Long taskId, SubmissionType type, String userId) {
-        Task task = getTaskById(taskId);
-        return task.getAssignment().isActive() && (!type.isGraded() || getRemainingAttempts(task, userId) > 0);
-    }
-
-    public Integer countActiveAssignments(String courseURL) {
-        return assignmentRepository.countByCourse_UrlAndStartDateBeforeAndEndDateAfter(courseURL, now(), now());
-    }
-
-    public List<TaskFile> getTaskFilesWithUserContent(Long taskId, String userId, Long submissionId) {
-        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdOrderByIdDesc(taskId);
-        permittedFiles.forEach(file -> Optional.ofNullable(submissionId)
-                .map(id -> submissionFileRepository.findByTaskFile_IdAndSubmission_Id(file.getId(), submissionId))
-                .orElseGet(() -> submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), userId))
-                .ifPresent(latestSubmissionFile -> file.setContent(latestSubmissionFile.getContent())));
-        return permittedFiles;
-    }
-
-    public StudentDTO getStudentWithPoints(String courseURL, UserRepresentation user) {
+    public StudentDTO getStudent(String courseURL, UserRepresentation user) {
         Double coursePoints = calculateCoursePoints(getCourseByURL(courseURL).getAssignments(), user.getEmail());
         return new StudentDTO(user.getFirstName(), user.getLastName(), user.getEmail(), coursePoints);
+    }
+
+    @Transactional
+    public void updateStudent(UserDTO updates) {
+        submissionRepository.findByTask_IdAndUserIdAndTypeAndValidTrueOrderByCreatedAtAsc(updates.getTaskId(), updates.getUserId(), SubmissionType.GRADE)
+                .stream().limit(updates.getAddAttempts()).forEach(submission -> {
+                    submission.setValid(false);
+                    submissionRepository.save(submission);
+                });
+    }
+
+    public Submission createSubmission(SubmissionDTO submissionDTO) {
+        Submission newSubmission = modelMapper.map(submissionDTO, Submission.class);
+        newSubmission.setUserId(getUserId());
+        newSubmission.setTask(getTaskById(submissionDTO.getTaskId()));
+        if (newSubmission.getTask().isText())
+            throw new NotAllowedException("Text tasks can only be evaluated for grading");
+        if (newSubmission.getType().equals(SubmissionType.RUN)) {
+            if (ObjectUtils.isEmpty(submissionDTO.getCurrentFileId()))
+                throw new NotFoundException("Submission of 'RUN' type must include the ID of the task file to run");
+            newSubmission.setExecutableFile(getTaskFileById(submissionDTO.getCurrentFileId()));
+        }
+        if (newSubmission.isGraded())
+            newSubmission.setOrdinalNum(getSubmissionsCount(submissionDTO.getTaskId(), null) + 1);
+        submissionDTO.getFiles().forEach(submissionFile -> {
+            if (Objects.nonNull(submissionFile.getContent())) {
+                SubmissionFile newSubmissionFile = new SubmissionFile();
+                newSubmissionFile.setSubmission(newSubmission);
+                newSubmissionFile.setContent(submissionFile.getContent());
+                newSubmissionFile.setTaskFile(getTaskFileById(submissionFile.getTaskFileId()));
+                newSubmission.getFiles().add(newSubmissionFile);
+            }
+        });
+        return submissionRepository.save(newSubmission);
     }
 
     @SneakyThrows
@@ -186,7 +230,7 @@ public class CourseService {
     }
 
     @SneakyThrows
-    public  <T> T getConfigFile(File localDir, Class<T> targetDTO) {
+    public <T> T getConfigFile(File localDir, Class<T> targetDTO) {
         return jsonMapper.readValue(localDir.toPath().resolve("config.json").toFile(), targetDTO);
     }
 
@@ -224,15 +268,6 @@ public class CourseService {
         return taskFile;
     }
 
-    private TaskFile createOrUpdateTaskSolutions(Task task, TaskDTO taskConfig) {
-        TaskFile solutions = new TaskFile();
-        solutions.setPermission(FilePermission.SOLUTION);
-        solutions.getSolutions().addAll(taskConfig.getSolutions());
-        solutions.getHints().addAll(taskConfig.getHints());
-        solutions.setTask(task);
-        return solutions;
-    }
-
     private Task createOrUpdateTask(Assignment assignment, File taskDir) {
         Integer ordinalNum = parseNum(taskDir);
         Task task = taskRepository.findByAssignment_IdAndOrdinalNum(assignment.getId(), ordinalNum).orElse(new Task());
@@ -240,10 +275,13 @@ public class CourseService {
         modelMapper.map(taskConfig, task);
         task.setDescription(readContent(taskDir.toPath().resolve("description.md"), false));
         task.setExtension(Extension.fromLanguage(taskConfig.getLanguage()));
+        task.setUrl(asURL(task.getTitle()));
         task.setOrdinalNum(ordinalNum);
         task.setAssignment(assignment);
         if (ObjectUtils.isNotEmpty(taskConfig.getSolutions()))
-            task.getFiles().add(createOrUpdateTaskSolutions(task, taskConfig));
+            task.setSolution(StringUtils.join(taskConfig.getSolutions(), "|"));
+        if (ObjectUtils.isNotEmpty(taskConfig.getHints()))
+            task.setHint(StringUtils.join(taskConfig.getHints(), "\n"));
         return task;
     }
 
@@ -258,14 +296,12 @@ public class CourseService {
         return assignment;
     }
 
-    public Course createCourseFromRepository(String repository, String creatorId) {
+    public Course createCourseFromRepository(String repository) {
         File courseDir = createCourseDir(repository);
         CourseDTO courseConfig = getConfigFile(courseDir, CourseDTO.class);
         Course newCourse = modelMapper.map(courseConfig, Course.class);
         newCourse.setUrl(asURL(newCourse.getTitle()));
         newCourse.setRepository(repository);
-        authService.createCourseRoles(newCourse.getUrl());
-        authService.registerCourseSupervisors(newCourse.getUrl(), List.of(creatorId)); // Replace later
         listDirectories(courseDir).forEach(assignmentDir -> {
             Assignment newAssignment = createOrUpdateAssignment(newCourse, assignmentDir);
             newCourse.getAssignments().add(newAssignment);
@@ -273,8 +309,8 @@ public class CourseService {
                 Task newTask = createOrUpdateTask(newAssignment, taskDir);
                 newAssignment.getTasks().add(newTask);
                 listDirectories(taskDir).forEach(taskSubDir ->
-                    FileUtils.listFiles(taskSubDir, Extension.listSupported(), true).forEach(localFile ->
-                        newTask.getFiles().add(createOrUpdateTaskFile(newTask, taskDir, localFile))));
+                        FileUtils.listFiles(taskSubDir, Extension.listSupported(), true).forEach(localFile ->
+                                newTask.getFiles().add(createOrUpdateTaskFile(newTask, taskDir, localFile))));
             });
         });
         return courseRepository.save(newCourse);

@@ -18,11 +18,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import javax.transaction.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @Transactional
@@ -46,8 +43,7 @@ class CourseServiceTests {
     @Test
     void createCourseFromRepositoryTest() {
         String repository = "https://github.com/mp-access/Mock-Course.git";
-        Course createdCourse = courseService.createCourseFromRepository(repository, "test@email.com");
-        verify(authService, times(1)).createCourseRoles(createdCourse.getUrl());
+        Course createdCourse = courseService.createCourseFromRepository(repository);
         assertEquals("Mock Course", createdCourse.getTitle());
         assertEquals(LocalDate.of(2020, 1, 1), createdCourse.getEndDate());
         assertEquals(3, createdCourse.getAssignments().size());
@@ -76,15 +72,14 @@ class CourseServiceTests {
         assertNull(textTask.getExtension());
         assertEquals(TaskType.TEXT, textTask.getType());
         assertEquals(5, textTask.getMaxAttempts());
-        TaskFile solutionFile = textTask.getFiles().stream().filter(file ->
-                file.getPermission().equals(FilePermission.SOLUTION)).findFirst().orElseThrow();
-        assertEquals(List.of("^100$"), solutionFile.getSolutions());
-        assertEquals(2, solutionFile.getHints().size());
+        assertEquals("^100$", textTask.getSolution());
+        assertEquals("Think really really hard.\nIt shouldn't be that hard!", textTask.getHint());
     }
+
     @Test
     void updateCourseFromRepositoryTest() {
         String repository = "https://github.com/mp-access/Mock-Course.git";
-        Course createdCourse = courseService.createCourseFromRepository(repository, "test@email.com");
+        Course createdCourse = courseService.createCourseFromRepository(repository);
         Assignment createdAssignment = assignmentRepository.findByCourse_UrlAndOrdinalNum(
                 createdCourse.getUrl(), 1).orElseThrow();
         Task codeTask = taskRepository.findByAssignment_IdAndOrdinalNum(createdAssignment.getId(), 1).orElseThrow();

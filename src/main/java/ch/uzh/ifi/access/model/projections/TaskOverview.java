@@ -10,9 +10,11 @@ public interface TaskOverview {
 
     Long getId();
 
-    Integer getOrdinalNum();
+    String getUrl();
 
     String getTitle();
+
+    Integer getOrdinalNum();
 
     TaskType getType();
 
@@ -26,17 +28,18 @@ public interface TaskOverview {
 
     Integer getMaxAttempts();
 
+    @Value("#{target.assignment.published}")
+    boolean isPublished();
+
+    boolean isText();
+
     void setUserId(String userId);
 
     void setSubmissionId(Long submissionId);
 
-    @Value("#{target.assignment.published}")
-    boolean isPublished();
-
-    @Value("#{target.limited ? @courseService.getRemainingAttempts(target, target.userId) : null}")
+    @Value("#{@courseService.getRemainingAttempts(target, target.userId)}")
     Integer getRemainingAttempts();
 
     @Value("#{target.graded ? @courseService.calculateTaskPoints(target.id, target.userId) : null}")
     Double getPoints();
-
 }

@@ -12,12 +12,10 @@ import java.util.Optional;
 public interface TaskFileRepository extends JpaRepository<TaskFile, Long> {
 
     @Transactional
-    @PostFilter("not filterObject.permission.restricted")
-    List<TaskFile> findByTask_IdOrderByIdDesc(Long taskId);
+    @PostFilter("hasRole(filterObject.task.assignment.course.url + '-assistant') or not filterObject.permission.restricted")
+    List<TaskFile> findByTask_IdOrderByPermissionAscNameAsc(Long taskId);
 
     Optional<TaskFile> findByTask_IdAndPath(Long taskId, String filePath);
-
-    Optional<TaskFile> findTopByTask_IdAndPermissionOrderByIdDesc(Long taskId, FilePermission permission);
 
     List<TaskFile> findByTask_IdAndPermissionIn(Long taskId, List<FilePermission> permissions);
 }

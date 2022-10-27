@@ -31,13 +31,12 @@ public interface AssignmentOverview {
 
     boolean isActive();
 
-    Integer getDefaultTaskNum();
-
-    void setUserId(String userId);
-
-    @Value("#{@courseService.calculateAssignmentPoints(target.tasks, target.userId)}")
+    @Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
     Double getPoints();
 
     @Value("#{target.tasks.size()}")
     Integer getTasksCount();
+
+    @Value("#{target.tasks.size() > 0 ? target.tasks.get(0).url : ''}")
+    String getDefaultTaskURL();
 }

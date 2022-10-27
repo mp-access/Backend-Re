@@ -43,7 +43,8 @@ public class MapperConfigurer {
                 .addMappings(mapping -> mapping.map(AssignmentDTO::getDueDate, Assignment::setEndDate));
         modelMapper.typeMap(TaskDTO.class, Task.class)
                 .addMappings(mapping -> mapping.map(TaskDTO::getMaxScore, Task::setMaxPoints))
-                .addMappings(mapping -> mapping.map(TaskDTO::getMaxSubmits, Task::setMaxAttempts));
+                .addMappings(mapping -> mapping.map(TaskDTO::getMaxSubmits, Task::setMaxAttempts))
+                .addMappings(mapping -> mapping.map(TaskDTO::getGradingSetup, Task::setGradingCommand));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
                 .addMappings(mapping -> mapping.skip(Submission::setTask))
                 .addMappings(mapping -> mapping.skip(Submission::setExecutableFile))

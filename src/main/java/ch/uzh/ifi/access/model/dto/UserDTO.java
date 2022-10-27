@@ -6,10 +6,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 public class UserDTO {
-
-    String firstName;
-
-    String lastName;
-
-    String email;
+    String userId;
+    Long taskId;
+    Integer addAttempts;
 }

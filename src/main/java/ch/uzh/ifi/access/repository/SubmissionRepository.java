@@ -13,5 +13,7 @@ public interface SubmissionRepository extends JpaRepository<Submission, Long> {
 
     List<Submission> findByTask_IdAndUserIdOrderByCreatedAtDesc(Long taskId, String userId);
 
+    List<Submission> findByTask_IdAndUserIdAndTypeAndValidTrueOrderByCreatedAtAsc(Long taskId, String userId, SubmissionType type);
+
     Integer countByTask_IdAndUserIdAndTypeAndValidTrue(Long taskId, String userId, SubmissionType type);
 }

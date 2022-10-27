@@ -11,10 +11,9 @@ import java.util.List;
 @Projection(types = {Task.class})
 public interface TaskWorkspace extends TaskOverview {
 
-    @Value("#{@courseService.getTaskFilesWithUserContent(target.id, target.userId, target.submissionId)}")
+    @Value("#{@courseService.getTaskFiles(target.id, target.submissionId, target.userId)}")
     List<TaskFile> getFiles();
 
-    @Value("#{@submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(target.id, target.userId)}")
+    @Value("#{@courseService.getSubmissions(target.assignment.course.url, target.id, target.userId)}")
     List<Submission> getSubmissions();
-
 }

@@ -5,12 +5,9 @@ import ch.uzh.ifi.access.model.constants.FilePermission;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang3.StringUtils;
 
 import javax.persistence.*;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 @Getter
 @Setter
@@ -22,7 +19,6 @@ public class TaskFile {
 
     private String name;
 
-    @JsonIgnore
     private String path;
 
     @JsonIgnore
@@ -37,14 +33,6 @@ public class TaskFile {
     private String template;
 
     @JsonIgnore
-    @ElementCollection
-    private List<String> solutions = new ArrayList<>();
-
-    @JsonIgnore
-    @ElementCollection
-    private List<String> hints = new ArrayList<>();
-
-    @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "task_id")
     private Task task;
@@ -52,12 +40,12 @@ public class TaskFile {
     @Transient
     private String content;
 
-    public String getContent() {
-        return StringUtils.firstNonBlank(content, template);
-    }
-
     public boolean isEditable() {
         return permission.equals(FilePermission.EDITABLE);
+    }
+
+    public boolean isRestricted() {
+        return permission.isRestricted();
     }
 
     public boolean isImage() {

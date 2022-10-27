@@ -29,9 +29,7 @@ public interface CourseOverview {
     @Value("#{@courseService.countActiveAssignments(target.url)}")
     Integer getActiveAssignmentsCount();
 
-    void setUserId(String userId);
-
-    @Value("#{@courseService.calculateCoursePoints(target.assignments, target.userId)}")
+    @Value("#{@courseService.calculateCoursePoints(target.assignments, null)}")
     Double getPoints();
 
 }

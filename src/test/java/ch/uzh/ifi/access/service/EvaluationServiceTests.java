@@ -64,10 +64,10 @@ class EvaluationServiceTests {
         testSubmission.setId(10L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent(TestingUtils.SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.runCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals(testSubmission.getTask().getMaxPoints(), returnedSubmission.getPoints());
-        assertEquals("All tests passed", returnedSubmission.getStdOut());
+        assertEquals("All tests passed!", returnedSubmission.getHint());
     }
 
     @Test
@@ -75,7 +75,7 @@ class EvaluationServiceTests {
         testSubmission.setId(11L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent(TestingUtils.PARTIAL_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.runCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals("The calculation of fac(0) is not correct!", returnedSubmission.getHint());
     }
@@ -85,7 +85,7 @@ class EvaluationServiceTests {
         testSubmission.setId(12L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent("Submission without runnable content");
-        Submission returnedSubmission = evaluationService.runCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals(0.0, returnedSubmission.getPoints());
         assertEquals("SyntaxError: invalid syntax", returnedSubmission.getHint());
@@ -97,9 +97,9 @@ class EvaluationServiceTests {
         testSubmission.setType(SubmissionType.RUN);
         testSubmission.setExecutableFile(testTask.getFiles().get(0));
         testSubmissionFile.setContent(TestingUtils.PARTIAL_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.runCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
-        assertEquals("fac(8) = 10\n", returnedSubmission.getStdOut());
+        assertEquals("fac(8) = 10\n", returnedSubmission.getLogs());
     }
 
     @Test
@@ -108,9 +108,9 @@ class EvaluationServiceTests {
         testSubmission.setType(SubmissionType.RUN);
         testSubmission.setExecutableFile(testTask.getFiles().get(0));
         testSubmissionFile.setContent(TestingUtils.TIMEOUT_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.runCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
-        assertEquals("Memory Limit Exceeded", returnedSubmission.getStdOut());
+        assertEquals("Memory Limit Exceeded", returnedSubmission.getHint());
     }
 
 }

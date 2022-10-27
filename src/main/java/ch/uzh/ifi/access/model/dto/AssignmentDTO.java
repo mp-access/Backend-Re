@@ -12,6 +12,8 @@ public class AssignmentDTO {
 
     String title;
 
+    String url;
+
     String description;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")

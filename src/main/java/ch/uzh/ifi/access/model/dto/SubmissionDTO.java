@@ -10,9 +10,9 @@ import java.util.List;
 @NoArgsConstructor
 public class SubmissionDTO {
 
-    Long fileId;
+    Long taskId;
 
-    String userId;
+    Long currentFileId;
 
     String answer;
 

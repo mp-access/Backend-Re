@@ -41,8 +41,5 @@ public class Course {
     private List<Assignment> assignments = new ArrayList<>();
 
     @Transient
-    private String userId;
-
-    @Transient
     private Double points;
 }
