@@ -151,7 +151,7 @@ public class CourseService {
         boolean isAssistant = isAssistant(courseURL);
         List<Submission> submissions = submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(taskId, verifyUserId(userId));
         submissions.stream().filter(submission -> isAssistant || !submission.isGraded())
-                .forEach(submission -> Optional.of(submission.getLogs()).ifPresent(submission::setHint));
+                .forEach(submission -> Optional.ofNullable(submission.getLogs()).ifPresent(submission::setHint));
         return submissions;
     }
 
