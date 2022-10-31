@@ -15,6 +15,7 @@ import ch.uzh.ifi.access.service.EvaluationService;
 import lombok.AllArgsConstructor;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,9 +34,10 @@ public class CourseController {
 
     @PostMapping
     @PreAuthorize("hasRole('supervisor')")
-    public String createCourse(@RequestBody Map<String, String> body) {
+    public String createCourse(@RequestBody Map<String, String> body, Authentication authentication) {
         Course newCourse = courseService.createCourseFromRepository(body.get("repository"));
         authService.createCourseRoles(newCourse.getUrl()); // Register course users from config
+        authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
         return newCourse.getUrl();
     }
 
