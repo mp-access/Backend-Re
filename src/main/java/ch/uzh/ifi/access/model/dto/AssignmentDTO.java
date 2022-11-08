@@ -5,10 +5,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
 public class AssignmentDTO {
+
+    Integer ordinalNum;
 
     String title;
 
@@ -17,8 +20,10 @@ public class AssignmentDTO {
     String description;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
-    LocalDateTime publishDate;
+    LocalDateTime startDate;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
-    LocalDateTime dueDate;
+    LocalDateTime endDate;
+
+    List<String> tasks;
 }

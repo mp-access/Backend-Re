@@ -4,7 +4,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -13,19 +12,17 @@ public class CourseDTO {
 
     String title;
 
+    String url;
+
     String description;
 
     LocalDate startDate;
 
     LocalDate endDate;
 
-    String owner;
+    String university;
 
     String semester;
 
-    String university;
-
-    List<String> admins = new ArrayList<>();
-
-    List<String> assistants = new ArrayList<>();
+    List<String> assignments;
 }

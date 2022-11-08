@@ -1,13 +1,11 @@
 package ch.uzh.ifi.access.service;
 
 import ch.uzh.ifi.access.TestingUtils;
-import ch.uzh.ifi.access.config.AccessProperties;
 import ch.uzh.ifi.access.config.DockerConfigurer;
 import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.SubmissionFile;
 import ch.uzh.ifi.access.model.Task;
 import ch.uzh.ifi.access.model.TaskFile;
-import ch.uzh.ifi.access.model.constants.FilePermission;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import ch.uzh.ifi.access.repository.SubmissionRepository;
 import ch.uzh.ifi.access.repository.TaskFileRepository;
@@ -35,9 +33,6 @@ class EvaluationServiceTests {
     private SubmissionFile testSubmissionFile;
 
     @MockBean
-    private AccessProperties accessProperties;
-
-    @MockBean
     private TaskFileRepository taskFileRepository;
 
     @MockBean
@@ -54,9 +49,7 @@ class EvaluationServiceTests {
         testSubmission.getFiles().add(testSubmissionFile);
         given(submissionRepository.save(any(Submission.class))).willAnswer(returnsFirstArg());
         given(taskFileRepository.save(any(TaskFile.class))).willAnswer(returnsFirstArg());
-        given(taskFileRepository.findByTask_IdAndPermissionIn(any(), any())).willReturn(testTask.getFiles().stream()
-                .filter(file -> file.getPermission().equals(FilePermission.GRADING)).toList());
-        given(accessProperties.getWorkingDir()).willReturn("/tmp");
+        given(taskFileRepository.findByTask_IdOrderByIdAscPathAsc(any())).willReturn(testTask.getFiles());
     }
 
     @Test
@@ -64,10 +57,10 @@ class EvaluationServiceTests {
         testSubmission.setId(10L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent(TestingUtils.SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals(testSubmission.getTask().getMaxPoints(), returnedSubmission.getPoints());
-        assertEquals("All tests passed!", returnedSubmission.getHint());
+        assertEquals("All tests passed!", returnedSubmission.getOutput());
     }
 
     @Test
@@ -75,9 +68,9 @@ class EvaluationServiceTests {
         testSubmission.setId(11L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent(TestingUtils.PARTIAL_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
-        assertEquals("The calculation of fac(0) is not correct!", returnedSubmission.getHint());
+        assertEquals("The calculation of fac(0) is not correct!", returnedSubmission.getOutput());
     }
 
     @Test
@@ -85,19 +78,18 @@ class EvaluationServiceTests {
         testSubmission.setId(12L);
         testSubmission.setType(SubmissionType.GRADE);
         testSubmissionFile.setContent("Submission without runnable content");
-        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals(0.0, returnedSubmission.getPoints());
-        assertEquals("SyntaxError: invalid syntax", returnedSubmission.getHint());
+        assertEquals("SyntaxError: invalid syntax", returnedSubmission.getOutput());
     }
 
     @Test
     void ungradedSubmissionWithPartialSolutionTest() {
         testSubmission.setId(20L);
         testSubmission.setType(SubmissionType.RUN);
-        testSubmission.setExecutableFile(testTask.getFiles().get(0));
         testSubmissionFile.setContent(TestingUtils.PARTIAL_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
         assertEquals("fac(8) = 10\n", returnedSubmission.getLogs());
     }
@@ -106,11 +98,10 @@ class EvaluationServiceTests {
     void ungradedSubmissionTimeoutTest() {
         testSubmission.setId(20L);
         testSubmission.setType(SubmissionType.RUN);
-        testSubmission.setExecutableFile(testTask.getFiles().get(0));
         testSubmissionFile.setContent(TestingUtils.TIMEOUT_SOLUTION_FILE);
-        Submission returnedSubmission = evaluationService.evaluateCode(testSubmission);
+        Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
-        assertEquals("Memory Limit Exceeded", returnedSubmission.getHint());
+        assertEquals("Memory Limit Exceeded", returnedSubmission.getOutput());
     }
 
 }

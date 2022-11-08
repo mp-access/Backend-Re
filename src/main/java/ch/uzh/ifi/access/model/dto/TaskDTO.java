@@ -1,29 +1,27 @@
 package ch.uzh.ifi.access.model.dto;
 
-import ch.uzh.ifi.access.model.constants.TaskType;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Data
 @NoArgsConstructor
 public class TaskDTO {
 
+    Integer ordinalNum;
+
     String title;
 
-    TaskType type;
+    String url;
 
-    String language;
+    String instructions;
 
-    Double maxScore;
+    Double maxPoints;
 
-    Integer maxSubmits;
+    Integer maxAttempts;
 
-    String gradingSetup;
+    TaskEvaluatorDTO evaluator;
 
-    List<String> solutions = new ArrayList<>();
-
-    List<String> hints = new ArrayList<>();
+    List<TaskFileDTO> files;
 }

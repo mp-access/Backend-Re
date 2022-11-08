@@ -5,10 +5,7 @@ import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.dto.StudentDTO;
 import ch.uzh.ifi.access.model.dto.SubmissionDTO;
 import ch.uzh.ifi.access.model.dto.UserDTO;
-import ch.uzh.ifi.access.model.projections.AssignmentOverview;
-import ch.uzh.ifi.access.model.projections.CourseOverview;
-import ch.uzh.ifi.access.model.projections.TaskOverview;
-import ch.uzh.ifi.access.model.projections.TaskWorkspace;
+import ch.uzh.ifi.access.model.projections.*;
 import ch.uzh.ifi.access.service.AuthService;
 import ch.uzh.ifi.access.service.CourseService;
 import ch.uzh.ifi.access.service.EvaluationService;
@@ -36,15 +33,17 @@ public class CourseController {
     @PreAuthorize("hasRole('supervisor')")
     public String createCourse(@RequestBody Map<String, String> body, Authentication authentication) {
         Course newCourse = courseService.createCourseFromRepository(body.get("repository"));
-        authService.createCourseRoles(newCourse.getUrl()); // Register course users from config
+        authService.createCourseRoles(newCourse.getUrl());
         authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
+        evaluationService.createEvaluators(newCourse);
         return newCourse.getUrl();
     }
 
     @GetMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
     public void updateCourse(@PathVariable String course) {
-        courseService.updateCourseFromRepository(course);
+        Course updatedCourse = courseService.updateCourseFromRepository(course);
+        evaluationService.createEvaluators(updatedCourse);
     }
 
     @GetMapping
@@ -64,7 +63,7 @@ public class CourseController {
     }
 
     @GetMapping("/{course}/assignments/{assignment}")
-    public AssignmentOverview getAssignment(@PathVariable String course, @PathVariable String assignment) {
+    public AssignmentWorkspace getAssignment(@PathVariable String course, @PathVariable String assignment) {
         return courseService.getAssignment(course, assignment);
     }
 
@@ -96,7 +95,7 @@ public class CourseController {
     @PreAuthorize("hasRole(#course + '-assistant') or @courseService.isSubmissionAllowed(#submission.taskId)")
     public Submission evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
         Submission newSubmission = courseService.createSubmission(submission);
-        return evaluationService.initEvaluation(newSubmission);
+        return evaluationService.evaluateSubmission(newSubmission);
     }
 
     @PostMapping("/{course}/enroll")

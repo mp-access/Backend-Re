@@ -14,8 +14,10 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.core.env.Environment;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,11 +27,14 @@ import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.data.repository.query.SecurityEvaluationContextExtension;
 import org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
 
 import javax.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.Map;
+
+import static java.util.Map.entry;
 
 @Slf4j
 @AllArgsConstructor
@@ -39,17 +44,9 @@ import java.util.Map;
 @ComponentScan(basePackageClasses = KeycloakSpringBootConfigResolver.class)
 public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
 
-    private AccessProperties accessProperties;
-
+    private Environment environment;
     private KeycloakSpringBootProperties keycloakProperties;
 
-    /**
-     * Register Keycloak with the authentication manager and set up a mapping from Keycloak role names to
-     * Spring Security's default role naming scheme (with the prefix "ROLE_"). This allows referring to
-     * role names exactly as they appear in Keycloak, without having to add the "ROLE_" prefix.
-     *
-     * @see "<a href="https://keycloak.org/docs/latest/securing_apps/index.html#naming-security-roles">Docs</a>"
-     */
     @Autowired
     public void configureGlobal(AuthenticationManagerBuilder auth) {
         KeycloakAuthenticationProvider keycloakAuthenticationProvider = keycloakAuthenticationProvider();
@@ -58,9 +55,14 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
     }
 
     @Bean
+    public ServletListenerRegistrationBean<HttpSessionEventPublisher> httpSessionEventPublisher() {
+        return new ServletListenerRegistrationBean<>(new HttpSessionEventPublisher());
+    }
+
+    @Bean
     @Override
     protected SessionAuthenticationStrategy sessionAuthenticationStrategy() {
-        return new RegisterSessionAuthenticationStrategy(new SessionRegistryImpl());
+        return new RegisterSessionAuthenticationStrategy(buildSessionRegistry());
     }
 
     @Bean
@@ -68,11 +70,6 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
         return new SessionRegistryImpl();
     }
 
-    /**
-     * Use the Spring properties defined in application.properties instead of searching for a "keycloak.json" file.
-     *
-     * @see <a href="https://keycloak.org/docs/latest/securing_apps/index.html#using-spring-boot-configuration">Docs</a>
-     */
     @Bean
     public KeycloakConfigResolver keycloakConfigResolver() {
         return new KeycloakSpringBootConfigResolver();
@@ -81,12 +78,11 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
     @Override
     public void configure(final HttpSecurity http) throws Exception {
         super.configure(http);
-        http.csrf()
-                .disable()
+        http.csrf().disable()
                 .authorizeRequests()
-                .antMatchers("/courses/new", "/info", "/v3/api-docs/**", "/swagger-ui/**")
+                .antMatchers("/v3/api-docs/**", "/swagger-ui/**")
                 .permitAll()
-                .antMatchers("/**")
+                .anyRequest()
                 .authenticated();
     }
 
@@ -109,11 +105,9 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
     public RealmResource keycloakRealm() {
         String realmName = keycloakProperties.getRealm();
         log.info("Initialising Keycloak realm '{}' at URL {}", realmName, keycloakProperties.getAuthServerUrl());
-        Keycloak keycloakClient = Keycloak.getInstance(
-                keycloakProperties.getAuthServerUrl(),
-                "master",
-                accessProperties.getAdminCLIUsername(),
-                accessProperties.getAdminCLIPassword(),
+        Keycloak keycloakClient = Keycloak.getInstance(keycloakProperties.getAuthServerUrl(), "master",
+                environment.getProperty("KEYCLOAK_ADMIN", "admin"),
+                environment.getProperty("KEYCLOAK_ADMIN_PASSWORD", "admin"),
                 "admin-cli");
 
         try {
@@ -150,15 +144,25 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
                     "host", "idsmtp.uzh.ch",
                     "from", "noreply@uzh.ch",
                     "fromDisplayName", "ACCESS"));
-            IdentityProviderRepresentation switchAAI = new IdentityProviderRepresentation();
-            switchAAI.setEnabled(true);
-            switchAAI.setAlias("switch-aai");
-            switchAAI.setDisplayName("SWITCH-AAI");
-            switchAAI.setProviderId("saml");
-            switchAAI.setConfig(Map.of(
-                    "entityId", "access",
-                    "singleSignOnServiceUrl", "https://aai-idp.uzh.ch/idp/profile/SAML2/Redirect/SSO"));
-            newRealm.addIdentityProvider(switchAAI);
+            IdentityProviderRepresentation switchEduId = new IdentityProviderRepresentation();
+            switchEduId.setEnabled(true);
+            switchEduId.setAlias("switch-edu-id");
+            switchEduId.setDisplayName("SWITCH edu-ID");
+            switchEduId.setProviderId("oidc");
+            switchEduId.setTrustEmail(true);
+            switchEduId.setConfig(Map.ofEntries(
+                    entry("clientId", "uzh_info1_staging"),
+                    entry("clientSecret", environment.getProperty("CLIENT_SECRET", "")),
+                    entry("clientAuthMethod", "client_secret_basic"),
+                    entry("defaultScope", "openid,profile,email"),
+                    entry("validateSignature", "true"),
+                    entry("useJwksUrl", "true"),
+                    entry("userInfoUrl", "https://login.eduid.ch/idp/profile/oidc/userinfo"),
+                    entry("tokenUrl", "https://login.eduid.ch/idp/profile/oidc/token"),
+                    entry("authorizationUrl", "https://login.eduid.ch/idp/profile/oidc/authorize"),
+                    entry("jwksUrl", "https://login.eduid.ch/idp/profile/oidc/keyset"),
+                    entry("issuer", "https://login.eduid.ch/")));
+            newRealm.addIdentityProvider(switchEduId);
             keycloakClient.realms().create(newRealm);
         }
 

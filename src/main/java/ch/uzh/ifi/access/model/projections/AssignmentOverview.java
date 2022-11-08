@@ -23,20 +23,17 @@ public interface AssignmentOverview {
 
     LocalDateTime getEndDate();
 
-    Double getMaxPoints();
-
     boolean isPublished();
 
     boolean isPastDue();
 
     boolean isActive();
 
+    Double getMaxPoints();
+
     @Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
     Double getPoints();
 
     @Value("#{target.tasks.size()}")
     Integer getTasksCount();
-
-    @Value("#{target.tasks.size() > 0 ? target.tasks.get(0).url : ''}")
-    String getDefaultTaskURL();
 }

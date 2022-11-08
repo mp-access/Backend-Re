@@ -1,13 +1,11 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.Extension;
-import ch.uzh.ifi.access.model.constants.FilePermission;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.persistence.*;
-import java.nio.file.Path;
 
 @Getter
 @Setter
@@ -17,17 +15,15 @@ public class TaskFile {
     @GeneratedValue
     private Long id;
 
-    private String name;
-
     private String path;
 
-    @JsonIgnore
-    @Enumerated(EnumType.STRING)
-    private Extension extension;
+    private String type;
 
-    @JsonIgnore
-    @Enumerated(EnumType.STRING)
-    private FilePermission permission;
+    private boolean editable;
+
+    private boolean grading;
+
+    private boolean published;
 
     @Lob
     private String template;
@@ -40,30 +36,15 @@ public class TaskFile {
     @Transient
     private String content;
 
-    public boolean isEditable() {
-        return permission.equals(FilePermission.EDITABLE);
-    }
-
-    public boolean isRestricted() {
-        return permission.isRestricted();
-    }
-
-    public boolean isImage() {
-        return extension.isImage();
+    public String getName() {
+        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(path, '/'), path);
     }
 
     public String getLanguage() {
-        return extension.getLanguage();
+        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(type, '-'), type);
     }
 
-    public String formRunCommand() {
-        return extension.formRunCommand(path);
-    }
-
-    public void parsePath(Path relativePath) {
-        path = relativePath.toString();
-        name = relativePath.getFileName().toString();
-        extension = Extension.fromPath(relativePath);
-        permission = FilePermission.fromPath(relativePath);
+    public boolean isImage() {
+        return StringUtils.contains(type, "image");
     }
 }

@@ -11,9 +11,9 @@ import java.util.List;
 @Projection(types = {Task.class})
 public interface TaskWorkspace extends TaskOverview {
 
-    @Value("#{@courseService.getTaskFiles(target.id, target.submissionId, target.userId)}")
+    @Value("#{@courseService.getTaskFiles(target)}")
     List<TaskFile> getFiles();
 
-    @Value("#{@courseService.getSubmissions(target.assignment.course.url, target.id, target.userId)}")
+    @Value("#{@courseService.getSubmissions(target)}")
     List<Submission> getSubmissions();
 }

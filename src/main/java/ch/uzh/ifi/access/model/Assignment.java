@@ -41,12 +41,11 @@ public class Assignment {
 
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL)
     private List<Task> tasks = new ArrayList<>();
-
     @Transient
     private Double points;
 
     public Double getMaxPoints() {
-        return tasks.stream().filter(Task::isGraded).mapToDouble(Task::getMaxPoints).sum();
+        return tasks.stream().mapToDouble(Task::getMaxPoints).sum();
     }
 
     public boolean isPublished() {

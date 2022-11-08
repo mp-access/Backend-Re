@@ -9,14 +9,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class SubmissionDTO {
-
     Long taskId;
-
-    Long currentFileId;
-
-    String answer;
-
     SubmissionType type;
-
     List<SubmissionFileDTO> files;
 }

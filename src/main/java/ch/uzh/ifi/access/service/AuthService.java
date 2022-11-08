@@ -20,7 +20,7 @@ public class AuthService {
     private RealmResource keycloakRealm;
 
     /**
-     * Create a representation of a new course user role for the input {@param userRoleName}, which is one of the 3
+     * Creates a representation of a new course user role for the input {@param userRoleName}, which is one of the 3
      * basic user roles as defined above (STUDENT, ASSISTANT or SUPERVISOR).
      * <p>
      * Every new course user role is a composite of 2 roles:

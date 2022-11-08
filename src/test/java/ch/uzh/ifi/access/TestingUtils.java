@@ -2,9 +2,6 @@ package ch.uzh.ifi.access;
 
 import ch.uzh.ifi.access.model.Task;
 import ch.uzh.ifi.access.model.TaskFile;
-import ch.uzh.ifi.access.model.constants.Extension;
-import ch.uzh.ifi.access.model.constants.FilePermission;
-import ch.uzh.ifi.access.model.constants.TaskType;
 
 public class TestingUtils {
 
@@ -60,22 +57,14 @@ public class TestingUtils {
         task.setId(3L);
         task.setMaxPoints(12.0);
         task.setMaxAttempts(5);
-        task.setType(TaskType.CODE);
-        task.setExtension(Extension.PY);
         TaskFile testMainFile = new TaskFile();
-        testMainFile.setName("script.py");
         testMainFile.setPath("public/script.py");
-        testMainFile.setExtension(Extension.PY);
         testMainFile.setTask(task);
-        testMainFile.setPermission(FilePermission.EDITABLE);
         testMainFile.setTemplate("print('test')");
         task.getFiles().add(testMainFile);
         TaskFile testGradingFile = new TaskFile();
-        testGradingFile.setName("tests.py");
         testGradingFile.setPath("private/tests.py");
-        testGradingFile.setExtension(Extension.PY);
         testGradingFile.setTask(task);
-        testGradingFile.setPermission(FilePermission.GRADING);
         testGradingFile.setTemplate(TestingUtils.GRADING_FILE);
         task.getFiles().add(testGradingFile);
         return task;

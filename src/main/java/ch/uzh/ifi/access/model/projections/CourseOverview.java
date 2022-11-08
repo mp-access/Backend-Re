@@ -26,10 +26,12 @@ public interface CourseOverview {
     @JsonFormat(pattern = "dd-MM-yyyy")
     LocalDate getEndDate();
 
-    @Value("#{@courseService.countActiveAssignments(target.url)}")
-    Integer getActiveAssignmentsCount();
+    Double getMaxPoints();
 
     @Value("#{@courseService.calculateCoursePoints(target.assignments, null)}")
     Double getPoints();
+
+    @Value("#{@courseService.getActiveAssignment(target.url)}")
+    AssignmentWorkspace getActiveAssignment();
 
 }

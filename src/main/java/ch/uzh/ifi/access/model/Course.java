@@ -25,11 +25,9 @@ public class Course {
     @Column(columnDefinition = "text")
     private String description;
 
-    private String university = "University of Zurich";
+    private String university;
 
     private String semester;
-
-    private String owner;
 
     private String repository;
 
@@ -39,7 +37,10 @@ public class Course {
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
     private List<Assignment> assignments = new ArrayList<>();
-
     @Transient
     private Double points;
+
+    public Double getMaxPoints() {
+        return assignments.stream().mapToDouble(Assignment::getMaxPoints).sum();
+    }
 }

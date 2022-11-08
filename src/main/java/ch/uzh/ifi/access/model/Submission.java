@@ -1,12 +1,9 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.Extension;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.math3.util.Precision;
 import org.hibernate.annotations.CreationTimestamp;
 
 import javax.persistence.*;
@@ -22,8 +19,6 @@ public class Submission {
     @GeneratedValue
     private Long id;
 
-    private Integer ordinalNum;
-
     private String userId;
 
     private Double points;
@@ -38,18 +33,11 @@ public class Submission {
     private Timestamp createdAt;
 
     @JsonIgnore
-    private String command;
-
-    @JsonIgnore
     @Column(columnDefinition = "text")
     private String logs;
 
     @Column(columnDefinition = "text")
-    private String hint;
-
-    @JsonInclude(value = JsonInclude.Include.NON_EMPTY)
-    @Column(columnDefinition = "text")
-    private String answer;
+    private String output;
 
     @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL)
     private List<SubmissionFile> files = new ArrayList<>();
@@ -58,11 +46,6 @@ public class Submission {
     @ManyToOne
     @JoinColumn(name = "task_id")
     private Task task;
-
-    @JsonIgnore
-    @ManyToOne
-    @JoinColumn(name = "executable_file_id")
-    private TaskFile executableFile;
 
     public Double getMaxPoints() {
         return task.getMaxPoints();
@@ -73,31 +56,6 @@ public class Submission {
     }
 
     public String getName() {
-        return switch (type) {
-            case RUN -> executableFile.getPath();
-            case TEST -> "tests";
-            case GRADE -> "Submission " + ordinalNum;
-        };
+        return isGraded() ? "Submission" : task.getEvaluator().formCommand(type);
     }
-
-    public Extension getExtension() {
-        return switch (type) {
-            case RUN -> executableFile.getExtension();
-            case TEST, GRADE -> task.getExtension();
-        };
-    }
-
-    public String formCommand() {
-        return switch (type) {
-            case RUN -> executableFile.formRunCommand();
-            case TEST -> task.getExtension().formTestCommand();
-            case GRADE -> task.getGradingCommand();
-        };
-    }
-
-    public void calculatePoints(Double testsPassedRatio) {
-        points = Precision.round(testsPassedRatio * getMaxPoints(), 1);
-        hint = points.equals(getMaxPoints()) ? "All tests passed!" : task.getExtension().parseErrorMessage(logs);
-    }
-
 }

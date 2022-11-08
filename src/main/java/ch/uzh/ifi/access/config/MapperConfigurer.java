@@ -1,9 +1,11 @@
 package ch.uzh.ifi.access.config;
 
 import ch.uzh.ifi.access.model.Assignment;
+import ch.uzh.ifi.access.model.Course;
 import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.Task;
 import ch.uzh.ifi.access.model.dto.AssignmentDTO;
+import ch.uzh.ifi.access.model.dto.CourseDTO;
 import ch.uzh.ifi.access.model.dto.SubmissionDTO;
 import ch.uzh.ifi.access.model.dto.TaskDTO;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -38,16 +40,14 @@ public class MapperConfigurer {
                 .setPropertyCondition(context -> ObjectUtils.isNotEmpty(context.getSource()))
                 .setMatchingStrategy(MatchingStrategies.STRICT)
                 .setSkipNullEnabled(true);
+        modelMapper.typeMap(CourseDTO.class, Course.class)
+                .addMappings(mapping -> mapping.skip(CourseDTO::getAssignments, Course::setAssignments));
         modelMapper.typeMap(AssignmentDTO.class, Assignment.class)
-                .addMappings(mapping -> mapping.map(AssignmentDTO::getPublishDate, Assignment::setStartDate))
-                .addMappings(mapping -> mapping.map(AssignmentDTO::getDueDate, Assignment::setEndDate));
+                .addMappings(mapping -> mapping.skip(AssignmentDTO::getTasks, Assignment::setTasks));
         modelMapper.typeMap(TaskDTO.class, Task.class)
-                .addMappings(mapping -> mapping.map(TaskDTO::getMaxScore, Task::setMaxPoints))
-                .addMappings(mapping -> mapping.map(TaskDTO::getMaxSubmits, Task::setMaxAttempts))
-                .addMappings(mapping -> mapping.map(TaskDTO::getGradingSetup, Task::setGradingCommand));
+                .addMappings(mapping -> mapping.skip(TaskDTO::getFiles, Task::setFiles));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
                 .addMappings(mapping -> mapping.skip(Submission::setTask))
-                .addMappings(mapping -> mapping.skip(Submission::setExecutableFile))
                 .addMappings(mapping -> mapping.skip(Submission::setFiles));
         return modelMapper;
     }
