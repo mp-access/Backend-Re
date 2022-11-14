@@ -25,7 +25,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -99,7 +98,7 @@ public class EvaluationService {
             if (submission.isGraded()) {
                 GradeResults results = readGradeResults(submissionDir.resolve(evaluator.getGradeResults()));
                 submission.setPoints(results.getPoints());
-                submission.setOutput(Optional.ofNullable(results.getHint()).orElse("Memory Limit Exceeded"));
+                submission.setOutput(results.getHints().stream().findFirst().orElse("Memory Limit Exceeded"));
             }
             submission.setValid(true);
         } catch (IOException exception) {

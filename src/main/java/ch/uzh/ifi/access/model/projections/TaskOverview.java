@@ -31,6 +31,9 @@ public interface TaskOverview {
     @Value("#{@courseService.getRemainingAttempts(target)}")
     Integer getRemainingAttempts();
 
-    @Value("#{@courseService.calculateTaskPoints(target, target.userId)}")
+    @Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")
     Double getPoints();
+
+    @Value("#{@courseService.calculateAvgTaskPoints(target.id)}")
+    Double getAvgPoints();
 }

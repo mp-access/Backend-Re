@@ -158,21 +158,34 @@ public class CourseService {
         return task.getAssignment().isActive() && (getRemainingAttempts(task) > 0);
     }
 
-    public AssignmentWorkspace getActiveAssignment(String courseURL) {
-        return assignmentRepository.findByCourse_UrlOrderByEndDateAsc(courseURL).stream().findFirst().orElse(null);
+    public List<AssignmentWorkspace> getActiveAssignments(String courseURL) {
+        return assignmentRepository.findByCourse_UrlOrderByEndDateAsc(courseURL);
     }
 
-    public Double calculateTaskPoints(Task task, String userId) {
+    public Double calculateTaskPoints(Long taskId, String userId) {
         return submissionRepository.findFirstByTask_IdAndUserIdAndPointsNotNullOrderByPointsDesc(
-                task.getId(), verifyUserId(userId)).map(Submission::getPoints).orElse(0.0);
+                taskId, verifyUserId(userId)).map(Submission::getPoints).orElse(0.0);
+    }
+
+    public Double calculateAvgTaskPoints(Long taskId) {
+        return submissionRepository.calculateAvgTaskPoints(taskId).stream().filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue).average().orElse(0.0);
     }
 
     public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
-        return tasks.stream().mapToDouble(task -> calculateTaskPoints(task, userId)).sum();
+        return tasks.stream().mapToDouble(task -> calculateTaskPoints(task.getId(), userId)).sum();
+    }
+
+    public Double calculateAvgAssignmentPoints(List<Task> tasks) {
+        return tasks.stream().mapToDouble(task -> calculateAvgTaskPoints(task.getId())).average().orElse(0.0);
     }
 
     public Double calculateCoursePoints(List<Assignment> assignments, String userId) {
         return assignments.stream().mapToDouble(assignment -> calculateAssignmentPoints(assignment.getTasks(), userId)).sum();
+    }
+
+    public Double calculateAvgCoursePoints(List<Assignment> assignments) {
+        return assignments.stream().mapToDouble(assignment -> calculateAvgAssignmentPoints(assignment.getTasks())).average().orElse(0.0);
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {

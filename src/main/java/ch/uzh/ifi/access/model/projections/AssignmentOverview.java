@@ -34,6 +34,9 @@ public interface AssignmentOverview {
     @Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
     Double getPoints();
 
+    @Value("#{@courseService.calculateAvgAssignmentPoints(target.tasks)}")
+    Double getAvgPoints();
+
     @Value("#{target.tasks.size()}")
     Integer getTasksCount();
 }

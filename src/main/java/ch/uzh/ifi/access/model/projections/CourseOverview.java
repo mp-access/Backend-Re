@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Projection(types = {Course.class})
 public interface CourseOverview {
@@ -31,7 +32,10 @@ public interface CourseOverview {
     @Value("#{@courseService.calculateCoursePoints(target.assignments, null)}")
     Double getPoints();
 
-    @Value("#{@courseService.getActiveAssignment(target.url)}")
-    AssignmentWorkspace getActiveAssignment();
+    @Value("#{@courseService.calculateAvgCoursePoints(target.assignments)}")
+    Double getAvgPoints();
+
+    @Value("#{@courseService.getActiveAssignments(target.url)}")
+    List<AssignmentWorkspace> getActiveAssignments();
 
 }
