@@ -85,7 +85,7 @@ public class EvaluationService {
             Path submissionDir = createLocalSubmissionDir(submission);
             CreateContainerResponse container = containerCmd.withWorkingDir(submissionDir.toString())
                     .withCmd("/bin/bash", "-c", evaluator.formCommand(submission.getType()) + " &> logs.txt")
-                    .withHostConfig(new HostConfig().withMemory(64000000L).withCpuQuota(100000L)
+                    .withHostConfig(new HostConfig().withMemory(64000000L).withCpuQuota(100000L).withPrivileged(true)
                             .withBinds(Bind.parse(submissionDir + ":" + submissionDir))
                             .withUlimits(List.of(new Ulimit("cpu", 60L, 60L)))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
