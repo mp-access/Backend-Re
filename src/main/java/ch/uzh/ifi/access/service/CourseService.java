@@ -10,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.tika.Tika;
 import org.eclipse.jgit.api.Git;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.modelmapper.ModelMapper;
@@ -250,7 +251,7 @@ public class CourseService {
 
     private String readType(Path taskFilePath) {
         try {
-            return Files.probeContentType(taskFilePath);
+            return new Tika().detect(taskFilePath);
         } catch (IOException e) {
             log.error("Failed to read file type at {}", taskFilePath);
             return FilenameUtils.getExtension(taskFilePath.toString());
