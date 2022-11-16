@@ -44,7 +44,7 @@ import static java.util.Map.entry;
 @ComponentScan(basePackageClasses = KeycloakSpringBootConfigResolver.class)
 public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
 
-    private Environment environment;
+    private Environment env;
     private KeycloakSpringBootProperties keycloakProperties;
 
     @Autowired
@@ -106,8 +106,8 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
         String realmName = keycloakProperties.getRealm();
         log.info("Initialising Keycloak realm '{}' at URL {}", realmName, keycloakProperties.getAuthServerUrl());
         Keycloak keycloakClient = Keycloak.getInstance(keycloakProperties.getAuthServerUrl(), "master",
-                environment.getProperty("KEYCLOAK_ADMIN", "admin"),
-                environment.getProperty("KEYCLOAK_ADMIN_PASSWORD", "admin"),
+                env.getProperty("KEYCLOAK_ADMIN", "admin"),
+                env.getProperty("KEYCLOAK_ADMIN_PASSWORD", "admin"),
                 "admin-cli");
 
         try {
@@ -152,7 +152,7 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
             switchEduId.setTrustEmail(true);
             switchEduId.setConfig(Map.ofEntries(
                     entry("clientId", "uzh_info1_staging"),
-                    entry("clientSecret", environment.getProperty("CLIENT_SECRET", "")),
+                    entry("clientSecret", env.getProperty("CLIENT_SECRET", "")),
                     entry("clientAuthMethod", "client_secret_basic"),
                     entry("defaultScope", "openid,profile,email"),
                     entry("validateSignature", "true"),

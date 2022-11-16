@@ -13,7 +13,7 @@ spring:
     mapper:
       ACCEPT_CASE_INSENSITIVE_ENUMS: true
   datasource:
-    url: jdbc:postgresql://localhost:5432/access
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/access}
     username: ${POSTGRES_USER:admin}
     password: ${POSTGRES_PASSWORD:admin}
   jpa:
@@ -28,6 +28,5 @@ keycloak:
   realm: access
   resource: access-backend
   auth-server-url: ${AUTH_SERVER_URL:http://localhost:8080}
-  ssl-required: external
   bearer-only: true
   principal-attribute: email

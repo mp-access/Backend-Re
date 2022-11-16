@@ -17,6 +17,7 @@ import com.google.gson.Gson;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
@@ -30,6 +31,9 @@ import java.util.List;
 @Service
 @AllArgsConstructor
 public class EvaluationService {
+
+    @Value("${WORKING_DIR:/tmp/submissions}")
+    private String workingDir;
 
     private DockerClient dockerClient;
 
@@ -61,7 +65,7 @@ public class EvaluationService {
     }
 
     private Path createLocalSubmissionDir(Submission submission) {
-        Path submissionDir = Paths.get("/tmp/access", submission.getId().toString());
+        Path submissionDir = Paths.get(workingDir, submission.getId().toString());
         if (submission.isGraded())
             submission.getTask().getFiles().stream().filter(TaskFile::isGrading)
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
