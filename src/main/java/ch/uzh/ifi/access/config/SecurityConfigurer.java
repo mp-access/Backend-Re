@@ -102,6 +102,11 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
     }
 
     @Bean
+    public String workingDir() {
+        return env.getProperty("WORKING_DIR", "/tmp/submissions");
+    }
+
+    @Bean
     public RealmResource keycloakRealm() {
         String realmName = keycloakProperties.getRealm();
         log.info("Initialising Keycloak realm '{}' at URL {}", realmName, keycloakProperties.getAuthServerUrl());
