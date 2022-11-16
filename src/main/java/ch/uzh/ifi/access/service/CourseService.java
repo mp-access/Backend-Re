@@ -122,6 +122,7 @@ public class CourseService {
         return workspace;
     }
 
+    @Transactional
     public List<TaskFile> getTaskFiles(Task task) {
         List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdOrderByIdAscPathAsc(task.getId());
         permittedFiles.forEach(file ->
@@ -132,6 +133,7 @@ public class CourseService {
         return permittedFiles;
     }
 
+    @Transactional
     public List<Submission> getSubmissions(Task task) {
         boolean isAssistant = isAssistant(task.getAssignment().getCourse().getUrl());
         List<Submission> submissions = submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(task.getId(), task.getUserId());
