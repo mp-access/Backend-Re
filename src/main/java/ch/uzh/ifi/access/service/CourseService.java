@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -122,10 +121,9 @@ public class CourseService {
         return workspace;
     }
 
-    @Transactional
     public List<TaskFile> getTaskFiles(Task task) {
         List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdOrderByIdAscPathAsc(task.getId());
-        permittedFiles.forEach(file ->
+        permittedFiles.stream().filter(TaskFile::isEditable).forEach(file ->
                 Optional.ofNullable(task.getSubmissionId())
                         .map(submissionId -> submissionFileRepository.findByTaskFile_IdAndSubmission_Id(file.getId(), submissionId))
                         .orElseGet(() -> submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), task.getUserId()))
@@ -133,7 +131,6 @@ public class CourseService {
         return permittedFiles;
     }
 
-    @Transactional
     public List<Submission> getSubmissions(Task task) {
         boolean isAssistant = isAssistant(task.getAssignment().getCourse().getUrl());
         List<Submission> submissions = submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(task.getId(), task.getUserId());
@@ -242,12 +239,12 @@ public class CourseService {
         }
     }
 
-    private String readImage(Path taskFilePath) {
+    private byte[] readImage(Path taskFilePath) {
         try {
-            return Base64.getEncoder().encodeToString(Files.readAllBytes(taskFilePath));
+            return Files.readAllBytes(taskFilePath);
         } catch (IOException e) {
             log.error("Failed to read image at {}", taskFilePath);
-            return null;
+            return new byte[0];
         }
     }
 
@@ -282,7 +279,10 @@ public class CourseService {
             modelMapper.map(taskFileDTO, taskFile);
             Path taskFilePath = taskPath.resolve(taskFile.getPath());
             taskFile.setType(readType(taskFilePath));
-            taskFile.setTemplate(taskFile.isImage() ? readImage(taskFilePath) : readContent(taskFilePath));
+            if (taskFile.isImage())
+                taskFile.setBytes(readImage(taskFilePath));
+            else
+                taskFile.setTemplate(readContent(taskFilePath));
         });
     }
 

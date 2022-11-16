@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
@@ -25,8 +26,12 @@ public class TaskFile {
 
     private boolean published;
 
-    @Lob
+    @Column(columnDefinition = "text")
     private String template;
+
+    @Lob
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private byte[] bytes;
 
     @JsonIgnore
     @ManyToOne
