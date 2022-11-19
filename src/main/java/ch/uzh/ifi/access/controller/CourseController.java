@@ -39,7 +39,7 @@ public class CourseController {
         return newCourse.getUrl();
     }
 
-    @GetMapping("/{course}/pull")
+    @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
     public void updateCourse(@PathVariable String course) {
         Course updatedCourse = courseService.updateCourseFromRepository(course);
@@ -53,7 +53,7 @@ public class CourseController {
 
     @GetMapping("/{course}")
     @PreAuthorize("hasRole(#course)")
-    public CourseOverview getCourseWorkspace(@PathVariable String course) {
+    public CourseWorkspace getCourseWorkspace(@PathVariable String course) {
         return courseService.getCourse(course);
     }
 
@@ -92,7 +92,7 @@ public class CourseController {
     }
 
     @PostMapping("/{course}/submit")
-    @PreAuthorize("hasRole(#course + '-assistant') or @courseService.isSubmissionAllowed(#submission.taskId)")
+    @PreAuthorize("hasRole(#course + '-assistant') or not #submission.type.graded or @courseService.isSubmissionAllowed(#submission.taskId)")
     public Submission evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
         Submission newSubmission = courseService.createSubmission(submission);
         return evaluationService.evaluateSubmission(newSubmission);

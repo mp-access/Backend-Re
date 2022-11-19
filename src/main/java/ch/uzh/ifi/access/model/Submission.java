@@ -25,7 +25,6 @@ public class Submission {
 
     private boolean valid;
 
-    @JsonIgnore
     @Enumerated(EnumType.STRING)
     private SubmissionType type;
 

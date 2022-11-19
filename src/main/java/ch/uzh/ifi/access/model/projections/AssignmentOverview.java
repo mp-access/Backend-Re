@@ -4,8 +4,6 @@ import ch.uzh.ifi.access.model.Assignment;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
-import java.time.LocalDateTime;
-
 @Projection(types = {Assignment.class})
 public interface AssignmentOverview {
 
@@ -19,9 +17,13 @@ public interface AssignmentOverview {
 
     String getDescription();
 
-    LocalDateTime getStartDate();
+    String getStartDate();
 
-    LocalDateTime getEndDate();
+    String getStartTime();
+
+    String getEndDate();
+
+    String getEndTime();
 
     boolean isPublished();
 

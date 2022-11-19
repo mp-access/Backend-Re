@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,5 +59,21 @@ public class Assignment {
 
     public boolean isActive() {
         return isPublished() && !isPastDue();
+    }
+
+    public String getStartDate() {
+        return startDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    public String getEndDate() {
+        return endDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    public String getStartTime() {
+        return startDate.format(DateTimeFormatter.ISO_LOCAL_TIME);
+    }
+
+    public String getEndTime() {
+        return endDate.format(DateTimeFormatter.ISO_LOCAL_TIME);
     }
 }

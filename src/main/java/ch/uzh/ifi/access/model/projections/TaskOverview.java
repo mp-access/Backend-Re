@@ -24,6 +24,9 @@ public interface TaskOverview {
     @Value("#{target.assignment.published}")
     boolean isPublished();
 
+    @Value("#{target.assignment.active}")
+    boolean isActive();
+
     void setUserId(String userId);
 
     void setSubmissionId(Long submissionId);

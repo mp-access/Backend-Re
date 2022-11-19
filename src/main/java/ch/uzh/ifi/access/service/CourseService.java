@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static java.time.LocalDateTime.now;
+
 @Slf4j
 @Service
 @AllArgsConstructor
@@ -83,7 +85,7 @@ public class CourseService {
         return courseRepository.findCoursesBy();
     }
 
-    public CourseOverview getCourse(String courseURL) {
+    public CourseWorkspace getCourse(String courseURL) {
         return courseRepository.findByUrl(courseURL).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));
     }
@@ -159,7 +161,7 @@ public class CourseService {
     }
 
     public List<AssignmentWorkspace> getActiveAssignments(String courseURL) {
-        return assignmentRepository.findByCourse_UrlOrderByEndDateAsc(courseURL);
+        return assignmentRepository.findByCourse_UrlAndStartDateAfterAndEndDateBeforeOrderByEndDateAsc(courseURL, now(), now());
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {

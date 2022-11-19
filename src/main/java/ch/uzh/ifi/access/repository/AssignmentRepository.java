@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,7 +20,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     Optional<AssignmentWorkspace> findByCourse_UrlAndUrl(String courseURL, String assignmentURL);
 
     @PostFilter("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and filterObject.published)")
-    List<AssignmentWorkspace> findByCourse_UrlOrderByEndDateAsc(String courseURL);
+    List<AssignmentWorkspace> findByCourse_UrlAndStartDateAfterAndEndDateBeforeOrderByEndDateAsc(String courseURL, LocalDateTime start, LocalDateTime end);
 
     Optional<Assignment> getByCourse_UrlAndUrl(String courseURL, String assignmentURL);
 
