@@ -1,8 +1,7 @@
 package ch.uzh.ifi.access.service;
 
-import ch.uzh.ifi.access.model.Course;
+import ch.uzh.ifi.access.model.Evaluator;
 import ch.uzh.ifi.access.model.Submission;
-import ch.uzh.ifi.access.model.TaskEvaluator;
 import ch.uzh.ifi.access.model.TaskFile;
 import ch.uzh.ifi.access.model.dao.GradeResults;
 import ch.uzh.ifi.access.repository.SubmissionRepository;
@@ -31,24 +30,11 @@ import java.util.List;
 @AllArgsConstructor
 public class EvaluationService {
 
-    private String workingDir;
+    private String submissionsDir;
 
     private DockerClient dockerClient;
 
     private SubmissionRepository submissionRepository;
-
-    public void createEvaluators(Course course) {
-        course.getAssignments().stream().flatMap(assignment -> assignment.getTasks().stream()
-                        .map(task -> task.getEvaluator().getDockerImage())).distinct().filter(StringUtils::isNotBlank)
-                .forEach(imageName -> {
-                    try {
-                        dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete();
-                    } catch (InterruptedException e) {
-                        log.error("Failed to pull docker image {}", imageName);
-                        Thread.currentThread().interrupt();
-                    }
-                });
-    }
 
     private void createLocalFile(Path submissionDir, String relativeFilePath, String content) {
         Path filePath = submissionDir.resolve(relativeFilePath);
@@ -63,7 +49,7 @@ public class EvaluationService {
     }
 
     private Path createLocalSubmissionDir(Submission submission) {
-        Path submissionDir = Paths.get(workingDir, submission.getId().toString());
+        Path submissionDir = Paths.get(submissionsDir, submission.getId().toString());
         if (submission.isGraded())
             submission.getTask().getFiles().stream().filter(TaskFile::isGrading)
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
@@ -82,7 +68,7 @@ public class EvaluationService {
 
     @Transactional
     public Submission evaluateSubmission(Submission submission) {
-        TaskEvaluator evaluator = submission.getTask().getEvaluator();
+        Evaluator evaluator = submission.getTask().getEvaluator();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(evaluator.getDockerImage())) {
             Path submissionDir = createLocalSubmissionDir(submission);
             CreateContainerResponse container = containerCmd.withWorkingDir(submissionDir.toString())

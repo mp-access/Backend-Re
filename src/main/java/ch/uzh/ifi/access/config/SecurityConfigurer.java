@@ -102,8 +102,8 @@ public class SecurityConfigurer extends KeycloakWebSecurityConfigurerAdapter {
     }
 
     @Bean
-    public String workingDir() {
-        return env.getProperty("WORKING_DIR", "/tmp/submissions");
+    public String submissionsDir() {
+        return env.getProperty("SUBMISSIONS_DIR", "/tmp/submissions");
     }
 
     @Bean

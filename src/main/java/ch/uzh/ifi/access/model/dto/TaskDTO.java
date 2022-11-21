@@ -3,8 +3,6 @@ package ch.uzh.ifi.access.model.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @NoArgsConstructor
 public class TaskDTO {
@@ -23,5 +21,5 @@ public class TaskDTO {
 
     TaskEvaluatorDTO evaluator;
 
-    List<TaskFileDTO> files;
+    TaskFilesDTO files;
 }

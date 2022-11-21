@@ -11,7 +11,7 @@ import javax.persistence.Id;
 @Getter
 @Setter
 @Entity
-public class TaskEvaluator {
+public class Evaluator {
     @Id
     @GeneratedValue
     private Long id;

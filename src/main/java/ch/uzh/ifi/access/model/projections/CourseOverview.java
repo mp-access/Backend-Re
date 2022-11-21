@@ -36,5 +36,4 @@ public interface CourseOverview {
 
     @Value("#{@courseService.getAssignments(target.url).size()}")
     Integer getAssignmentsCount();
-
 }

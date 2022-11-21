@@ -12,7 +12,7 @@ public interface TaskFileRepository extends JpaRepository<TaskFile, Long> {
 
     @Transactional
     @PostFilter("hasRole(filterObject.task.assignment.course.url + '-assistant') or filterObject.published")
-    List<TaskFile> findByTask_IdOrderByIdAscPathAsc(Long taskId);
+    List<TaskFile> findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(Long taskId);
 
     Optional<TaskFile> findByTask_IdAndPath(Long taskId, String filePath);
 }

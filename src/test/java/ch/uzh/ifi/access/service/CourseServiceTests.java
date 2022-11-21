@@ -13,7 +13,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.transaction.Transactional;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,7 +44,6 @@ class CourseServiceTests {
                 assignment.getOrdinalNum().equals(1)).findFirst().orElseThrow();
         assertEquals(6, createdAssignment.getTasks().size());
         assertEquals("Introduction to Python", createdAssignment.getTitle());
-        assertEquals(LocalDateTime.of(2050, 12, 4, 8, 0), createdAssignment.getEndDate());
         Task codeTask = createdAssignment.getTasks().stream().filter(task ->
                 task.getOrdinalNum().equals(1)).findFirst().orElseThrow();
         assertTrue(codeTask.getInstructions().startsWith("In this task you will model the information system"));

@@ -31,7 +31,7 @@ public class Task {
 
     @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "task_evaluator_id")
-    private TaskEvaluator evaluator;
+    private Evaluator evaluator;
 
     @ManyToOne
     @JoinColumn(name = "assignment_id")
@@ -42,6 +42,8 @@ public class Task {
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
     private List<TaskFile> files = new ArrayList<>();
+
+    private boolean enabled;
 
     @Transient
     private String userId;

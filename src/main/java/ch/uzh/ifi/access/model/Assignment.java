@@ -42,6 +42,9 @@ public class Assignment {
 
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL)
     private List<Task> tasks = new ArrayList<>();
+
+    private boolean enabled;
+
     @Transient
     private Double points;
 
@@ -59,14 +62,6 @@ public class Assignment {
 
     public boolean isActive() {
         return isPublished() && !isPastDue();
-    }
-
-    public String getStartDate() {
-        return startDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-    }
-
-    public String getEndDate() {
-        return endDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
     }
 
     public String getStartTime() {

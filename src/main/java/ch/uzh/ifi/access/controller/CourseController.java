@@ -35,15 +35,13 @@ public class CourseController {
         Course newCourse = courseService.createCourseFromRepository(body.get("repository"));
         authService.createCourseRoles(newCourse.getUrl());
         authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
-        evaluationService.createEvaluators(newCourse);
         return newCourse.getUrl();
     }
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    public void updateCourse(@PathVariable String course) {
-        Course updatedCourse = courseService.updateCourseFromRepository(course);
-        evaluationService.createEvaluators(updatedCourse);
+    public String updateCourse(@PathVariable String course) {
+        return courseService.updateCourseFromRepository(course).getUrl();
     }
 
     @GetMapping

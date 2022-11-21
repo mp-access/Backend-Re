@@ -11,14 +11,12 @@ import java.util.Optional;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    List<TaskOverview> findByAssignment_Course_UrlAndAssignment_UrlOrderByOrdinalNum(
+    List<TaskOverview> findByAssignment_Course_UrlAndAssignment_UrlAndEnabledTrueOrderByOrdinalNum(
             String courseURL, String assignmentURL);
 
     @PostAuthorize("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and returnObject.get().published)")
     Optional<TaskWorkspace> findByAssignment_Course_UrlAndAssignment_UrlAndUrl(String courseURL, String assignmentURL, String taskURL);
 
     Optional<Task> findByAssignment_IdAndOrdinalNum(Long assignmentId, Integer taskNum);
-
-    Optional<Task> getByAssignment_IdAndUrl(Long assignmentId, String taskURL);
 
 }

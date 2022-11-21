@@ -7,6 +7,10 @@ import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.persistence.*;
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+import static java.time.LocalDateTime.now;
 
 @Getter
 @Setter
@@ -18,13 +22,9 @@ public class TaskFile {
 
     private String path;
 
-    private String type;
+    private String mime;
 
-    private boolean editable;
-
-    private boolean grading;
-
-    private boolean published;
+    private LocalDateTime publishDate;
 
     @Column(columnDefinition = "text")
     private String template;
@@ -38,6 +38,12 @@ public class TaskFile {
     @JoinColumn(name = "task_id")
     private Task task;
 
+    private boolean enabled;
+
+    private boolean editable;
+
+    private boolean grading;
+
     @Transient
     private String content;
 
@@ -46,10 +52,14 @@ public class TaskFile {
     }
 
     public String getLanguage() {
-        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(type, '-'), type);
+        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(mime, '-'), mime);
     }
 
     public boolean isImage() {
-        return StringUtils.contains(type, "image");
+        return StringUtils.contains(mime, "image");
+    }
+
+    public boolean isPublished() {
+        return Objects.nonNull(publishDate) && publishDate.isBefore(now());
     }
 }

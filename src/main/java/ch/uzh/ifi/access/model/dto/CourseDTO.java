@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -24,5 +25,5 @@ public class CourseDTO {
 
     String semester;
 
-    List<String> assignments;
+    List<String> assignments = new ArrayList<>();
 }

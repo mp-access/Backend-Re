@@ -6,10 +6,12 @@ import ch.uzh.ifi.access.model.dto.*;
 import ch.uzh.ifi.access.model.projections.*;
 import ch.uzh.ifi.access.repository.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.github.dockerjava.api.DockerClient;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.tika.Tika;
 import org.eclipse.jgit.api.Git;
 import org.keycloak.representations.idm.UserRepresentation;
@@ -25,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,6 +50,8 @@ public class CourseService {
     private SubmissionRepository submissionRepository;
 
     private SubmissionFileRepository submissionFileRepository;
+
+    private DockerClient dockerClient;
 
     private ModelMapper modelMapper;
 
@@ -91,7 +96,7 @@ public class CourseService {
     }
 
     public List<AssignmentOverview> getAssignments(String courseURL) {
-        return assignmentRepository.findByCourse_UrlOrderByOrdinalNumDesc(courseURL);
+        return assignmentRepository.findByCourse_UrlAndEnabledTrueOrderByOrdinalNumDesc(courseURL);
     }
 
     public AssignmentWorkspace getAssignment(String courseURL, String assignmentURL) {
@@ -100,7 +105,7 @@ public class CourseService {
     }
 
     public List<TaskOverview> getTasks(String courseURL, String assignmentURL) {
-        return taskRepository.findByAssignment_Course_UrlAndAssignment_UrlOrderByOrdinalNum(courseURL, assignmentURL);
+        return taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndEnabledTrueOrderByOrdinalNum(courseURL, assignmentURL);
     }
 
     public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL) {
@@ -124,7 +129,7 @@ public class CourseService {
     }
 
     public List<TaskFile> getTaskFiles(Task task) {
-        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdOrderByIdAscPathAsc(task.getId());
+        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(task.getId());
         permittedFiles.stream().filter(TaskFile::isEditable).forEach(file ->
                 Optional.ofNullable(task.getSubmissionId())
                         .map(submissionId -> submissionFileRepository.findByTaskFile_IdAndSubmission_Id(file.getId(), submissionId))
@@ -161,7 +166,8 @@ public class CourseService {
     }
 
     public List<AssignmentWorkspace> getActiveAssignments(String courseURL) {
-        return assignmentRepository.findByCourse_UrlAndStartDateAfterAndEndDateBeforeOrderByEndDateAsc(courseURL, now(), now());
+        return assignmentRepository.findByCourse_UrlAndEnabledTrueAndStartDateBeforeAndEndDateAfterOrderByEndDateAsc(
+                courseURL, now(), now());
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {
@@ -259,67 +265,101 @@ public class CourseService {
         }
     }
 
-    public void createOrUpdateTask(Assignment assignment, Path taskPath) {
-        TaskDTO taskConfig = getConfigFile(taskPath, TaskDTO.class);
-        Task task = taskRepository.getByAssignment_IdAndUrl(assignment.getId(), taskConfig.getUrl())
+    private TaskFile createOrUpdateTaskFile(Task task, Path parentPath, String filePath) {
+        TaskFile taskFile = task.getFiles().stream()
+                .filter(existing -> existing.getPath().equals(filePath)).findFirst()
                 .orElseGet(() -> {
-                    Task newTask = new Task();
-                    assignment.getTasks().add(newTask);
-                    newTask.setAssignment(assignment);
-                    return newTask;
+                    TaskFile newTaskFile = new TaskFile();
+                    task.getFiles().add(newTaskFile);
+                    newTaskFile.setTask(task);
+                    newTaskFile.setPath(filePath);
+                    return newTaskFile;
                 });
-        modelMapper.map(taskConfig, task);
-        task.setInstructions(readContent(taskPath.resolve(task.getInstructions())));
-        taskConfig.getFiles().forEach(taskFileDTO -> {
-            TaskFile taskFile = taskFileRepository.findByTask_IdAndPath(task.getId(), taskFileDTO.getPath())
-                    .orElseGet(() -> {
-                        TaskFile newTaskFile = new TaskFile();
-                        task.getFiles().add(newTaskFile);
-                        newTaskFile.setTask(task);
-                        return newTaskFile;
-                    });
-            modelMapper.map(taskFileDTO, taskFile);
-            Path taskFilePath = taskPath.resolve(taskFile.getPath());
-            taskFile.setType(readType(taskFilePath));
+        if (!taskFile.isEnabled()) {
+            taskFile.setEnabled(true);
+            Path taskFilePath = parentPath.resolve(taskFile.getPath());
+            taskFile.setMime(readType(taskFilePath));
             if (taskFile.isImage())
                 taskFile.setBytes(readImage(taskFilePath));
             else
                 taskFile.setTemplate(readContent(taskFilePath));
-        });
+        }
+        return taskFile;
     }
 
-    public void createOrUpdateAssignment(Course course, Path assignmentPath) {
-        AssignmentDTO assignmentConfig = getConfigFile(assignmentPath, AssignmentDTO.class);
-        Assignment assignment = assignmentRepository.getByCourse_UrlAndUrl(course.getUrl(), assignmentConfig.getUrl())
-                .orElseGet(() -> {
-                    Assignment newAssignment = new Assignment();
-                    course.getAssignments().add(newAssignment);
-                    newAssignment.setCourse(course);
-                    return newAssignment;
+    public Course createOrUpdateCourseFromRepository(Course course) {
+        Path coursePath = createCourseDir(course.getRepository());
+        CourseDTO courseConfig = getConfigFile(coursePath, CourseDTO.class);
+        modelMapper.map(courseConfig, course);
+        course.getAssignments().forEach(assignment -> assignment.setEnabled(false));
+        courseConfig.getAssignments().forEach(assignmentDir -> {
+            Path assignmentPath = coursePath.resolve(assignmentDir);
+            AssignmentDTO assignmentConfig = getConfigFile(assignmentPath, AssignmentDTO.class);
+            Assignment assignment = course.getAssignments().stream()
+                    .filter(existing -> existing.getUrl().equals(assignmentConfig.getUrl())).findFirst()
+                    .orElseGet(() -> {
+                        Assignment newAssignment = new Assignment();
+                        course.getAssignments().add(newAssignment);
+                        newAssignment.setCourse(course);
+                        return newAssignment;
+                    });
+            modelMapper.map(assignmentConfig, assignment);
+            assignment.setEnabled(true);
+            assignment.getTasks().forEach(task -> task.setEnabled(false));
+            assignmentConfig.getTasks().forEach(taskDir -> {
+                Path taskPath = assignmentPath.resolve(taskDir);
+                TaskDTO taskConfig = getConfigFile(taskPath, TaskDTO.class);
+                Task task = assignment.getTasks().stream()
+                        .filter(existing -> existing.getUrl().equals(taskConfig.getUrl())).findFirst()
+                        .orElseGet(() -> {
+                            Task newTask = new Task();
+                            assignment.getTasks().add(newTask);
+                            newTask.setAssignment(assignment);
+                            return newTask;
+                        });
+                modelMapper.map(taskConfig, task);
+                task.setEnabled(true);
+                task.setInstructions(readContent(taskPath.resolve(task.getInstructions())));
+                task.getFiles().forEach(file -> file.setEnabled(false));
+                taskConfig.getEvaluator().getResources().forEach(filePath ->
+                        createOrUpdateTaskFile(task, coursePath, filePath).setGrading(true));
+                taskConfig.getFiles().getGrading().forEach(filePath ->
+                        createOrUpdateTaskFile(task, taskPath, filePath).setGrading(true));
+                taskConfig.getFiles().getEditable().forEach(filePath ->
+                        createOrUpdateTaskFile(task, taskPath, filePath).setEditable(true));
+                taskConfig.getFiles().getPublish().forEach((key, filePaths) -> {
+                    LocalDateTime publishDate = switch (key) {
+                        case "startDate" -> assignment.getStartDate();
+                        case "endDate" -> assignment.getEndDate();
+                        default -> LocalDateTime.parse(key);
+                    };
+                    filePaths.forEach(filePath ->
+                            createOrUpdateTaskFile(task, taskPath, filePath).setPublishDate(publishDate));
                 });
-        modelMapper.map(assignmentConfig, assignment);
-        assignmentConfig.getTasks().forEach(taskDir -> createOrUpdateTask(assignment, assignmentPath.resolve(taskDir)));
+            });
+        });
+        course.getAssignments().stream()
+                .flatMap(assignment -> assignment.getTasks().stream().map(task -> task.getEvaluator().getDockerImage()))
+                .distinct().filter(StringUtils::isNotBlank).forEach(imageName -> {
+                    try {
+                        dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete();
+                    } catch (InterruptedException e) {
+                        log.error("Failed to pull docker image {}", imageName);
+                        Thread.currentThread().interrupt();
+                    }
+                });
+        return courseRepository.save(course);
     }
 
     public Course createCourseFromRepository(String repository) {
-        Path coursePath = createCourseDir(repository);
-        CourseDTO courseConfig = getConfigFile(coursePath, CourseDTO.class);
-        Course newCourse = modelMapper.map(courseConfig, Course.class);
+        Course newCourse = new Course();
         newCourse.setRepository(repository);
-        courseConfig.getAssignments().forEach(assignmentDir ->
-                createOrUpdateAssignment(newCourse, coursePath.resolve(assignmentDir)));
-        return courseRepository.save(newCourse);
+        return createOrUpdateCourseFromRepository(newCourse);
     }
 
     @Transactional
     public Course updateCourseFromRepository(String courseURL) {
         Course existingCourse = getCourseByURL(courseURL);
-        Path coursePath = createCourseDir(existingCourse.getRepository());
-        CourseDTO courseConfig = getConfigFile(coursePath, CourseDTO.class);
-        modelMapper.map(courseConfig, existingCourse);
-        Course updatedCourse = courseRepository.save(existingCourse);
-        courseConfig.getAssignments().forEach(assignmentDir ->
-                createOrUpdateAssignment(existingCourse, coursePath.resolve(assignmentDir)));
-        return updatedCourse;
+        return createOrUpdateCourseFromRepository(existingCourse);
     }
 }

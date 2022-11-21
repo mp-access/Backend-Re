@@ -1,8 +1,11 @@
 package ch.uzh.ifi.access.model.projections;
 
 import ch.uzh.ifi.access.model.Assignment;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
+
+import java.time.LocalDateTime;
 
 @Projection(types = {Assignment.class})
 public interface AssignmentOverview {
@@ -17,11 +20,13 @@ public interface AssignmentOverview {
 
     String getDescription();
 
-    String getStartDate();
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDateTime getStartDate();
 
     String getStartTime();
 
-    String getEndDate();
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    LocalDateTime getEndDate();
 
     String getEndTime();
 

@@ -37,6 +37,7 @@ public class Course {
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
     private List<Assignment> assignments = new ArrayList<>();
+
     @Transient
     private Double points;
 
