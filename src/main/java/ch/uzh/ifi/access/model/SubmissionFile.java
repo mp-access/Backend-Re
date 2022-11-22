@@ -28,5 +28,9 @@ public class SubmissionFile {
     @ManyToOne
     @JoinColumn(name = "submission_id")
     private Submission submission;
+    
+    public Long getTaskFileId() {
+        return taskFile.getId();
+    }
 
 }

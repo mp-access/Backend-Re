@@ -44,9 +44,6 @@ public class TaskFile {
 
     private boolean grading;
 
-    @Transient
-    private String content;
-
     public String getName() {
         return StringUtils.firstNonBlank(StringUtils.substringAfterLast(path, '/'), path);
     }

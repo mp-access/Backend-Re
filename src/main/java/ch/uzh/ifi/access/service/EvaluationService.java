@@ -9,21 +9,25 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.WaitContainerResultCallback;
+import com.github.dockerjava.api.exception.DockerClientException;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.HostConfig;
-import com.github.dockerjava.api.model.Ulimit;
 import com.google.gson.Gson;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.util.Strings;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -57,15 +61,6 @@ public class EvaluationService {
         return submissionDir;
     }
 
-    private GradeResults readGradeResults(Path path) {
-        try {
-            return new Gson().fromJson(Files.newBufferedReader(path), GradeResults.class);
-        } catch (IOException e) {
-            log.info("Failed to read test results file at {}", path.toAbsolutePath());
-            return new GradeResults();
-        }
-    }
-
     @Transactional
     public Submission evaluateSubmission(Submission submission) {
         Evaluator evaluator = submission.getTask().getEvaluator();
@@ -73,26 +68,34 @@ public class EvaluationService {
             Path submissionDir = createLocalSubmissionDir(submission);
             CreateContainerResponse container = containerCmd.withWorkingDir(submissionDir.toString())
                     .withCmd("/bin/bash", "-c", evaluator.formCommand(submission.getType()) + " &> logs.txt")
-                    .withHostConfig(new HostConfig().withMemory(64000000L).withCpuQuota(100000L).withPrivileged(true)
-                            .withBinds(Bind.parse(submissionDir + ":" + submissionDir))
-                            .withUlimits(List.of(new Ulimit("cpu", 60L, 60L)))).exec();
+                    .withHostConfig(new HostConfig().withMemory(512 * 1024 * 1024L).withPrivileged(true)
+                            .withBinds(Bind.parse(submissionDir + ":" + submissionDir))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
-                    .exec(new WaitContainerResultCallback()).awaitStatusCode();
+                    .exec(new WaitContainerResultCallback()).awaitStatusCode(2, TimeUnit.MINUTES);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
-            Path logsPath = submissionDir.resolve("logs.txt");
-            if (logsPath.toFile().exists())
-                submission.setLogs(Files.readString(logsPath));
-            if (submission.isGraded()) {
-                GradeResults results = readGradeResults(submissionDir.resolve(evaluator.getGradeResults()));
-                submission.setPoints(results.getPoints());
-                submission.setOutput(results.getHints().stream().findFirst().orElse("Memory Limit Exceeded"));
+            if (statusCode == 137) {
+                submission.setOutput("Memory Limit Exceeded");
+                submission.setPoints(0.0);
             }
-            submission.setValid(true);
+            submission.setLogs(FileUtils.readLines(submissionDir.resolve("logs.txt").toFile(),
+                    Charset.defaultCharset()).stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
+            if (submission.isGraded()) {
+                Path resultsPath = submissionDir.resolve(evaluator.getGradeResults());
+                GradeResults results = new Gson().fromJson(Files.newBufferedReader(resultsPath), GradeResults.class);
+                results.getHints().stream().findFirst().ifPresent(submission::setOutput);
+                submission.setPoints(results.getPoints());
+            }
         } catch (IOException exception) {
-            submission.setLogs(StringUtils.join(submission.getLogs(), exception));
-            submission.setValid(false);
+            log.error("Failed to read evaluation logs or results: {}", exception.getMessage());
+        } catch (DockerClientException exception) {
+            submission.setOutput("Execution error");
+            if (exception.getMessage().contains("timeout")) {
+                submission.setOutput("Time Limit Exceeded");
+                submission.setPoints(0.0);
+            }
         }
+        submission.setValid(!submission.isGraded() || Objects.nonNull(submission.getPoints()));
         return submissionRepository.save(submission);
     }
 }
