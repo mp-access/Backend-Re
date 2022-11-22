@@ -230,24 +230,6 @@ public class CourseService {
         return courseDir;
     }
 
-    private String readContent(Path taskFilePath) {
-        try {
-            return Files.readString(taskFilePath);
-        } catch (IOException e) {
-            log.error("Failed to read file at {}", taskFilePath);
-            return null;
-        }
-    }
-
-    private byte[] readImage(Path taskFilePath) {
-        try {
-            return Files.readAllBytes(taskFilePath);
-        } catch (IOException e) {
-            log.error("Failed to read image at {}", taskFilePath);
-            return new byte[0];
-        }
-    }
-
     private String readType(Path taskFilePath) {
         try {
             return new Tika().detect(taskFilePath);
@@ -268,13 +250,17 @@ public class CourseService {
                     return newTaskFile;
                 });
         if (!taskFile.isEnabled()) {
-            taskFile.setEnabled(true);
             Path taskFilePath = parentPath.resolve(taskFile.getPath());
             taskFile.setMime(readType(taskFilePath));
-            if (taskFile.isImage())
-                taskFile.setBytes(readImage(taskFilePath));
-            else
-                taskFile.setTemplate(readContent(taskFilePath));
+            try {
+                if (taskFile.isImage())
+                    taskFile.setBytes(Files.readAllBytes(taskFilePath));
+                else
+                    taskFile.setTemplate(Files.readString(taskFilePath));
+                taskFile.setEnabled(true);
+            } catch (IOException e) {
+                log.error("Failed to read file content at {}", taskFilePath);
+            }
         }
         return taskFile;
     }
@@ -310,8 +296,12 @@ public class CourseService {
                             return newTask;
                         });
                 modelMapper.map(taskConfig, task);
-                task.setEnabled(true);
-                task.setInstructions(readContent(taskPath.resolve(task.getInstructions())));
+                try {
+                    task.setInstructions(Files.readString(taskPath.resolve(task.getInstructions())));
+                    task.setEnabled(true);
+                } catch (IOException e) {
+                    log.error("Failed to read task instructions: {}", e.getMessage());
+                }
                 task.getFiles().forEach(file -> file.setEnabled(false));
                 taskConfig.getEvaluator().getResources().forEach(filePath ->
                         createOrUpdateTaskFile(task, coursePath, filePath).setGrading(true));
