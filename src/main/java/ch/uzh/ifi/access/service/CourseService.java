@@ -49,6 +49,8 @@ public class CourseService {
 
     private SubmissionRepository submissionRepository;
 
+    private SubmissionFileRepository submissionFileRepository;
+
     private DockerClient dockerClient;
 
     private ModelMapper modelMapper;
@@ -127,7 +129,11 @@ public class CourseService {
     }
 
     public List<TaskFile> getTaskFiles(Task task) {
-        return taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(task.getId());
+        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(task.getId());
+        permittedFiles.stream().filter(TaskFile::isEditable).forEach(file ->
+                submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), task.getUserId())
+                        .ifPresent(latestSubmissionFile -> file.setContent(latestSubmissionFile.getContent())));
+        return permittedFiles;
     }
 
     public List<Submission> getSubmissions(Task task) {

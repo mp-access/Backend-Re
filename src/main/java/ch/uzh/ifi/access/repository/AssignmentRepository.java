@@ -16,7 +16,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
     @PostFilter("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and filterObject.published)")
     List<AssignmentOverview> findByCourse_UrlAndEnabledTrueOrderByOrdinalNumDesc(String courseURL);
 
-    @PostAuthorize("hasRole(#courseURL + '-assistant') or (returnObject.present and returnObject.get().published)")
+    @PostAuthorize("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and returnObject.present and returnObject.get().published)")
     Optional<AssignmentWorkspace> findByCourse_UrlAndUrl(String courseURL, String assignmentURL);
 
     @PostFilter("hasRole(#courseURL)")
