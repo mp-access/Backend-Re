@@ -52,7 +52,11 @@ public class TaskFile {
     }
 
     public String getLanguage() {
-        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(mime, '-'), mime);
+        return switch (mime) {
+            case "py", "python", "text/x-python" -> "python";
+            case "r", "r-base", "text/x-rsrc" -> "r";
+            default -> StringUtils.firstNonBlank(StringUtils.substringAfterLast(mime, '-'), mime);
+        };
     }
 
     public boolean isImage() {
