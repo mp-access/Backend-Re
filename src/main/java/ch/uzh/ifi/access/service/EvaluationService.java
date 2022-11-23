@@ -55,7 +55,7 @@ public class EvaluationService {
     private Path createLocalSubmissionDir(Submission submission) {
         Path submissionDir = Paths.get(submissionsDir, submission.getId().toString());
         if (submission.isGraded())
-            submission.getTask().getFiles().stream().filter(TaskFile::isGrading)
+            submission.getTask().getFiles().stream().filter(TaskFile::isEnabled).filter(TaskFile::isGrading)
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
         submission.getFiles().forEach(file -> createLocalFile(submissionDir, file.getTaskFile().getPath(), file.getContent()));
         return submissionDir;
