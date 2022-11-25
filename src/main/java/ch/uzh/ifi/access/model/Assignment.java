@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -64,11 +65,17 @@ public class Assignment {
         return isPublished() && !isPastDue();
     }
 
-    public String getStartTime() {
-        return startDate.format(DateTimeFormatter.ISO_LOCAL_TIME);
+    public Long getActiveDays() {
+        return Duration.between(startDate, endDate).toDays();
     }
 
-    public String getEndTime() {
-        return endDate.format(DateTimeFormatter.ISO_LOCAL_TIME);
+    public String getActiveRange() {
+        String start = startDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        String end = endDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        return "%s ~ %s".formatted(start, end);
+    }
+
+    public Duration getRemainingTime() {
+        return Duration.between(now(), endDate);
     }
 }

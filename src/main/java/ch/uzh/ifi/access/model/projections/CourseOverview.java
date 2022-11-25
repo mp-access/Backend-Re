@@ -20,6 +20,8 @@ public interface CourseOverview {
 
     String getSemester();
 
+    String getDescription();
+
     @JsonFormat(pattern = "dd-MM-yyyy")
     LocalDate getStartDate();
 

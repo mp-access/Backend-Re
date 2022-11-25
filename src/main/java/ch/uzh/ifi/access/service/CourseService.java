@@ -99,6 +99,14 @@ public class CourseService {
         return assignmentRepository.findByCourse_UrlAndEnabledTrueOrderByOrdinalNumDesc(courseURL);
     }
 
+    public List<AssignmentWorkspace> getActiveAssignments(String courseURL) {
+        return assignmentRepository.findByCourse_UrlAndEnabledTrueAndStartDateBeforeAndEndDateAfterOrderByEndDateAsc(courseURL, now(), now());
+    }
+
+    public List<AssignmentOverview> getPastAssignments(String courseURL) {
+        return assignmentRepository.findByCourse_UrlAndEnabledTrueAndEndDateBeforeOrderByEndDateAsc(courseURL, now());
+    }
+
     public AssignmentWorkspace getAssignment(String courseURL, String assignmentURL) {
         return assignmentRepository.findByCourse_UrlAndUrl(courseURL, assignmentURL)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No assignment found with the URL " + assignmentURL));
@@ -161,11 +169,6 @@ public class CourseService {
     public boolean isSubmissionAllowed(Long taskId) {
         Task task = getTaskById(taskId);
         return task.getAssignment().isActive() && (getRemainingAttempts(task) > 0);
-    }
-
-    public List<AssignmentWorkspace> getActiveAssignments(String courseURL) {
-        return assignmentRepository.findByCourse_UrlAndEnabledTrueAndStartDateBeforeAndEndDateAfterOrderByEndDateAsc(
-                courseURL, now(), now());
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {

@@ -9,9 +9,9 @@ import java.util.List;
 @Projection(types = {Course.class})
 public interface CourseWorkspace extends CourseOverview {
 
-    @Value("#{@courseService.getAssignments(target.url)}")
-    List<AssignmentOverview> getAssignments();
-
     @Value("#{@courseService.getActiveAssignments(target.url)}")
     List<AssignmentWorkspace> getActiveAssignments();
+
+    @Value("#{@courseService.getPastAssignments(target.url)}")
+    List<AssignmentOverview> getPastAssignments();
 }

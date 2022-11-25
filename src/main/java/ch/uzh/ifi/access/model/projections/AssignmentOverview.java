@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.model.projections;
 
 import ch.uzh.ifi.access.model.Assignment;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
@@ -20,15 +19,22 @@ public interface AssignmentOverview {
 
     String getDescription();
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDateTime getStartDate();
 
-    String getStartTime();
-
-    @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDateTime getEndDate();
 
-    String getEndTime();
+    String getActiveRange();
+
+    Long getActiveDays();
+
+    @Value("#{target.remainingTime.toDays()}")
+    Long getRemainingDays();
+
+    @Value("#{target.remainingTime.toHoursPart()}")
+    Integer getRemainingHours();
+
+    @Value("#{target.remainingTime.toMinutesPart()}")
+    Integer getRemainingMinutes();
 
     boolean isPublished();
 
