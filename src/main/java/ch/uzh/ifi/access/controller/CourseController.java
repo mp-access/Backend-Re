@@ -16,7 +16,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @AllArgsConstructor
 @RestController
@@ -29,13 +28,18 @@ public class CourseController {
 
     private EvaluationService evaluationService;
 
-    @PostMapping
+    @PostMapping("/create/{repository}")
     @PreAuthorize("hasRole('supervisor')")
-    public String createCourse(@RequestBody Map<String, String> body, Authentication authentication) {
-        Course newCourse = courseService.createCourseFromRepository(body.get("repository"));
+    public String createCourse(@PathVariable String repository, Authentication authentication) {
+        Course newCourse = courseService.createCourseFromRepository(repository);
         authService.createCourseRoles(newCourse.getUrl());
         authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
         return newCourse.getUrl();
+    }
+
+    @PostMapping("/{course}/enroll")
+    public void enrollInCourse(@PathVariable String course, Authentication authentication) {
+        authService.registerCourseStudents(course, List.of(authentication.getName()));
     }
 
     @PostMapping("/{course}/pull")
@@ -47,6 +51,11 @@ public class CourseController {
     @GetMapping
     public List<CourseOverview> getCourses() {
         return courseService.getCourses();
+    }
+
+    @GetMapping("/featured")
+    public List<CourseFeature> getFeaturedCourses() {
+        return courseService.getFeaturedCourses();
     }
 
     @GetMapping("/{course}")
@@ -96,10 +105,16 @@ public class CourseController {
         return evaluationService.evaluateSubmission(newSubmission);
     }
 
-    @PostMapping("/{course}/enroll")
+    @PostMapping("/{course}/register/students")
     @PreAuthorize("hasRole(#course + '-supervisor')")
-    public void addStudents(@PathVariable String course, @RequestBody List<String> newStudents) {
+    public void enrollStudents(@PathVariable String course, @RequestBody List<String> newStudents) {
         authService.registerCourseStudents(course, newStudents);
+    }
+
+    @PostMapping("/{course}/register/assistants")
+    @PreAuthorize("hasRole(#course + '-supervisor')")
+    public void enrollAssistants(@PathVariable String course, @RequestBody List<String> newAssistants) {
+        authService.registerCourseAssistants(course, newAssistants);
     }
 
     @GetMapping("/{course}/students")
@@ -119,11 +134,5 @@ public class CourseController {
     @PreAuthorize("hasRole(#course + '-supervisor')")
     public List<UserRepresentation> getAssistants(@PathVariable String course) {
         return authService.getAssistantsByCourse(course);
-    }
-
-    @PostMapping("/{course}/assistants")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
-    public void addAssistants(@PathVariable String course, @RequestBody List<String> newAssistants) {
-        authService.registerCourseAssistants(course, newAssistants);
     }
 }

@@ -15,6 +15,9 @@ public interface AssignmentOverview {
 
     String getTitle();
 
+    @Value("#{'Assignment ' + target.ordinalNum.toString()}")
+    String getName();
+
     Integer getOrdinalNum();
 
     String getDescription();

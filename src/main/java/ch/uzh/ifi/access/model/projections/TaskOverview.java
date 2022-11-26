@@ -13,6 +13,9 @@ public interface TaskOverview {
 
     String getTitle();
 
+    @Value("#{'Task ' + target.ordinalNum.toString()}")
+    String getName();
+
     Integer getOrdinalNum();
 
     String getInstructions();

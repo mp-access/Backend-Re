@@ -35,6 +35,8 @@ public class Course {
 
     private LocalDate endDate;
 
+    private boolean restricted = false;
+
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
     private List<Assignment> assignments = new ArrayList<>();
 

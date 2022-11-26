@@ -90,6 +90,10 @@ public class CourseService {
         return courseRepository.findCoursesBy();
     }
 
+    public List<CourseFeature> getFeaturedCourses() {
+        return courseRepository.findCoursesByRestrictedFalse();
+    }
+
     public CourseWorkspace getCourse(String courseURL) {
         return courseRepository.findByUrl(courseURL).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));

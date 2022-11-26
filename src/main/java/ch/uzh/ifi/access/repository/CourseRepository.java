@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.repository;
 
 import ch.uzh.ifi.access.model.Course;
+import ch.uzh.ifi.access.model.projections.CourseFeature;
 import ch.uzh.ifi.access.model.projections.CourseOverview;
 import ch.uzh.ifi.access.model.projections.CourseWorkspace;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,5 +18,8 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @PostFilter("hasRole(filterObject.url)")
     List<CourseOverview> findCoursesBy();
+
+    @PostFilter("not hasRole(filterObject.url)")
+    List<CourseFeature> findCoursesByRestrictedFalse();
 
 }
