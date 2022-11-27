@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.model;
 
+import ch.uzh.ifi.access.model.dao.TimeCount;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -65,17 +66,19 @@ public class Assignment {
         return isPublished() && !isPastDue();
     }
 
-    public Long getActiveDays() {
-        return Duration.between(startDate, endDate).toDays();
-    }
-
     public String getActiveRange() {
         String start = startDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
         String end = endDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
         return "%s ~ %s".formatted(start, end);
     }
 
-    public Duration getRemainingTime() {
-        return Duration.between(now(), endDate);
+    public List<TimeCount> getRemainingTime() {
+        if (!isActive()) return List.of();
+        Duration remaining = Duration.between(now(), endDate);
+        return List.of(
+                new TimeCount("DAYS", remaining.toDays() - 1, Duration.between(startDate, endDate).toDays()),
+                new TimeCount("HOURS", (long) remaining.toHoursPart(), 24L),
+                new TimeCount("MINUTES", (long) remaining.toMinutesPart(), 60L)
+        );
     }
 }

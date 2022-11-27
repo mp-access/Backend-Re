@@ -1,9 +1,9 @@
 package ch.uzh.ifi.access.repository;
 
 import ch.uzh.ifi.access.model.Course;
-import ch.uzh.ifi.access.model.projections.CourseFeature;
-import ch.uzh.ifi.access.model.projections.CourseOverview;
-import ch.uzh.ifi.access.model.projections.CourseWorkspace;
+import ch.uzh.ifi.access.projections.CourseFeature;
+import ch.uzh.ifi.access.projections.CourseOverview;
+import ch.uzh.ifi.access.projections.CourseWorkspace;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.access.prepost.PostFilter;
 

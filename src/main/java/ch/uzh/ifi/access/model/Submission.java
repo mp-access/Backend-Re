@@ -7,7 +7,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import javax.persistence.*;
-import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,17 +19,24 @@ public class Submission {
     @GeneratedValue
     private Long id;
 
+    private Integer ordinalNum;
+
+    @Column(nullable = false)
     private String userId;
 
     private Double points;
 
     private boolean valid;
 
+
+    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private SubmissionType type;
 
     @CreationTimestamp
-    private Timestamp createdAt;
+    private LocalDateTime createdAt;
+
+    private LocalDateTime nextAttemptAt;
 
     @JsonIgnore
     @Column(columnDefinition = "text")
@@ -55,6 +62,6 @@ public class Submission {
     }
 
     public String getName() {
-        return isGraded() ? "Submission" : task.getEvaluator().formCommand(type);
+        return isGraded() ? "Submission " + ordinalNum.toString() : task.getEvaluator().formCommand(type);
     }
 }

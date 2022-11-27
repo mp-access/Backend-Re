@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,6 +30,8 @@ public class Task {
 
     private Integer maxAttempts;
 
+    private Duration attemptWindow;
+
     @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "task_evaluator_id")
     private Evaluator evaluator;
@@ -47,9 +50,6 @@ public class Task {
 
     @Transient
     private String userId;
-
-    @Transient
-    private Long submissionId;
 
     @Transient
     private Double points;

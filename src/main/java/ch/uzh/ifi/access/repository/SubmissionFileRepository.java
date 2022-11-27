@@ -8,6 +8,4 @@ import java.util.Optional;
 public interface SubmissionFileRepository extends JpaRepository<SubmissionFile, Long> {
 
     Optional<SubmissionFile> findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(Long taskFileId, String userId);
-
-    Optional<SubmissionFile> findByTaskFile_IdAndSubmission_Id(Long taskFileId, Long submissionId);
 }

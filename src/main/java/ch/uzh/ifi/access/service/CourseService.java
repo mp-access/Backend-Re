@@ -3,7 +3,7 @@ package ch.uzh.ifi.access.service;
 import ch.uzh.ifi.access.model.*;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import ch.uzh.ifi.access.model.dto.*;
-import ch.uzh.ifi.access.model.projections.*;
+import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.repository.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.github.dockerjava.api.DockerClient;
@@ -17,8 +17,6 @@ import org.eclipse.jgit.api.Git;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
-import org.springframework.lang.Nullable;
-import org.springframework.security.data.repository.query.SecurityEvaluationContextExtension;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -26,11 +24,12 @@ import javax.transaction.Transactional;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Stream;
 
 import static java.time.LocalDateTime.now;
 
@@ -56,20 +55,6 @@ public class CourseService {
     private ModelMapper modelMapper;
 
     private JsonMapper jsonMapper;
-
-    private SecurityEvaluationContextExtension security;
-
-    private String getUserId() {
-        return Objects.requireNonNull(security.getRootObject()).getAuthentication().getName();
-    }
-
-    private String verifyUserId(@Nullable String userId) {
-        return Optional.ofNullable(userId).orElseGet(this::getUserId);
-    }
-
-    private boolean isAssistant(String courseURL) {
-        return Objects.requireNonNull(security.getRootObject()).hasRole(courseURL + "-assistant");
-    }
 
     public Course getCourseByURL(String courseURL) {
         return courseRepository.getByUrl(courseURL).orElseThrow(() ->
@@ -116,68 +101,76 @@ public class CourseService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No assignment found with the URL " + assignmentURL));
     }
 
-    public List<TaskOverview> getTasks(String courseURL, String assignmentURL) {
-        return taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndEnabledTrueOrderByOrdinalNum(courseURL, assignmentURL);
-    }
-
-    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL) {
+    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId) {
         TaskWorkspace workspace = taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "No task found with the URL: %s/%s/%s".formatted(courseURL, assignmentURL, taskURL)));
-        workspace.setUserId(getUserId());
-        return workspace;
-    }
-
-    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId) {
-        TaskWorkspace workspace = getTask(courseURL, assignmentURL, taskURL);
         workspace.setUserId(userId);
         return workspace;
     }
 
-    public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId, Long submissionId) {
-        TaskWorkspace workspace = getTask(courseURL, assignmentURL, taskURL, userId);
-        workspace.setSubmissionId(submissionId);
-        return workspace;
-    }
-
-    public List<TaskFile> getTaskFiles(Task task) {
-        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(task.getId());
+    public List<TaskFile> getTaskFiles(Long taskId, String userId) {
+        List<TaskFile> permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId);
         permittedFiles.stream().filter(TaskFile::isEditable).forEach(file ->
-                submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), task.getUserId())
+                submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.getId(), userId)
                         .ifPresent(latestSubmissionFile -> file.setContent(latestSubmissionFile.getContent())));
         return permittedFiles;
     }
 
-    public List<Submission> getSubmissions(Task task) {
-        boolean isAssistant = isAssistant(task.getAssignment().getCourse().getUrl());
-        List<Submission> submissions = submissionRepository.findByTask_IdAndUserIdOrderByCreatedAtDesc(task.getId(), task.getUserId());
-        submissions.stream().filter(submission -> isAssistant || !submission.isGraded())
-                .forEach(submission -> Optional.ofNullable(submission.getLogs()).ifPresent(submission::setOutput));
-        return submissions;
+    public List<Submission> getSubmissions(Long taskId, String userId) {
+        List<Submission> unrestricted = submissionRepository.findByTask_IdAndUserId(taskId, userId);
+        unrestricted.forEach(submission -> Optional.ofNullable(submission.getLogs()).ifPresent(submission::setOutput));
+        List<Submission> restricted = submissionRepository
+                .findByTask_IdAndUserIdAndIdNotIn(taskId, userId, unrestricted.stream().map(Submission::getId).toList());
+        return Stream.concat(unrestricted.stream(), restricted.stream()).sorted(Comparator.comparingLong(Submission::getId).reversed()).toList();
     }
 
-    public boolean isSubmissionOwner(Long submissionId, String userId) {
-        Submission submission = submissionRepository.findById(submissionId).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "No submission found with the ID " + submissionId));
-        return submission.getUserId().equals(userId);
-    }
-
-    public Integer getSubmissionsCount(Task task) {
-        return submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrue(task.getId(), verifyUserId(task.getUserId()), SubmissionType.GRADE);
+    public Integer getRemainingAttempts(Long taskId, Integer maxAttempts, Duration attemptWindow, String userId) {
+        if (Objects.isNull(attemptWindow))
+            return maxAttempts - submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrue(taskId, userId, SubmissionType.GRADE);
+        LocalDateTime relevantWindowStart = now().minus(attemptWindow.multipliedBy(maxAttempts));
+        LocalDateTime latestWindowStart = now().minus(attemptWindow);
+        Integer priorToLatestCount = submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrueAndCreatedAtBetween(
+                taskId, userId, SubmissionType.GRADE, relevantWindowStart, latestWindowStart);
+        Integer latestCount = submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrueAndCreatedAtBetween(
+                taskId, userId, SubmissionType.GRADE, latestWindowStart, now());
+        return Math.min(maxAttempts, 2 * maxAttempts - 1 - priorToLatestCount) - latestCount;
     }
 
     public Integer getRemainingAttempts(Task task) {
-        return task.getMaxAttempts() - getSubmissionsCount(task);
+        return getRemainingAttempts(task.getId(), task.getMaxAttempts(), task.getAttemptWindow(), task.getUserId());
     }
 
-    public boolean isSubmissionAllowed(Long taskId) {
-        Task task = getTaskById(taskId);
-        return task.getAssignment().isActive() && (getRemainingAttempts(task) > 0);
-    }
-
-    public Double calculateTaskPoints(Long taskId, String userId) {
-        return submissionRepository.findFirstByTask_IdAndUserIdAndPointsNotNullOrderByPointsDesc(
-                taskId, verifyUserId(userId)).map(Submission::getPoints).orElse(0.0);
+    public Submission createSubmission(SubmissionDTO submissionDTO) {
+        Task task = getTaskById(submissionDTO.getTaskId());
+        Submission newSubmission = modelMapper.map(submissionDTO, Submission.class);
+        if (submissionDTO.isRestricted()) {
+            if (!dockerClient.listContainersCmd().withLabelFilter(Map.of("userId", submissionDTO.getUserId())).exec().isEmpty())
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - another submission is currently running!");
+            if (newSubmission.isGraded()) {
+                if (getRemainingAttempts(task) <= 0)
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
+                if (!task.getAssignment().isActive())
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - task is not active!");
+            }
+        }
+        newSubmission.setTask(task);
+        submissionDTO.getFiles().stream()
+                .filter(submissionFile -> Objects.nonNull(submissionFile.getContent()))
+                .forEach(submissionFile -> {
+                    SubmissionFile newSubmissionFile = new SubmissionFile();
+                    newSubmissionFile.setSubmission(newSubmission);
+                    newSubmissionFile.setContent(submissionFile.getContent());
+                    newSubmissionFile.setTaskFile(getTaskFileById(submissionFile.getTaskFileId()));
+                    newSubmission.getFiles().add(newSubmissionFile);
+                });
+        if (newSubmission.isGraded()) {
+            Optional<Submission> latestSubmission = submissionRepository.findTopByTask_IdAndUserIdAndTypeAndValidTrueOrderByCreatedAtAsc(
+                    submissionDTO.getTaskId(), submissionDTO.getUserId(), SubmissionType.GRADE);
+            newSubmission.setOrdinalNum(latestSubmission.map(Submission::getOrdinalNum).orElse(0) + 1);
+            newSubmission.setNextAttemptAt(latestSubmission.map(Submission::getNextAttemptAt).orElse(now()).plus(1, ChronoUnit.HOURS));
+        }
+        return submissionRepository.save(newSubmission);
     }
 
     public Double calculateAvgTaskPoints(Long taskId) {
@@ -185,20 +178,24 @@ public class CourseService {
                 .mapToDouble(Double::doubleValue).average().orElse(0.0);
     }
 
-    public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
-        return tasks.stream().mapToDouble(task -> calculateTaskPoints(task.getId(), userId)).sum();
-    }
-
     public Double calculateAvgAssignmentPoints(List<Task> tasks) {
         return tasks.stream().mapToDouble(task -> calculateAvgTaskPoints(task.getId())).average().orElse(0.0);
     }
 
-    public Double calculateCoursePoints(List<Assignment> assignments, String userId) {
-        return assignments.stream().mapToDouble(assignment -> calculateAssignmentPoints(assignment.getTasks(), userId)).sum();
-    }
-
     public Double calculateAvgCoursePoints(List<Assignment> assignments) {
         return assignments.stream().mapToDouble(assignment -> calculateAvgAssignmentPoints(assignment.getTasks())).average().orElse(0.0);
+    }
+
+    public Double calculateTaskPoints(Long taskId, String userId) {
+        return Optional.ofNullable(submissionRepository.calculateTaskPoints(taskId, userId)).orElse(0.0);
+    }
+
+    public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
+        return tasks.stream().mapToDouble(task -> calculateTaskPoints(task.getId(), userId)).sum();
+    }
+
+    public Double calculateCoursePoints(List<Assignment> assignments, String userId) {
+        return assignments.stream().mapToDouble(assignment -> calculateAssignmentPoints(assignment.getTasks(), userId)).sum();
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
@@ -213,22 +210,6 @@ public class CourseService {
                     submission.setValid(false);
                     submissionRepository.save(submission);
                 });
-    }
-
-    public Submission createSubmission(SubmissionDTO submissionDTO) {
-        Submission newSubmission = modelMapper.map(submissionDTO, Submission.class);
-        newSubmission.setUserId(getUserId());
-        newSubmission.setTask(getTaskById(submissionDTO.getTaskId()));
-        submissionDTO.getFiles().stream()
-                .filter(submissionFile -> Objects.nonNull(submissionFile.getContent()))
-                .forEach(submissionFile -> {
-                    SubmissionFile newSubmissionFile = new SubmissionFile();
-                    newSubmissionFile.setSubmission(newSubmission);
-                    newSubmissionFile.setContent(submissionFile.getContent());
-                    newSubmissionFile.setTaskFile(getTaskFileById(submissionFile.getTaskFileId()));
-                    newSubmission.getFiles().add(newSubmissionFile);
-                });
-        return submissionRepository.save(newSubmission);
     }
 
     @SneakyThrows

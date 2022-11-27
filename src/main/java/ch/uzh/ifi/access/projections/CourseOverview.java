@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.model.projections;
+package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Course;
 import org.springframework.beans.factory.annotation.Value;

@@ -5,7 +5,7 @@ import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.dto.StudentDTO;
 import ch.uzh.ifi.access.model.dto.SubmissionDTO;
 import ch.uzh.ifi.access.model.dto.UserDTO;
-import ch.uzh.ifi.access.model.projections.*;
+import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.service.AuthService;
 import ch.uzh.ifi.access.service.CourseService;
 import ch.uzh.ifi.access.service.EvaluationService;
@@ -64,42 +64,19 @@ public class CourseController {
         return courseService.getCourse(course);
     }
 
-    @GetMapping("/{course}/assignments")
-    public List<AssignmentOverview> getAssignments(@PathVariable String course) {
-        return courseService.getAssignments(course);
-    }
-
     @GetMapping("/{course}/assignments/{assignment}")
     public AssignmentWorkspace getAssignment(@PathVariable String course, @PathVariable String assignment) {
         return courseService.getAssignment(course, assignment);
     }
 
-    @GetMapping("/{course}/assignments/{assignment}/tasks")
-    public List<TaskOverview> getTasks(@PathVariable String course, @PathVariable String assignment) {
-        return courseService.getTasks(course, assignment);
-    }
-
-    @GetMapping("/{course}/assignments/{assignment}/tasks/{task}")
-    public TaskWorkspace getTask(@PathVariable String course, @PathVariable String assignment, @PathVariable String task) {
-        return courseService.getTask(course, assignment, task);
-    }
-
     @GetMapping("/{course}/assignments/{assignment}/tasks/{task}/users/{user}")
     @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
-    public TaskWorkspace getTask(@PathVariable String course, @PathVariable String assignment,
-                                 @PathVariable String task, @PathVariable String user) {
+    public TaskWorkspace getTask(@PathVariable String course, @PathVariable String assignment, @PathVariable String task, @PathVariable String user) {
         return courseService.getTask(course, assignment, task, user);
     }
 
-    @GetMapping("/{course}/assignments/{assignment}/tasks/{task}/users/{user}/submissions/{submission}")
-    @PreAuthorize("hasRole(#course + '-assistant') or @courseService.isSubmissionOwner(#submission, #user)")
-    public TaskWorkspace getTask(@PathVariable String course, @PathVariable String assignment,
-                                 @PathVariable String task, @PathVariable String user, @PathVariable Long submission) {
-        return courseService.getTask(course, assignment, task, user, submission);
-    }
-
     @PostMapping("/{course}/submit")
-    @PreAuthorize("hasRole(#course + '-assistant') or not #submission.type.graded or @courseService.isSubmissionAllowed(#submission.taskId)")
+    @PreAuthorize("hasRole(#course) and (#submission.userId == authentication.name) and (#submission.restricted or hasRole(#course + '-assistant'))")
     public Submission evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
         Submission newSubmission = courseService.createSubmission(submission);
         return evaluationService.evaluateSubmission(newSubmission);

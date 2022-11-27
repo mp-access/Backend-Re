@@ -1,10 +1,12 @@
-package ch.uzh.ifi.access.model.projections;
+package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Assignment;
+import ch.uzh.ifi.access.model.dao.TimeCount;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Projection(types = {Assignment.class})
 public interface AssignmentOverview {
@@ -28,16 +30,7 @@ public interface AssignmentOverview {
 
     String getActiveRange();
 
-    Long getActiveDays();
-
-    @Value("#{target.remainingTime.toDays()}")
-    Long getRemainingDays();
-
-    @Value("#{target.remainingTime.toHoursPart()}")
-    Integer getRemainingHours();
-
-    @Value("#{target.remainingTime.toMinutesPart()}")
-    Integer getRemainingMinutes();
+    List<TimeCount> getRemainingTime();
 
     boolean isPublished();
 

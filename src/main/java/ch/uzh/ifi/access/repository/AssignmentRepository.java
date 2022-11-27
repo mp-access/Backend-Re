@@ -1,8 +1,8 @@
 package ch.uzh.ifi.access.repository;
 
 import ch.uzh.ifi.access.model.Assignment;
-import ch.uzh.ifi.access.model.projections.AssignmentOverview;
-import ch.uzh.ifi.access.model.projections.AssignmentWorkspace;
+import ch.uzh.ifi.access.projections.AssignmentOverview;
+import ch.uzh.ifi.access.projections.AssignmentWorkspace;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;

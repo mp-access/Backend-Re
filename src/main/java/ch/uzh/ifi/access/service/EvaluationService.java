@@ -25,6 +25,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -66,9 +67,10 @@ public class EvaluationService {
         Evaluator evaluator = submission.getTask().getEvaluator();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(evaluator.getDockerImage())) {
             Path submissionDir = createLocalSubmissionDir(submission);
-            CreateContainerResponse container = containerCmd.withWorkingDir(submissionDir.toString())
+            CreateContainerResponse container = containerCmd.withNetworkDisabled(true)
+                    .withLabels(Map.of("userId", submission.getUserId())).withWorkingDir(submissionDir.toString())
                     .withCmd("/bin/bash", "-c", evaluator.formCommand(submission.getType()) + " &> logs.txt")
-                    .withHostConfig(new HostConfig().withMemory(512 * 1024 * 1024L).withPrivileged(true)
+                    .withHostConfig(new HostConfig().withMemory(536870912L).withPrivileged(true).withAutoRemove(true)
                             .withBinds(Bind.parse(submissionDir + ":" + submissionDir))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
@@ -86,6 +88,7 @@ public class EvaluationService {
                 results.getHints().stream().findFirst().ifPresent(submission::setOutput);
                 submission.setPoints(results.getPoints());
             }
+            FileUtils.deleteDirectory(submissionDir.toFile());
         } catch (IOException exception) {
             log.error("Failed to read evaluation logs or results: {}", exception.getMessage());
         } catch (DockerClientException exception) {

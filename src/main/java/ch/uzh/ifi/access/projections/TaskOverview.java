@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.model.projections;
+package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Task;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,22 +24,20 @@ public interface TaskOverview {
 
     Integer getMaxAttempts();
 
+    void setUserId(String userId);
+
     @Value("#{target.assignment.published}")
     boolean isPublished();
 
     @Value("#{target.assignment.active}")
     boolean isActive();
 
-    void setUserId(String userId);
-
-    void setSubmissionId(Long submissionId);
-
-    @Value("#{@courseService.getRemainingAttempts(target)}")
-    Integer getRemainingAttempts();
+    @Value("#{@courseService.calculateAvgTaskPoints(target.id)}")
+    Double getAvgPoints();
 
     @Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")
     Double getPoints();
 
-    @Value("#{@courseService.calculateAvgTaskPoints(target.id)}")
-    Double getAvgPoints();
+    @Value("#{@courseService.getRemainingAttempts(target)}")
+    Integer getRemainingAttempts();
 }

@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.model.projections;
+package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Course;
 import com.fasterxml.jackson.annotation.JsonFormat;
