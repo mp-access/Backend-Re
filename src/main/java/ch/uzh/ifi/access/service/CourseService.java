@@ -125,13 +125,14 @@ public class CourseService {
     }
 
     public Integer getRemainingAttempts(Long taskId, Integer maxAttempts, Duration attemptWindow, String userId) {
+        log.info("Calculating remaining attempts for task {} and user {}", taskId, userId);
         List<Submission> gradedSubmissions = submissionRepository.getGradedSubmissions(taskId, userId);
         if (Objects.isNull(attemptWindow))
             return maxAttempts - gradedSubmissions.size();
         LocalDateTime relevantWindowStart = now().minus(attemptWindow.multipliedBy(maxAttempts));
         LocalDateTime latestWindowStart = now().minus(attemptWindow);
-        AtomicInteger priorToLatestCount = new AtomicInteger();
-        AtomicInteger latestCount = new AtomicInteger();
+        AtomicInteger priorToLatestCount = new AtomicInteger(0);
+        AtomicInteger latestCount = new AtomicInteger(0);
         gradedSubmissions.forEach(submission -> {
             if (submission.getCreatedAt().isAfter(relevantWindowStart)) {
                 if (submission.getCreatedAt().isBefore(latestWindowStart))
@@ -140,7 +141,10 @@ public class CourseService {
                     latestCount.getAndIncrement();
             }
         });
-        return Math.min(maxAttempts, 2 * maxAttempts - 1 - priorToLatestCount.get()) - latestCount.get();
+        Integer maxRefills = gradedSubmissions.stream().findFirst().map(submission ->
+                Duration.between(submission.getCreatedAt(), now()).dividedBy(attemptWindow)).orElse(0L).intValue();
+        log.info("priorToLatest = {}, latest = {}, maxRefills = {}", priorToLatestCount.get(), latestCount.get(), maxRefills);
+        return Math.min(maxAttempts, maxAttempts + maxRefills - priorToLatestCount.get()) - latestCount.get();
     }
 
     public Submission createSubmission(SubmissionDTO submissionDTO) {
