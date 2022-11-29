@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.model;
 import ch.uzh.ifi.access.model.dao.TimeCount;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OrderBy;
 
 import javax.persistence.*;
 import java.time.Duration;
@@ -43,6 +44,7 @@ public class Assignment {
     private Course course;
 
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL)
+    @OrderBy(clause = "ID ASC")
     private List<Task> tasks = new ArrayList<>();
 
     private boolean enabled;

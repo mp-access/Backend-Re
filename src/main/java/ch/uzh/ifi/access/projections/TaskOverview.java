@@ -38,6 +38,6 @@ public interface TaskOverview {
     @Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")
     Double getPoints();
 
-    @Value("#{@courseService.getRemainingAttempts(target)}")
+    @Value("#{@courseService.getRemainingAttempts(target.id, target.maxAttempts, target.attemptWindow, target.userId)}")
     Integer getRemainingAttempts();
 }

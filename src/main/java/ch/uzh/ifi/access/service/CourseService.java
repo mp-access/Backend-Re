@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.service;
 
 import ch.uzh.ifi.access.model.*;
-import ch.uzh.ifi.access.model.constants.SubmissionType;
 import ch.uzh.ifi.access.model.dto.*;
 import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.repository.*;
@@ -27,8 +26,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static java.time.LocalDateTime.now;
@@ -126,19 +125,22 @@ public class CourseService {
     }
 
     public Integer getRemainingAttempts(Long taskId, Integer maxAttempts, Duration attemptWindow, String userId) {
+        List<Submission> gradedSubmissions = submissionRepository.getGradedSubmissions(taskId, userId);
         if (Objects.isNull(attemptWindow))
-            return maxAttempts - submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrue(taskId, userId, SubmissionType.GRADE);
+            return maxAttempts - gradedSubmissions.size();
         LocalDateTime relevantWindowStart = now().minus(attemptWindow.multipliedBy(maxAttempts));
         LocalDateTime latestWindowStart = now().minus(attemptWindow);
-        Integer priorToLatestCount = submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrueAndCreatedAtBetween(
-                taskId, userId, SubmissionType.GRADE, relevantWindowStart, latestWindowStart);
-        Integer latestCount = submissionRepository.countByTask_IdAndUserIdAndTypeAndValidTrueAndCreatedAtBetween(
-                taskId, userId, SubmissionType.GRADE, latestWindowStart, now());
-        return Math.min(maxAttempts, 2 * maxAttempts - 1 - priorToLatestCount) - latestCount;
-    }
-
-    public Integer getRemainingAttempts(Task task) {
-        return getRemainingAttempts(task.getId(), task.getMaxAttempts(), task.getAttemptWindow(), task.getUserId());
+        AtomicInteger priorToLatestCount = new AtomicInteger();
+        AtomicInteger latestCount = new AtomicInteger();
+        gradedSubmissions.forEach(submission -> {
+            if (submission.getCreatedAt().isAfter(relevantWindowStart)) {
+                if (submission.getCreatedAt().isBefore(latestWindowStart))
+                    priorToLatestCount.getAndIncrement();
+                else
+                    latestCount.getAndIncrement();
+            }
+        });
+        return Math.min(maxAttempts, 2 * maxAttempts - 1 - priorToLatestCount.get()) - latestCount.get();
     }
 
     public Submission createSubmission(SubmissionDTO submissionDTO) {
@@ -148,7 +150,7 @@ public class CourseService {
             if (!dockerClient.listContainersCmd().withLabelFilter(Map.of("userId", submissionDTO.getUserId())).exec().isEmpty())
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - another submission is currently running!");
             if (newSubmission.isGraded()) {
-                if (getRemainingAttempts(task) <= 0)
+                if (getRemainingAttempts(task.getId(), task.getMaxAttempts(), task.getAttemptWindow(), submissionDTO.getUserId()) <= 0)
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
                 if (!task.getAssignment().isActive())
                     throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - task is not active!");
@@ -165,10 +167,11 @@ public class CourseService {
                     newSubmission.getFiles().add(newSubmissionFile);
                 });
         if (newSubmission.isGraded()) {
-            Optional<Submission> latestSubmission = submissionRepository.findTopByTask_IdAndUserIdAndTypeAndValidTrueOrderByCreatedAtAsc(
-                    submissionDTO.getTaskId(), submissionDTO.getUserId(), SubmissionType.GRADE);
+            Optional<Submission> latestSubmission = submissionRepository
+                    .getGradedSubmissions(submissionDTO.getTaskId(), submissionDTO.getUserId()).stream().findFirst();
             newSubmission.setOrdinalNum(latestSubmission.map(Submission::getOrdinalNum).orElse(0) + 1);
-            newSubmission.setNextAttemptAt(latestSubmission.map(Submission::getNextAttemptAt).orElse(now()).plus(1, ChronoUnit.HOURS));
+            newSubmission.setNextAttemptAt(latestSubmission.map(Submission::getNextAttemptAt)
+                    .filter(nextAttemptAt -> nextAttemptAt.isAfter(now())).orElse(now()).plus(task.getAttemptWindow()));
         }
         return submissionRepository.save(newSubmission);
     }
@@ -205,8 +208,9 @@ public class CourseService {
 
     @Transactional
     public void updateStudent(UserDTO updates) {
-        submissionRepository.findByTask_IdAndUserIdAndTypeAndValidTrueOrderByCreatedAtAsc(updates.getTaskId(), updates.getUserId(), SubmissionType.GRADE)
-                .stream().limit(updates.getAddAttempts()).forEach(submission -> {
+        submissionRepository.getGradedSubmissions(updates.getTaskId(), updates.getUserId()).stream()
+                .sorted(Comparator.comparingLong(Submission::getId)).limit(updates.getAddAttempts())
+                .forEach(submission -> {
                     submission.setValid(false);
                     submissionRepository.save(submission);
                 });

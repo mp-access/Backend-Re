@@ -3,6 +3,8 @@ package ch.uzh.ifi.access.model.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
+
 @Data
 @NoArgsConstructor
 public class TaskDTO {
@@ -18,6 +20,8 @@ public class TaskDTO {
     Double maxPoints;
 
     Integer maxAttempts;
+
+    Duration attemptWindow;
 
     TaskEvaluatorDTO evaluator;
 
