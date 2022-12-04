@@ -1,11 +1,11 @@
 package ch.uzh.ifi.access.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import javax.persistence.*;
 
 @Getter
 @Setter
@@ -28,7 +28,7 @@ public class SubmissionFile {
     @ManyToOne
     @JoinColumn(name = "submission_id")
     private Submission submission;
-    
+
     public Long getTaskFileId() {
         return taskFile.getId();
     }

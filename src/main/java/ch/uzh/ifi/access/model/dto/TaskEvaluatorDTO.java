@@ -14,5 +14,6 @@ public class TaskEvaluatorDTO {
     String testCommand;
     String gradeCommand;
     String gradeResults;
+    Integer timeLimit;
     List<String> resources = new ArrayList<>();
 }

@@ -6,12 +6,8 @@ server:
 
 spring:
   jackson:
-    serialization:
-      WRITE_DATES_AS_TIMESTAMPS: false
-    deserialization:
-      FAIL_ON_UNKNOWN_PROPERTIES: false
     mapper:
-      ACCEPT_CASE_INSENSITIVE_ENUMS: true
+      accept-case-insensitive-enums: true
   datasource:
     url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/access}
     username: ${POSTGRES_USER:admin}
@@ -19,14 +15,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AUTH_SERVER_URL:http://localhost:8080}/realms/access
 
 logging:
   level:
-    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
-
-keycloak:
-  realm: access
-  resource: access-backend
-  auth-server-url: ${AUTH_SERVER_URL:http://localhost:8080}
-  bearer-only: true
-  principal-attribute: email
+    org.springframework:
+      security: debug
+      web.filter.CommonsRequestLoggingFilter: debug

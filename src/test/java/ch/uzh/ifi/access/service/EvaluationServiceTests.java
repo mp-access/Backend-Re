@@ -20,13 +20,11 @@ import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
-@SpringBootTest(classes = {EvaluationService.class, DockerConfigurer.class})
+@SpringBootTest(classes = {CourseService.class, DockerConfigurer.class})
 class EvaluationServiceTests {
 
     @Autowired
-    private EvaluationService evaluationService;
-
-    private Task testTask;
+    private CourseService evaluationService;
 
     private Submission testSubmission;
 
@@ -41,7 +39,7 @@ class EvaluationServiceTests {
     @BeforeEach
     void setUp() {
         testSubmission = new Submission();
-        testTask = TestingUtils.createTask();
+        Task testTask = TestingUtils.createTask();
         testSubmission.setTask(testTask);
         testSubmissionFile = new SubmissionFile();
         testSubmissionFile.setTaskFile(testTask.getFiles().get(0));
@@ -49,7 +47,7 @@ class EvaluationServiceTests {
         testSubmission.getFiles().add(testSubmissionFile);
         given(submissionRepository.save(any(Submission.class))).willAnswer(returnsFirstArg());
         given(taskFileRepository.save(any(TaskFile.class))).willAnswer(returnsFirstArg());
-        given(taskFileRepository.findByTask_IdOrderByIdAscPathAsc(any())).willReturn(testTask.getFiles());
+        given(taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(any())).willReturn(testTask.getFiles());
     }
 
     @Test

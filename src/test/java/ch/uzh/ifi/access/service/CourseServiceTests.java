@@ -7,11 +7,11 @@ import ch.uzh.ifi.access.model.TaskFile;
 import ch.uzh.ifi.access.repository.AssignmentRepository;
 import ch.uzh.ifi.access.repository.TaskFileRepository;
 import ch.uzh.ifi.access.repository.TaskRepository;
+import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import javax.transaction.Transactional;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,9 +1,9 @@
 package ch.uzh.ifi.access.model;
 
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.*;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,8 +16,10 @@ public class Task {
     @GeneratedValue
     private Long id;
 
+    @Column(nullable = false)
     private Integer ordinalNum;
 
+    @Column(nullable = false)
     private String title;
 
     @Column(nullable = false)
@@ -32,6 +34,8 @@ public class Task {
 
     private Duration attemptWindow;
 
+    private boolean enabled;
+
     @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "task_evaluator_id")
     private Evaluator evaluator;
@@ -41,12 +45,10 @@ public class Task {
     private Assignment assignment;
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
-    private List<Submission> submissions = new ArrayList<>();
-
-    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
     private List<TaskFile> files = new ArrayList<>();
 
-    private boolean enabled;
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
+    private List<Submission> submissions = new ArrayList<>();
 
     @Transient
     private String userId;

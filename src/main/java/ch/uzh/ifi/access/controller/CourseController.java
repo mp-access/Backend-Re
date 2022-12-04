@@ -2,14 +2,14 @@ package ch.uzh.ifi.access.controller;
 
 import ch.uzh.ifi.access.model.Course;
 import ch.uzh.ifi.access.model.Submission;
+import ch.uzh.ifi.access.model.dto.CourseDTO;
 import ch.uzh.ifi.access.model.dto.StudentDTO;
 import ch.uzh.ifi.access.model.dto.SubmissionDTO;
-import ch.uzh.ifi.access.model.dto.UserDTO;
 import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.service.AuthService;
 import ch.uzh.ifi.access.service.CourseService;
-import ch.uzh.ifi.access.service.EvaluationService;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @AllArgsConstructor
 @RestController
 @RequestMapping("/courses")
@@ -26,12 +27,10 @@ public class CourseController {
 
     private CourseService courseService;
 
-    private EvaluationService evaluationService;
-
-    @PostMapping("/create/{repository}")
+    @PostMapping("/create")
     @PreAuthorize("hasRole('supervisor')")
-    public String createCourse(@PathVariable String repository, Authentication authentication) {
-        Course newCourse = courseService.createCourseFromRepository(repository);
+    public String createCourse(@RequestBody CourseDTO courseDTO, Authentication authentication) {
+        Course newCourse = courseService.createCourseFromRepository(courseDTO.getRepository());
         authService.createCourseRoles(newCourse.getUrl());
         authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
         return newCourse.getUrl();
@@ -78,8 +77,7 @@ public class CourseController {
     @PostMapping("/{course}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.userId == authentication.name) and (#submission.restricted or hasRole(#course + '-assistant'))")
     public Submission evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
-        Submission newSubmission = courseService.createSubmission(submission);
-        return evaluationService.evaluateSubmission(newSubmission);
+        return courseService.createSubmission(submission);
     }
 
     @PostMapping("/{course}/register/students")
@@ -99,12 +97,6 @@ public class CourseController {
     public List<StudentDTO> getStudents(@PathVariable String course) {
         return authService.getStudentsByCourse(course).stream()
                 .map(student -> courseService.getStudent(course, student)).toList();
-    }
-
-    @PostMapping("/{course}/students")
-    @PreAuthorize("hasRole(#course + '-assistant')")
-    public void updateStudent(@PathVariable String course, @RequestBody UserDTO updates) {
-        courseService.updateStudent(updates);
     }
 
     @GetMapping("/{course}/assistants")

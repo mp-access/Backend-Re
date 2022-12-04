@@ -2,11 +2,11 @@ package ch.uzh.ifi.access.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 
-import javax.persistence.*;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -22,7 +22,7 @@ public class TaskFile {
 
     private String path;
 
-    private String mime;
+    private String name;
 
     private LocalDateTime publishDate;
 
@@ -38,6 +38,8 @@ public class TaskFile {
     @JoinColumn(name = "task_id")
     private Task task;
 
+    private boolean image;
+
     private boolean enabled;
 
     private boolean editable;
@@ -47,20 +49,8 @@ public class TaskFile {
     @Transient
     private String content;
 
-    public String getName() {
-        return StringUtils.firstNonBlank(StringUtils.substringAfterLast(path, '/'), path);
-    }
-
     public String getLanguage() {
-        return switch (mime) {
-            case "py", "python", "text/x-python" -> "python";
-            case "r", "r-base", "text/x-rsrc" -> "r";
-            default -> StringUtils.firstNonBlank(StringUtils.substringAfterLast(mime, '-'), mime);
-        };
-    }
-
-    public boolean isImage() {
-        return StringUtils.contains(mime, "image");
+        return StringUtils.substringAfterLast(name, '.');
     }
 
     public boolean isPublished() {

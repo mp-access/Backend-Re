@@ -1,11 +1,11 @@
 package ch.uzh.ifi.access.model;
 
 import ch.uzh.ifi.access.model.dao.TimeCount;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.OrderBy;
 
-import javax.persistence.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +22,7 @@ public class Assignment {
     @GeneratedValue
     private Long id;
 
+    @Column(nullable = false)
     private Integer ordinalNum;
 
     @Column(nullable = false)
@@ -39,6 +40,8 @@ public class Assignment {
     @Column(nullable = false)
     private LocalDateTime endDate;
 
+    private boolean enabled;
+
     @ManyToOne
     @JoinColumn(name = "course_id")
     private Course course;
@@ -46,8 +49,6 @@ public class Assignment {
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL)
     @OrderBy(clause = "ID ASC")
     private List<Task> tasks = new ArrayList<>();
-
-    private boolean enabled;
 
     @Transient
     private Double points;
@@ -74,7 +75,7 @@ public class Assignment {
         return "%s ~ %s".formatted(start, end);
     }
 
-    public List<TimeCount> getRemainingTime() {
+    public List<TimeCount> getCountDown() {
         if (!isActive()) return List.of();
         Duration remaining = Duration.between(now(), endDate);
         return List.of(

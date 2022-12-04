@@ -1,5 +1,7 @@
 package ch.uzh.ifi.access.model.constants;
 
+import com.google.common.base.Joiner;
+
 public enum Role {
     STUDENT, ASSISTANT, SUPERVISOR;
 
@@ -8,7 +10,7 @@ public enum Role {
     }
 
     public String withCourseURL(String courseURL) {
-        return String.join("-", courseURL, getName());
+        return Joiner.on("-").skipNulls().join(courseURL, getName());
     }
 
 }

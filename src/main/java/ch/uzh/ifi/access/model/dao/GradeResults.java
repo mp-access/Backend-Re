@@ -9,6 +9,6 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class GradeResults {
-    Double points = 0.0;
+    Double points;
     List<String> hints = new ArrayList<>();
 }

@@ -15,6 +15,8 @@ public class CourseDTO {
 
     String url;
 
+    String repository;
+
     String description;
 
     LocalDate startDate;

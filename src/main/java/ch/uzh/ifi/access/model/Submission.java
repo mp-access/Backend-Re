@@ -2,11 +2,11 @@ package ch.uzh.ifi.access.model;
 
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
-import javax.persistence.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +27,6 @@ public class Submission {
     private Double points;
 
     private boolean valid;
-
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)

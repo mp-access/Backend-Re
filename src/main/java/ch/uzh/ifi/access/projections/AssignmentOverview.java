@@ -30,7 +30,7 @@ public interface AssignmentOverview {
 
     String getActiveRange();
 
-    List<TimeCount> getRemainingTime();
+    List<TimeCount> getCountDown();
 
     boolean isPublished();
 
