@@ -84,11 +84,6 @@ public class SecurityConfigurer {
     }
 
     @Bean
-    public String defaultPassword() {
-        return env.getProperty("KEYCLOAK_ADMIN_PASSWORD", "test");
-    }
-
-    @Bean
     public RealmResource accessRealm() {
         Keycloak keycloakClient = Keycloak.getInstance(
                 env.getProperty("AUTH_SERVER_URL", "http://localhost:8080"), "master",

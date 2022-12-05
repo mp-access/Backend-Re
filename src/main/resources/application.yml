@@ -9,9 +9,9 @@ spring:
     mapper:
       accept-case-insensitive-enums: true
   datasource:
-    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/access}
-    username: ${POSTGRES_USER:admin}
-    password: ${POSTGRES_PASSWORD:admin}
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,7 +19,7 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AUTH_SERVER_URL:http://localhost:8080}/realms/access
+          issuer-uri: ${AUTH_SERVER_URL}/realms/access
 
 logging:
   level:

@@ -24,8 +24,6 @@ import java.util.Set;
 @AllArgsConstructor
 public class AuthService {
 
-    private String defaultPassword;
-
     private RealmResource accessRealm;
 
     @PostConstruct
@@ -96,7 +94,7 @@ public class AuthService {
                         newUser.setLastName("Test");
                         CredentialRepresentation credentials = new CredentialRepresentation();
                         credentials.setType("password");
-                        credentials.setValue(defaultPassword);
+                        credentials.setValue("test");
                         credentials.setTemporary(false);
                         newUser.setCredentials(List.of(credentials));
                         return CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser));

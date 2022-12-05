@@ -265,7 +265,7 @@ public class CourseService {
     public Submission evaluateSubmission(Submission submission) {
         Evaluator evaluator = submission.getTask().getEvaluator();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(evaluator.getDockerImage())) {
-            Path submissionDir = Paths.get(workingDir, submission.getId().toString());
+            Path submissionDir = Paths.get(workingDir, "submissions", submission.getId().toString());
             if (submission.isGraded())
                 taskFileRepository.findByTask_IdAndEnabledTrueAndGradingTrue(submission.getTask().getId())
                         .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
@@ -346,7 +346,7 @@ public class CourseService {
 
     @SneakyThrows
     public Course createOrUpdateCourseFromRepository(Course course) {
-        Path coursePath = Path.of(workingDir, "course_" + Instant.now().toEpochMilli());
+        Path coursePath = Path.of(workingDir, "courses", "course_" + Instant.now().toEpochMilli());
         Git.cloneRepository().setURI(course.getRepository()).setDirectory(coursePath.toFile()).call();
         CourseDTO courseConfig = readConfig(coursePath, CourseDTO.class);
         modelMapper.map(courseConfig, course);
