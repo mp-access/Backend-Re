@@ -9,7 +9,7 @@ plugins {
 
 group = 'ch.uzh.ifi'
 version = '0.0.2'
-sourceCompatibility = JavaVersion.VERSION_17
+sourceCompatibility = '17'
 
 repositories {
     mavenCentral()
