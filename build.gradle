@@ -63,6 +63,10 @@ sonarqube {
     }
 }
 
+jar {
+    enabled = false
+}
+
 /**
  * Build and push a Docker image of the backend to DockerHub via the built-in gradle task.
  * Requires passing 2 environment variables:

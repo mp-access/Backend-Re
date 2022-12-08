@@ -1,8 +1,7 @@
 package ch.uzh.ifi.access.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -22,7 +21,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
 
-@Slf4j
 @AllArgsConstructor
 @Configuration
 @EnableWebSecurity
@@ -31,7 +29,7 @@ public class SecurityConfigurer {
 
     private Environment env;
 
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -47,7 +45,7 @@ public class SecurityConfigurer {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setPrincipalClaimName("email");
         converter.setJwtGrantedAuthoritiesConverter(source -> {
-            AccessToken.Access realmAccess = objectMapper.convertValue(source.getClaimAsMap("realm_access"), AccessToken.Access.class);
+            AccessToken.Access realmAccess = jsonMapper.convertValue(source.getClaimAsMap("realm_access"), AccessToken.Access.class);
             return CollectionUtils.collect(realmAccess.getRoles(), SimpleGrantedAuthority::new);
         });
         return converter;

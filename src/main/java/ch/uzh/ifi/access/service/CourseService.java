@@ -6,7 +6,7 @@ import ch.uzh.ifi.access.model.dao.GradeResults;
 import ch.uzh.ifi.access.model.dto.*;
 import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.repository.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
@@ -69,7 +69,7 @@ public class CourseService {
 
     private ModelMapper modelMapper;
 
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     private String verifyUserId(@Nullable String userId) {
         return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().getAuthentication().getName());
@@ -309,7 +309,7 @@ public class CourseService {
 
     @SneakyThrows
     public <T> T readJsonFile(Path path, String filename, Class<T> targetDTO) {
-        return objectMapper.readValue(Files.readString(path.resolve(filename)), targetDTO);
+        return jsonMapper.readValue(Files.readString(path.resolve(filename)), targetDTO);
     }
 
     @SneakyThrows
