@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Formula;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -38,6 +39,10 @@ public class Course {
     @Column(nullable = false)
     private LocalDate endDate;
 
+    private String role = "";
+
+    private String feedback;
+
     private boolean restricted = false;
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
@@ -46,10 +51,16 @@ public class Course {
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
     private List<Event> events = new ArrayList<>();
 
+    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=role)")
+    private Long studentsCount = 0L;
+
     @Transient
     private Double points;
 
-    public Double getMaxPoints() {
-        return assignments.stream().mapToDouble(Assignment::getMaxPoints).sum();
+    public Assignment createAssignment() {
+        Assignment newAssignment = new Assignment();
+        assignments.add(newAssignment);
+        newAssignment.setCourse(this);
+        return newAssignment;
     }
 }

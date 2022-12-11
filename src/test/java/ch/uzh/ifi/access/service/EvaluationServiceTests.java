@@ -2,10 +2,7 @@ package ch.uzh.ifi.access.service;
 
 import ch.uzh.ifi.access.TestingUtils;
 import ch.uzh.ifi.access.config.DockerConfigurer;
-import ch.uzh.ifi.access.model.Submission;
-import ch.uzh.ifi.access.model.SubmissionFile;
-import ch.uzh.ifi.access.model.Task;
-import ch.uzh.ifi.access.model.TaskFile;
+import ch.uzh.ifi.access.model.*;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
 import ch.uzh.ifi.access.repository.SubmissionRepository;
 import ch.uzh.ifi.access.repository.TaskFileRepository;
@@ -40,7 +37,9 @@ class EvaluationServiceTests {
     void setUp() {
         testSubmission = new Submission();
         Task testTask = TestingUtils.createTask();
-        testSubmission.setTask(testTask);
+        Evaluation testEvaluation = new Evaluation();
+        testEvaluation.setTask(testTask);
+        testSubmission.setEvaluation(testEvaluation);
         testSubmissionFile = new SubmissionFile();
         testSubmissionFile.setTaskFile(testTask.getFiles().get(0));
         testSubmissionFile.setSubmission(testSubmission);
@@ -57,7 +56,7 @@ class EvaluationServiceTests {
         testSubmissionFile.setContent(TestingUtils.SOLUTION_FILE);
         Submission returnedSubmission = evaluationService.evaluateSubmission(testSubmission);
         assertEquals(testSubmission.getId(), returnedSubmission.getId());
-        assertEquals(testSubmission.getTask().getMaxPoints(), returnedSubmission.getPoints());
+        assertEquals(testSubmission.getEvaluation().getTask().getMaxPoints(), returnedSubmission.getPoints());
         assertEquals("All tests passed!", returnedSubmission.getOutput());
     }
 

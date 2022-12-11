@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.model;
 
 import ch.uzh.ifi.access.model.constants.SubmissionType;
+import ch.uzh.ifi.access.model.dao.Results;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -10,6 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Getter
 @Setter
@@ -19,7 +21,7 @@ public class Submission {
     @GeneratedValue
     private Long id;
 
-    private Integer ordinalNum;
+    private Long ordinalNum;
 
     @Column(nullable = false)
     private String userId;
@@ -35,8 +37,6 @@ public class Submission {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    private LocalDateTime nextAttemptAt;
-
     @JsonIgnore
     @Column(columnDefinition = "text")
     private String logs;
@@ -48,19 +48,28 @@ public class Submission {
     private List<SubmissionFile> files = new ArrayList<>();
 
     @JsonIgnore
-    @ManyToOne
-    @JoinColumn(name = "task_id")
-    private Task task;
+    @ManyToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "evaluation_id")
+    private Evaluation evaluation;
+
+    public String getName() {
+        return type.formatName(ordinalNum);
+    }
 
     public Double getMaxPoints() {
-        return task.getMaxPoints();
+        return evaluation.getTask().getMaxPoints();
     }
 
     public boolean isGraded() {
         return type.isGraded();
     }
 
-    public String getName() {
-        return isGraded() ? "Submission " + ordinalNum.toString() : task.getEvaluator().formCommand(type);
+    public void parseResults(Results results) {
+        output = results.getHint();
+        if (Objects.nonNull(results.getPoints())) {
+            valid = true;
+            points = results.getPoints();
+            evaluation.update(points);
+        }
     }
 }

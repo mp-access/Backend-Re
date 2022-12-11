@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.commons.lang3.ObjectUtils;
+import org.apache.tika.Tika;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +22,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class MapperConfigurer {
+
+    @Bean
+    public Tika tika() {
+        return new Tika();
+    }
 
     @Bean
     public JsonMapper jsonMapper() {
@@ -45,7 +51,6 @@ public class MapperConfigurer {
         modelMapper.typeMap(TaskDTO.class, Task.class)
                 .addMappings(mapping -> mapping.skip(TaskDTO::getFiles, Task::setFiles));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
-                .addMappings(mapping -> mapping.skip(Submission::setTask))
                 .addMappings(mapping -> mapping.skip(Submission::setFiles));
         return modelMapper;
     }

@@ -48,14 +48,23 @@ public class Task {
     private List<TaskFile> files = new ArrayList<>();
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL)
-    private List<Submission> submissions = new ArrayList<>();
+    private List<Evaluation> evaluations = new ArrayList<>();
 
     @Transient
     private String userId;
 
-    @Transient
-    private Double points;
+    public TaskFile createFile() {
+        TaskFile newTaskFile = new TaskFile();
+        files.add(newTaskFile);
+        newTaskFile.setTask(this);
+        return newTaskFile;
+    }
 
-    @Transient
-    private Integer remainingAttempts;
+    public Evaluation createEvaluation() {
+        Evaluation newEvaluation = new Evaluation();
+        evaluations.add(newEvaluation);
+        newEvaluation.setTask(this);
+        newEvaluation.setRemainingAttempts(maxAttempts);
+        return newEvaluation;
+    }
 }

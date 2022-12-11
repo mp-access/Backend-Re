@@ -1,12 +1,10 @@
 package ch.uzh.ifi.access.controller;
 
-import ch.uzh.ifi.access.model.Course;
 import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.dto.CourseDTO;
 import ch.uzh.ifi.access.model.dto.StudentDTO;
 import ch.uzh.ifi.access.model.dto.SubmissionDTO;
 import ch.uzh.ifi.access.projections.*;
-import ch.uzh.ifi.access.service.AuthService;
 import ch.uzh.ifi.access.service.CourseService;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,22 +21,14 @@ import java.util.List;
 @RequestMapping("/courses")
 public class CourseController {
 
-    private AuthService authService;
-
     private CourseService courseService;
 
     @PostMapping("/create")
     @PreAuthorize("hasRole('supervisor')")
     public String createCourse(@RequestBody CourseDTO courseDTO, Authentication authentication) {
-        Course newCourse = courseService.createCourseFromRepository(courseDTO.getRepository());
-        authService.createCourseRoles(newCourse.getUrl());
-        authService.registerCourseSupervisors(newCourse.getUrl(), List.of(authentication.getName()));
-        return newCourse.getUrl();
-    }
-
-    @PostMapping("/{course}/enroll")
-    public void enrollInCourse(@PathVariable String course, Authentication authentication) {
-        authService.registerCourseStudents(course, List.of(authentication.getName()));
+        String createdCourseURL = courseService.createCourseFromRepository(courseDTO.getRepository()).getUrl();
+        courseService.registerCourseSupervisor(createdCourseURL, authentication.getName());
+        return createdCourseURL;
     }
 
     @PostMapping("/{course}/pull")
@@ -80,28 +70,28 @@ public class CourseController {
         return courseService.createSubmission(submission);
     }
 
-    @PostMapping("/{course}/register/students")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
-    public void enrollStudents(@PathVariable String course, @RequestBody List<String> newStudents) {
-        authService.registerCourseStudents(course, newStudents);
+    @PostMapping("/{course}/students/{user}")
+    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
+    public void enrollStudent(@PathVariable String course, @PathVariable String user) {
+        courseService.registerCourseStudent(course, user);
     }
 
-    @PostMapping("/{course}/register/assistants")
+    @PostMapping("/{course}/assistants/{user}")
     @PreAuthorize("hasRole(#course + '-supervisor')")
-    public void enrollAssistants(@PathVariable String course, @RequestBody List<String> newAssistants) {
-        authService.registerCourseAssistants(course, newAssistants);
+    public void enrollAssistant(@PathVariable String course, @PathVariable String user) {
+        courseService.registerCourseAssistant(course, user);
     }
 
     @GetMapping("/{course}/students")
     @PreAuthorize("hasRole(#course + '-assistant')")
     public List<StudentDTO> getStudents(@PathVariable String course) {
-        return authService.getStudentsByCourse(course).stream()
+        return courseService.getStudentsByCourse(course).stream()
                 .map(student -> courseService.getStudent(course, student)).toList();
     }
 
     @GetMapping("/{course}/assistants")
     @PreAuthorize("hasRole(#course + '-supervisor')")
     public List<UserRepresentation> getAssistants(@PathVariable String course) {
-        return authService.getAssistantsByCourse(course);
+        return courseService.getAssistantsByCourse(course);
     }
 }

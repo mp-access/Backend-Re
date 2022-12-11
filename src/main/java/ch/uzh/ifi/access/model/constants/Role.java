@@ -9,7 +9,7 @@ public enum Role {
         return name().toLowerCase();
     }
 
-    public String withCourseURL(String courseURL) {
+    public String withCourse(String courseURL) {
         return Joiner.on("-").skipNulls().join(courseURL, getName());
     }
 

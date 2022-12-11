@@ -29,7 +29,7 @@ public class Evaluator {
     private String gradeCommand;
 
     @Column(nullable = false)
-    private String gradeResults = "grade_results.json";
+    private String resultsFile = "grade_results.json";
 
     @Column(nullable = false)
     private Integer timeLimit = 2;

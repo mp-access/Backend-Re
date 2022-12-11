@@ -1,11 +1,9 @@
 package ch.uzh.ifi.access.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.commons.lang3.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -24,14 +22,12 @@ public class TaskFile {
 
     private String name;
 
+    private String language;
+
     private LocalDateTime publishDate;
 
     @Column(columnDefinition = "text")
     private String template;
-
-    @Lob
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private byte[] bytes;
 
     @JsonIgnore
     @ManyToOne
@@ -48,10 +44,6 @@ public class TaskFile {
 
     @Transient
     private String content;
-
-    public String getLanguage() {
-        return StringUtils.substringAfterLast(name, '.');
-    }
 
     public boolean isPublished() {
         return Objects.nonNull(publishDate) && publishDate.isBefore(now());

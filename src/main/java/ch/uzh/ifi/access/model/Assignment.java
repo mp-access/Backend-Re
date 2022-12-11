@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.dao.TimeCount;
+import ch.uzh.ifi.access.model.dao.Timer;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,7 +8,6 @@ import org.hibernate.annotations.OrderBy;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,6 +39,10 @@ public class Assignment {
     @Column(nullable = false)
     private LocalDateTime endDate;
 
+    private String duration;
+
+    private Double maxPoints;
+
     private boolean enabled;
 
     @ManyToOne
@@ -53,10 +56,6 @@ public class Assignment {
     @Transient
     private Double points;
 
-    public Double getMaxPoints() {
-        return tasks.stream().mapToDouble(Task::getMaxPoints).sum();
-    }
-
     public boolean isPublished() {
         return startDate.isBefore(now());
     }
@@ -69,19 +68,19 @@ public class Assignment {
         return isPublished() && !isPastDue();
     }
 
-    public String getActiveRange() {
-        String start = startDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
-        String end = endDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
-        return "%s ~ %s".formatted(start, end);
-    }
-
-    public List<TimeCount> getCountDown() {
-        if (!isActive()) return List.of();
+    public List<Timer> getCountDown() {
         Duration remaining = Duration.between(now(), endDate);
         return List.of(
-                new TimeCount("DAYS", remaining.toDays() - 1, Duration.between(startDate, endDate).toDays()),
-                new TimeCount("HOURS", (long) remaining.toHoursPart(), 24L),
-                new TimeCount("MINUTES", (long) remaining.toMinutesPart(), 60L)
+                new Timer("DAYS", remaining.toDays(), Duration.between(startDate, endDate).toDays()),
+                new Timer("HOURS", (long) remaining.toHoursPart(), 24L),
+                new Timer("MINUTES", (long) remaining.toMinutesPart(), 60L)
         );
+    }
+
+    public Task createTask() {
+        Task newTask = new Task();
+        tasks.add(newTask);
+        newTask.setAssignment(this);
+        return newTask;
     }
 }

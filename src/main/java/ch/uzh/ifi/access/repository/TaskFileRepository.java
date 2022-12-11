@@ -15,7 +15,7 @@ public interface TaskFileRepository extends JpaRepository<TaskFile, Long> {
     List<TaskFile> findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(Long taskId);
 
     @Transactional
-    List<TaskFile> findByTask_IdAndEnabledTrueAndGradingTrue(Long taskId);
+    List<TaskFile> findByTask_IdAndEnabledTrue(Long taskId);
 
     Optional<TaskFile> findByTask_IdAndPath(Long taskId, String filePath);
 }

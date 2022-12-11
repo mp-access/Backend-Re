@@ -1,8 +1,10 @@
 package ch.uzh.ifi.access.service;
 
 import ch.uzh.ifi.access.model.*;
+import ch.uzh.ifi.access.model.constants.Role;
 import ch.uzh.ifi.access.model.constants.SubmissionType;
-import ch.uzh.ifi.access.model.dao.GradeResults;
+import ch.uzh.ifi.access.model.dao.Rank;
+import ch.uzh.ifi.access.model.dao.Results;
 import ch.uzh.ifi.access.model.dto.*;
 import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.repository.*;
@@ -18,11 +20,18 @@ import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.collections4.ListUtils;
+import org.apache.commons.collections4.SetUtils;
+import org.apache.commons.compress.utils.FileNameUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.tika.Tika;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
@@ -36,9 +45,10 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -50,6 +60,7 @@ import static java.time.LocalDateTime.now;
 @Service
 @AllArgsConstructor
 public class CourseService {
+    private final EvaluationRepository evaluationRepository;
 
     private String workingDir;
 
@@ -67,9 +78,13 @@ public class CourseService {
 
     private DockerClient dockerClient;
 
+    private RealmResource accessRealm;
+
     private ModelMapper modelMapper;
 
     private JsonMapper jsonMapper;
+
+    private Tika tika;
 
     private String verifyUserId(@Nullable String userId) {
         return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().getAuthentication().getName());
@@ -136,46 +151,26 @@ public class CourseService {
         return permittedFiles;
     }
 
+    public List<TaskFile> getTaskFilesByType(Long taskId, boolean isGrading) {
+        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
+                .stream().filter(file -> file.isPublished() || (file.isGrading() && isGrading)).toList();
+    }
+
     public List<Submission> getSubmissions(Long taskId, String userId) {
-        List<Submission> unrestricted = submissionRepository.findByTask_IdAndUserId(taskId, userId);
+        List<Submission> unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId);
         unrestricted.forEach(submission -> Optional.ofNullable(submission.getLogs()).ifPresent(submission::setOutput));
-        List<Submission> restricted = submissionRepository.findByTask_IdAndUserIdAndType(taskId, userId, SubmissionType.GRADE);
+        List<Submission> restricted = submissionRepository.findByEvaluation_Task_IdAndUserIdAndType(taskId, userId, SubmissionType.GRADE);
         return Stream.concat(unrestricted.stream(), restricted.stream()).sorted(Comparator.comparingLong(Submission::getId).reversed()).toList();
     }
 
-    private Optional<Submission> getEarliestGradedSubmission(Long taskId, String userId, LocalDateTime start) {
-        return submissionRepository.findTopByTask_IdAndUserIdAndValidTrueAndTypeAndCreatedAtAfterOrderByCreatedAtAsc(taskId, userId, SubmissionType.GRADE, start);
+    public Integer getRemainingAttempts(Long taskId, String userId, Integer maxAttempts) {
+        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId))
+                .map(Evaluation::getRemainingAttempts).orElse(maxAttempts);
     }
 
-    private Optional<Submission> getLatestGradedSubmission(Long taskId, String userId) {
-        return submissionRepository.findTopByTask_IdAndUserIdAndValidTrueAndTypeAndNextAttemptAtAfterOrderByNextAttemptAtDesc(
-                taskId, userId, SubmissionType.GRADE, now());
-    }
-
-    private Integer countGradedSubmissions(Long taskId, String userId) {
-        return submissionRepository.countByTask_IdAndUserIdAndType(taskId, userId, SubmissionType.GRADE);
-    }
-
-    private Integer countValidGradedSubmissions(Long taskId, String userId) {
-        return submissionRepository.countByTask_IdAndUserIdAndValidTrueAndType(taskId, userId, SubmissionType.GRADE);
-    }
-
-    private Integer countValidGradedSubmissions(Long taskId, String userId, LocalDateTime start, LocalDateTime end) {
-        return submissionRepository.countByTask_IdAndUserIdAndValidTrueAndTypeAndCreatedAtBetween(taskId, userId, SubmissionType.GRADE, start, end);
-    }
-
-    public Integer getRemainingAttempts(Long taskId, Integer maxAttempts, Duration attemptWindow, @Nullable String userId) {
-        String verifiedUserId = verifyUserId(userId);
-        if (Objects.isNull(attemptWindow))
-            return maxAttempts - countValidGradedSubmissions(taskId, verifiedUserId);
-        LocalDateTime relevantWindowStart = now().minus(attemptWindow.multipliedBy(maxAttempts));
-        LocalDateTime latestWindowStart = now().minus(attemptWindow);
-        Integer priorToLatestCount = countValidGradedSubmissions(taskId, verifiedUserId, relevantWindowStart, latestWindowStart);
-        Integer latestCount = countValidGradedSubmissions(taskId, verifiedUserId, latestWindowStart, now());
-        Integer maxRefills = getEarliestGradedSubmission(taskId, verifiedUserId, relevantWindowStart)
-                .map(submission -> Duration.between(submission.getCreatedAt(), now()).dividedBy(attemptWindow))
-                .orElse(0L).intValue();
-        return Math.min(maxAttempts, maxAttempts + maxRefills - priorToLatestCount) - latestCount;
+    public LocalDateTime getNextAttemptAt(Long taskId, String userId) {
+        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId))
+                .map(Evaluation::getNextAttemptAt).orElse(null);
     }
 
     public Event createEvent(Integer ordinalNum, LocalDateTime date, String type) {
@@ -193,21 +188,12 @@ public class CourseService {
     }
 
     public Double calculateAvgTaskPoints(Long taskId) {
-        return submissionRepository.calculateAvgTaskPoints(taskId).stream().filter(Objects::nonNull)
-                .mapToDouble(Double::doubleValue).average().orElse(0.0);
-    }
-
-    public Double calculateAvgAssignmentPoints(List<Task> tasks) {
-        return tasks.stream().mapToDouble(task -> calculateAvgTaskPoints(task.getId())).average().orElse(0.0);
-    }
-
-    public Double calculateAvgCoursePoints(List<Assignment> assignments) {
-        return assignments.stream().mapToDouble(assignment -> calculateAvgAssignmentPoints(assignment.getTasks())).average().orElse(0.0);
+        return evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId)
+                .stream().mapToDouble(Evaluation::getBestScore).average().orElse(0.0);
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {
-        return submissionRepository.findTopByTask_IdAndUserIdAndValidTrueAndTypeOrderByPointsDesc(
-                taskId, verifyUserId(userId), SubmissionType.GRADE).map(Submission::getPoints).orElse(0.0);
+        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId)).map(Evaluation::getBestScore).orElse(0.0);
     }
 
     public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
@@ -218,57 +204,68 @@ public class CourseService {
         return assignments.stream().mapToDouble(assignment -> calculateAssignmentPoints(assignment.getTasks(), userId)).sum();
     }
 
+    public Double getMaxPoints(String courseURL) {
+        return getAssignments(courseURL).stream().mapToDouble(AssignmentOverview::getMaxPoints).sum();
+    }
+
+    public Integer getOnlineCount(Long courseId) {
+        return submissionRepository.countOnlineByCourse(courseId, now().minus(5, ChronoUnit.MINUTES)).size() + 1;
+    }
+
+    public Integer getRank(Long courseId) {
+        String userId = verifyUserId(null);
+        return ListUtils.indexOf(getLeaderboard(courseId), rank -> rank.getEmail().equals(userId)) + 1;
+    }
+
+    public List<Rank> getLeaderboard(Long courseId) {
+        return evaluationRepository.getCourseRanking(courseId)
+                .stream().sorted(Comparator.comparingDouble(Rank::getScore)).toList();
+    }
+
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
         Double coursePoints = calculateCoursePoints(getCourseByURL(courseURL).getAssignments(), user.getEmail());
         return new StudentDTO(user.getFirstName(), user.getLastName(), user.getEmail(), coursePoints);
     }
 
-    public boolean isCurrentlySubmitting(String userId) {
+    private boolean isCurrentlySubmitting(String userId) {
         return !dockerClient.listContainersCmd().withLabelFilter(Map.of("userId", userId)).exec().isEmpty();
+    }
+
+    private void createSubmissionFile(Submission submission, SubmissionFileDTO fileDTO) {
+        SubmissionFile newSubmissionFile = new SubmissionFile();
+        newSubmissionFile.setSubmission(submission);
+        newSubmissionFile.setContent(fileDTO.getContent());
+        newSubmissionFile.setTaskFile(getTaskFileById(fileDTO.getTaskFileId()));
+        submission.getFiles().add(newSubmissionFile);
     }
 
     @Transactional
     public Submission createSubmission(SubmissionDTO submissionDTO) {
-        Task task = getTaskById(submissionDTO.getTaskId());
-        Submission newSubmission = modelMapper.map(submissionDTO, Submission.class);
-        if (submissionDTO.isRestricted() && isCurrentlySubmitting(newSubmission.getUserId())) {
+        if (isCurrentlySubmitting(submissionDTO.getUserId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - another submission is currently running!");
+        Evaluation evaluation = evaluationRepository.findByTask_IdAndUserId(submissionDTO.getTaskId(), submissionDTO.getUserId())
+                .orElseGet(getTaskById(submissionDTO.getTaskId())::createEvaluation);
+        evaluation.setUserId(submissionDTO.getUserId());
+        Submission newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission.class));
+        if (submissionDTO.isRestricted() && newSubmission.isGraded()) {
+            if (!evaluation.isActive())
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - task is not active!");
+            if (evaluation.getRemainingAttempts() <= 0)
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
         }
-        if (newSubmission.isGraded()) {
-            newSubmission.setOrdinalNum(countGradedSubmissions(task.getId(), newSubmission.getUserId()) + 1);
-            if (submissionDTO.isRestricted()) {
-                if (!task.getAssignment().isActive())
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - task is not active!");
-                if (getRemainingAttempts(task.getId(), task.getMaxAttempts(), task.getAttemptWindow(), newSubmission.getUserId()) <= 0)
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
-                if (Objects.nonNull(task.getAttemptWindow()))
-                    newSubmission.setNextAttemptAt(getLatestGradedSubmission(task.getId(), newSubmission.getUserId())
-                            .map(Submission::getNextAttemptAt).orElse(now()).plus(task.getAttemptWindow()));
-            }
-        }
-        newSubmission.setTask(task);
-        newSubmission.setValid(!newSubmission.isGraded());
-        submissionDTO.getFiles().stream()
-                .filter(submissionFile -> Objects.nonNull(submissionFile.getContent()))
-                .forEach(submissionFile -> {
-                    SubmissionFile newSubmissionFile = new SubmissionFile();
-                    newSubmissionFile.setSubmission(newSubmission);
-                    newSubmissionFile.setContent(submissionFile.getContent());
-                    newSubmissionFile.setTaskFile(getTaskFileById(submissionFile.getTaskFileId()));
-                    newSubmission.getFiles().add(newSubmissionFile);
-                });
+        submissionDTO.getFiles().stream().filter(fileDTO -> Objects.nonNull(fileDTO.getContent()))
+                .forEach(fileDTO -> createSubmissionFile(newSubmission, fileDTO));
         Submission savedSubmission = submissionRepository.saveAndFlush(newSubmission);
         return evaluateSubmission(savedSubmission);
     }
 
     @Transactional
     public Submission evaluateSubmission(Submission submission) {
-        Evaluator evaluator = submission.getTask().getEvaluator();
+        Evaluator evaluator = submission.getEvaluation().getTask().getEvaluator();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(evaluator.getDockerImage())) {
             Path submissionDir = Paths.get(workingDir, "submissions", submission.getId().toString());
-            if (submission.isGraded())
-                taskFileRepository.findByTask_IdAndEnabledTrueAndGradingTrue(submission.getTask().getId())
-                        .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
+            getTaskFilesByType(submission.getEvaluation().getTask().getId(), submission.isGraded())
+                    .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate()));
             submission.getFiles().forEach(file -> createLocalFile(submissionDir, file.getTaskFile().getPath(), file.getContent()));
             CreateContainerResponse container = containerCmd.withNetworkDisabled(true)
                     .withLabels(Map.of("userId", submission.getUserId())).withWorkingDir(submissionDir.toString())
@@ -279,16 +276,10 @@ public class CourseService {
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
                     .exec(new WaitContainerResultCallback()).awaitStatusCode(evaluator.getTimeLimit(), TimeUnit.MINUTES);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
-            if (statusCode == 137)
-                submission.setOutput("Memory Limit Exceeded");
             submission.setLogs(FileUtils.readLines(submissionDir.resolve("logs.txt").toFile(),
                     Charset.defaultCharset()).stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
-            if (submission.isGraded()) {
-                GradeResults results = readJsonFile(submissionDir, evaluator.getGradeResults(), GradeResults.class);
-                results.getHints().stream().findFirst().ifPresent(submission::setOutput);
-                submission.setPoints(results.getPoints());
-                submission.setValid(Objects.nonNull(submission.getPoints()));
-            }
+            if (submission.isGraded())
+                submission.parseResults(readJsonFile(submissionDir, evaluator.getResultsFile(), Results.class));
             FileUtils.deleteQuietly(submissionDir.toFile());
         } catch (IOException | NullPointerException e) {
             log.error("Failed to read or write file: {}", e.toString());
@@ -307,82 +298,100 @@ public class CourseService {
         Files.writeString(filePath, content);
     }
 
-    @SneakyThrows
-    public <T> T readJsonFile(Path path, String filename, Class<T> targetDTO) {
-        return jsonMapper.readValue(Files.readString(path.resolve(filename)), targetDTO);
+    private Path createLocalRepository(String repository) {
+        Path coursePath = Path.of(workingDir, "courses", "course_" + Instant.now().toEpochMilli());
+        try {
+            Git.cloneRepository().setURI(repository).setDirectory(coursePath.toFile()).call();
+            return coursePath;
+        } catch (GitAPIException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to clone repository");
+        }
+    }
+
+    private void pullDockerImage(String imageName) {
+        try {
+            dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete();
+        } catch (InterruptedException e) {
+            log.error("Failed to pull docker image {}", imageName);
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String formatActiveDuration(LocalDateTime startDate, LocalDateTime endDate) {
+        String start = startDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        String end = endDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        return "%s ~ %s".formatted(start, end);
     }
 
     @SneakyThrows
-    public <T> T readConfig(Path localDirPath, Class<T> targetDTO) {
+    private <T> T readJsonFile(Path path, String filename, Class<T> targetDTO) {
+        return jsonMapper.readValue(Files.readString(path.resolve(filename)), targetDTO);
+    }
+
+    private <T> T readConfig(Path localDirPath, Class<T> targetDTO) {
         return readJsonFile(localDirPath, "config.json", targetDTO);
+    }
+
+    private boolean isImage(Path path) {
+        try {
+            return StringUtils.contains(tika.detect(path), "image");
+        } catch (IOException e) {
+            log.error("Failed to detect file type at: {}", path);
+            return false;
+        }
+    }
+
+    private String readContent(Path path, boolean image) {
+        try {
+            return image ? Base64.encodeBase64URLSafeString(Files.readAllBytes(path)) : Files.readString(path);
+        } catch (IOException e) {
+            log.error("Failed to read file at: {}", path);
+            return "";
+        }
     }
 
     private TaskFile createOrUpdateTaskFile(Task task, Path parentPath, String filePath) {
         TaskFile taskFile = task.getFiles().stream()
                 .filter(existing -> existing.getPath().equals(filePath)).findFirst()
-                .orElseGet(() -> {
-                    TaskFile newTaskFile = new TaskFile();
-                    task.getFiles().add(newTaskFile);
-                    newTaskFile.setTask(task);
-                    newTaskFile.setPath(filePath);
-                    return newTaskFile;
-                });
+                .orElseGet(task::createFile);
         if (!taskFile.isEnabled()) {
-            Path taskFilePath = parentPath.resolve(taskFile.getPath());
+            Path taskFilePath = parentPath.resolve(filePath);
             taskFile.setName(taskFilePath.getFileName().toString());
-            try {
-                taskFile.setImage(StringUtils.contains(new Tika().detect(taskFilePath), "image"));
-                if (taskFile.isImage())
-                    taskFile.setBytes(Files.readAllBytes(taskFilePath));
-                else
-                    taskFile.setTemplate(Files.readString(taskFilePath));
-                taskFile.setEnabled(true);
-            } catch (IOException e) {
-                log.error("Failed to parse file at {}", taskFilePath);
-            }
+            taskFile.setPath(filePath);
+            taskFile.setLanguage(FileNameUtils.getExtension(filePath));
+            taskFile.setImage(isImage(taskFilePath));
+            taskFile.setTemplate(readContent(taskFilePath, taskFile.isImage()));
+            taskFile.setEnabled(true);
         }
         return taskFile;
     }
 
-    @SneakyThrows
     public Course createOrUpdateCourseFromRepository(Course course) {
-        Path coursePath = Path.of(workingDir, "courses", "course_" + Instant.now().toEpochMilli());
-        Git.cloneRepository().setURI(course.getRepository()).setDirectory(coursePath.toFile()).call();
+        Path coursePath = createLocalRepository(course.getRepository());
         CourseDTO courseConfig = readConfig(coursePath, CourseDTO.class);
         modelMapper.map(courseConfig, course);
+        course.setRole(createCourseRoles(course.getUrl()));
         course.getAssignments().forEach(assignment -> assignment.setEnabled(false));
         courseConfig.getAssignments().forEach(assignmentDir -> {
             Path assignmentPath = coursePath.resolve(assignmentDir);
             AssignmentDTO assignmentConfig = readConfig(assignmentPath, AssignmentDTO.class);
             Assignment assignment = course.getAssignments().stream()
                     .filter(existing -> existing.getUrl().equals(assignmentConfig.getUrl())).findFirst()
-                    .orElseGet(() -> {
-                        Assignment newAssignment = new Assignment();
-                        course.getAssignments().add(newAssignment);
-                        newAssignment.setCourse(course);
-                        return newAssignment;
-                    });
+                    .orElseGet(course::createAssignment);
             modelMapper.map(assignmentConfig, assignment);
             assignment.setEnabled(true);
+            assignment.setDuration(formatActiveDuration(assignment.getStartDate(), assignment.getEndDate()));
             assignment.getTasks().forEach(task -> task.setEnabled(false));
             assignmentConfig.getTasks().forEach(taskDir -> {
                 Path taskPath = assignmentPath.resolve(taskDir);
                 TaskDTO taskConfig = readConfig(taskPath, TaskDTO.class);
                 Task task = assignment.getTasks().stream()
                         .filter(existing -> existing.getUrl().equals(taskConfig.getUrl())).findFirst()
-                        .orElseGet(() -> {
-                            Task newTask = new Task();
-                            assignment.getTasks().add(newTask);
-                            newTask.setAssignment(assignment);
-                            return newTask;
-                        });
+                        .orElseGet(assignment::createTask);
+                pullDockerImage(taskConfig.getEvaluator().getDockerImage());
                 modelMapper.map(taskConfig, task);
-                try {
-                    task.setInstructions(Files.readString(taskPath.resolve(task.getInstructions())));
-                    task.setEnabled(true);
-                } catch (IOException e) {
-                    log.error("Failed to read task instructions: {}", e.getMessage());
-                }
+                task.setEnabled(true);
+                task.setInstructions(readContent(taskPath.resolve(taskConfig.getInstructions()), false));
                 task.getFiles().forEach(file -> file.setEnabled(false));
                 taskConfig.getEvaluator().getResources().forEach(filePath ->
                         createOrUpdateTaskFile(task, coursePath, filePath).setGrading(true));
@@ -400,17 +409,8 @@ public class CourseService {
                             createOrUpdateTaskFile(task, taskPath, filePath).setPublishDate(publishDate));
                 });
             });
+            assignment.setMaxPoints(assignment.getTasks().stream().filter(Task::isEnabled).mapToDouble(Task::getMaxPoints).sum());
         });
-        course.getAssignments().stream()
-                .flatMap(assignment -> assignment.getTasks().stream().map(task -> task.getEvaluator().getDockerImage()))
-                .distinct().filter(StringUtils::isNotBlank).forEach(imageName -> {
-                    try {
-                        dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete();
-                    } catch (InterruptedException e) {
-                        log.error("Failed to pull docker image {}", imageName);
-                        Thread.currentThread().interrupt();
-                    }
-                });
         return courseRepository.save(course);
     }
 
@@ -424,5 +424,58 @@ public class CourseService {
     public Course updateCourseFromRepository(String courseURL) {
         Course existingCourse = getCourseByURL(courseURL);
         return createOrUpdateCourseFromRepository(existingCourse);
+    }
+
+    private RoleRepresentation createCourseRole(String courseURL, Role mainRole, @Nullable Role subRole) {
+        RoleRepresentation userRole = new RoleRepresentation();
+        userRole.setName(mainRole.withCourse(courseURL));
+        userRole.setComposite(true);
+        RoleRepresentation.Composites userRoleComposites = new RoleRepresentation.Composites();
+        Set<String> associatedRoles = SetUtils.hashSet(courseURL, mainRole.getName());
+        Optional.ofNullable(subRole).ifPresent(role -> associatedRoles.add(role.withCourse(courseURL)));
+        userRoleComposites.setRealm(associatedRoles);
+        userRole.setComposites(userRoleComposites);
+        return userRole;
+    }
+
+    public String createCourseRoles(String courseURL) {
+        return accessRealm.roles().list(Role.STUDENT.withCourse(courseURL), true)
+                .stream().findFirst().orElseGet(() -> {
+                    RoleRepresentation basicCourseRole = new RoleRepresentation();
+                    basicCourseRole.setName(courseURL);
+                    accessRealm.roles().create(basicCourseRole);
+                    accessRealm.roles().create(createCourseRole(courseURL, Role.STUDENT, null));
+                    accessRealm.roles().create(createCourseRole(courseURL, Role.ASSISTANT, null));
+                    accessRealm.roles().create(createCourseRole(courseURL, Role.SUPERVISOR, Role.ASSISTANT));
+                    return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).toRepresentation();
+                }).getId();
+    }
+
+    public void registerCourseUser(String email, String roleName) {
+        RoleRepresentation realmRole = accessRealm.roles().get(roleName).toRepresentation();
+        accessRealm.users().search(email).stream().findFirst().ifPresent(user ->
+                accessRealm.users().get(user.getId()).roles().realmLevel().add(List.of(realmRole)));
+    }
+
+    public void registerCourseStudent(String courseURL, String student) {
+        registerCourseUser(student, Role.STUDENT.withCourse(courseURL));
+    }
+
+    public void registerCourseAssistant(String courseURL, String assistant) {
+        registerCourseUser(assistant, Role.ASSISTANT.withCourse(courseURL));
+    }
+
+    public void registerCourseSupervisor(String courseURL, String supervisor) {
+        registerCourseUser(supervisor, Role.SUPERVISOR.withCourse(courseURL));
+    }
+
+    public Set<UserRepresentation> getStudentsByCourse(String courseURL) {
+        return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).getRoleUserMembers();
+    }
+
+    public List<UserRepresentation> getAssistantsByCourse(String courseURL) {
+        return accessRealm.roles().get(Role.ASSISTANT.withCourse(courseURL)).getRoleUserMembers()
+                .stream().filter(user -> user.getRealmRoles().stream().noneMatch(roleName ->
+                        roleName.equals(Role.SUPERVISOR.withCourse(courseURL)))).toList();
     }
 }

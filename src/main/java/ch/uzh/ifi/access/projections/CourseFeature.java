@@ -21,6 +21,8 @@ public interface CourseFeature {
 
     String getDescription();
 
+    String getFeedback();
+
     String getRestricted();
 
     @JsonFormat(pattern = "dd-MM-yyyy")
@@ -28,4 +30,6 @@ public interface CourseFeature {
 
     @JsonFormat(pattern = "dd-MM-yyyy")
     LocalDate getEndDate();
+
+    Long getStudentsCount();
 }

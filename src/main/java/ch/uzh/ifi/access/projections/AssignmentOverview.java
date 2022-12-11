@@ -1,7 +1,7 @@
 package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Assignment;
-import ch.uzh.ifi.access.model.dao.TimeCount;
+import ch.uzh.ifi.access.model.dao.Timer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
@@ -28,9 +28,9 @@ public interface AssignmentOverview {
 
     LocalDateTime getEndDate();
 
-    String getActiveRange();
+    String getDuration();
 
-    List<TimeCount> getCountDown();
+    List<Timer> getCountDown();
 
     boolean isPublished();
 
@@ -42,9 +42,6 @@ public interface AssignmentOverview {
 
     @Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
     Double getPoints();
-
-    @Value("#{@courseService.calculateAvgAssignmentPoints(target.tasks)}")
-    Double getAvgPoints();
 
     @Value("#{target.tasks.size()}")
     Integer getTasksCount();

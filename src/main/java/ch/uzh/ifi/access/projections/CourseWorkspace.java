@@ -18,4 +18,7 @@ public interface CourseWorkspace extends CourseOverview {
 
     @Value("#{@courseService.getEvents(target.url)}")
     List<Event> getEvents();
+
+    @Value("#{@courseService.getRank(target.id)}")
+    Integer getRank();
 }

@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class TimeCount {
+public class Timer {
     String name;
     Long current;
     Long max;
