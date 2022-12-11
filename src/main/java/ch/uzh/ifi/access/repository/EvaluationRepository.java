@@ -10,7 +10,7 @@ import java.util.Optional;
 
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
 
-    Optional<Evaluation> findByTask_IdAndUserId(Long taskId, String userId);
+    Optional<Evaluation> findTopByTask_IdAndUserIdOrderById(Long taskId, String userId);
 
     List<Evaluation> findByTask_IdAndBestScoreNotNull(Long taskId);
 

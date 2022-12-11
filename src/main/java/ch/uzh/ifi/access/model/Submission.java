@@ -48,7 +48,7 @@ public class Submission {
     private List<SubmissionFile> files = new ArrayList<>();
 
     @JsonIgnore
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     @JoinColumn(name = "evaluation_id")
     private Evaluation evaluation;
 

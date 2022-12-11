@@ -50,6 +50,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,30 +61,19 @@ import static java.time.LocalDateTime.now;
 @Service
 @AllArgsConstructor
 public class CourseService {
-    private final EvaluationRepository evaluationRepository;
-
     private String workingDir;
-
     private CourseRepository courseRepository;
-
     private AssignmentRepository assignmentRepository;
-
     private TaskRepository taskRepository;
-
     private TaskFileRepository taskFileRepository;
-
     private SubmissionRepository submissionRepository;
-
     private SubmissionFileRepository submissionFileRepository;
-
+    private EvaluationRepository evaluationRepository;
     private DockerClient dockerClient;
-
     private RealmResource accessRealm;
-
+    private ConcurrentMap<String, Boolean> submissionCache;
     private ModelMapper modelMapper;
-
     private JsonMapper jsonMapper;
-
     private Tika tika;
 
     private String verifyUserId(@Nullable String userId) {
@@ -163,13 +153,17 @@ public class CourseService {
         return Stream.concat(unrestricted.stream(), restricted.stream()).sorted(Comparator.comparingLong(Submission::getId).reversed()).toList();
     }
 
+    public Optional<Evaluation> getEvaluation(Long taskId, String userId) {
+        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(taskId, userId);
+    }
+
     public Integer getRemainingAttempts(Long taskId, String userId, Integer maxAttempts) {
-        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId))
+        return getEvaluation(taskId, verifyUserId(userId))
                 .map(Evaluation::getRemainingAttempts).orElse(maxAttempts);
     }
 
     public LocalDateTime getNextAttemptAt(Long taskId, String userId) {
-        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId))
+        return getEvaluation(taskId, verifyUserId(userId))
                 .map(Evaluation::getNextAttemptAt).orElse(null);
     }
 
@@ -193,7 +187,7 @@ public class CourseService {
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {
-        return evaluationRepository.findByTask_IdAndUserId(taskId, verifyUserId(userId)).map(Evaluation::getBestScore).orElse(0.0);
+        return getEvaluation(taskId, verifyUserId(userId)).map(Evaluation::getBestScore).orElse(0.0);
     }
 
     public Double calculateAssignmentPoints(List<Task> tasks, String userId) {
@@ -227,8 +221,10 @@ public class CourseService {
         return new StudentDTO(user.getFirstName(), user.getLastName(), user.getEmail(), coursePoints);
     }
 
-    private boolean isCurrentlySubmitting(String userId) {
-        return !dockerClient.listContainersCmd().withLabelFilter(Map.of("userId", userId)).exec().isEmpty();
+    private Evaluation createEvaluation(Long taskId, String userId) {
+        Evaluation newEvaluation = getTaskById(taskId).createEvaluation();
+        newEvaluation.setUserId(userId);
+        return evaluationRepository.save(newEvaluation);
     }
 
     private void createSubmissionFile(Submission submission, SubmissionFileDTO fileDTO) {
@@ -239,13 +235,23 @@ public class CourseService {
         submission.getFiles().add(newSubmissionFile);
     }
 
-    @Transactional
+    public void initSubmission(String userId) {
+        if (isSubmitting(userId))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are too fast! Please try again in a few seconds...");
+        submissionCache.put(userId, Boolean.TRUE);
+    }
+
+    public void endSubmission(String userId) {
+        submissionCache.put(userId, Boolean.FALSE);
+    }
+
+    public boolean isSubmitting(String userId) {
+        return submissionCache.getOrDefault(userId, Boolean.FALSE);
+    }
+
     public Submission createSubmission(SubmissionDTO submissionDTO) {
-        if (isCurrentlySubmitting(submissionDTO.getUserId()))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - another submission is currently running!");
-        Evaluation evaluation = evaluationRepository.findByTask_IdAndUserId(submissionDTO.getTaskId(), submissionDTO.getUserId())
-                .orElseGet(getTaskById(submissionDTO.getTaskId())::createEvaluation);
-        evaluation.setUserId(submissionDTO.getUserId());
+        Evaluation evaluation = getEvaluation(submissionDTO.getTaskId(), submissionDTO.getUserId())
+                .orElseGet(() -> createEvaluation(submissionDTO.getTaskId(), submissionDTO.getUserId()));
         Submission newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission.class));
         if (submissionDTO.isRestricted() && newSubmission.isGraded()) {
             if (!evaluation.isActive())
@@ -255,12 +261,15 @@ public class CourseService {
         }
         submissionDTO.getFiles().stream().filter(fileDTO -> Objects.nonNull(fileDTO.getContent()))
                 .forEach(fileDTO -> createSubmissionFile(newSubmission, fileDTO));
-        Submission savedSubmission = submissionRepository.saveAndFlush(newSubmission);
-        return evaluateSubmission(savedSubmission);
+        return submissionRepository.saveAndFlush(newSubmission);
     }
 
-    @Transactional
-    public Submission evaluateSubmission(Submission submission) {
+    public void evaluateSubmission(Long taskId, String userId, Long submissionId) {
+        Evaluation evaluation = getEvaluation(taskId, userId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No evaluation found for " + userId));
+        Submission submission = evaluation.getSubmissions().stream().filter(saved -> saved.getId().equals(submissionId)).findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No submission found with ID " + submissionId));
+        submission.setValid(!submission.isGraded());
         Evaluator evaluator = submission.getEvaluation().getTask().getEvaluator();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(evaluator.getDockerImage())) {
             Path submissionDir = Paths.get(workingDir, "submissions", submission.getId().toString());
@@ -286,7 +295,7 @@ public class CourseService {
         } catch (DockerClientException e) {
             submission.setOutput(e.getMessage());
         }
-        return submissionRepository.save(submission);
+        evaluationRepository.saveAndFlush(evaluation);
     }
 
     @SneakyThrows

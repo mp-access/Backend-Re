@@ -66,8 +66,11 @@ public class CourseController {
 
     @PostMapping("/{course}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.userId == authentication.name) and (#submission.restricted or hasRole(#course + '-assistant'))")
-    public Submission evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
-        return courseService.createSubmission(submission);
+    public void evaluateSubmission(@PathVariable String course, @RequestBody SubmissionDTO submission) {
+        courseService.initSubmission(submission.getUserId());
+        Submission createdSubmission = courseService.createSubmission(submission);
+        courseService.evaluateSubmission(submission.getTaskId(), submission.getUserId(), createdSubmission.getId());
+        courseService.endSubmission(submission.getUserId());
     }
 
     @PostMapping("/{course}/students/{user}")

@@ -53,7 +53,6 @@ public class Evaluation {
         submissions.add(newSubmission);
         newSubmission.setEvaluation(this);
         newSubmission.setOrdinalNum(countSubmissionsByType(newSubmission.getType()));
-        newSubmission.setValid(!newSubmission.isGraded());
         return newSubmission;
     }
 
