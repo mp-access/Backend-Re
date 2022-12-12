@@ -20,16 +20,8 @@ import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
 @Configuration
 public class MapperConfigurer {
-
-    @Bean
-    public ConcurrentMap<String, Boolean> submissionCache() {
-        return new ConcurrentHashMap<>();
-    }
 
     @Bean
     public Tika tika() {

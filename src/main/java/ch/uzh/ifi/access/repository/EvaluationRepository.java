@@ -14,7 +14,7 @@ public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
 
     List<Evaluation> findByTask_IdAndBestScoreNotNull(Long taskId);
 
-    @Query("SELECT new ch.uzh.ifi.access.model.dao.Rank(e.userId, SUM(e.bestScore)) FROM Evaluation e " +
+    @Query("SELECT new ch.uzh.ifi.access.model.dao.Rank(MIN(e.id), e.userId, SUM(e.bestScore)) FROM Evaluation e " +
             "WHERE e.task.assignment.course.id=:courseId AND e.bestScore IS NOT NULL GROUP BY e.userId")
     List<Rank> getCourseRanking(Long courseId);
 }

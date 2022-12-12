@@ -32,7 +32,7 @@ public class Evaluator {
     private String resultsFile = "grade_results.json";
 
     @Column(nullable = false)
-    private Integer timeLimit = 2;
+    private Integer timeLimit = 30;
 
     public String formCommand(SubmissionType type) {
         return switch (type) {

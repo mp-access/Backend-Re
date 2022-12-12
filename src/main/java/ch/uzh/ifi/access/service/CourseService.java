@@ -13,7 +13,6 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.WaitContainerResultCallback;
-import com.github.dockerjava.api.exception.DockerClientException;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.HostConfig;
 import jakarta.transaction.Transactional;
@@ -41,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,7 +50,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -71,7 +70,6 @@ public class CourseService {
     private EvaluationRepository evaluationRepository;
     private DockerClient dockerClient;
     private RealmResource accessRealm;
-    private ConcurrentMap<String, Boolean> submissionCache;
     private ModelMapper modelMapper;
     private JsonMapper jsonMapper;
     private Tika tika;
@@ -212,8 +210,8 @@ public class CourseService {
     }
 
     public List<Rank> getLeaderboard(Long courseId) {
-        return evaluationRepository.getCourseRanking(courseId)
-                .stream().sorted(Comparator.comparingDouble(Rank::getScore)).toList();
+        return evaluationRepository.getCourseRanking(courseId).stream()
+                .sorted(Comparator.comparingDouble(Rank::getScore).reversed().thenComparing(Rank::getEvaluationId)).toList();
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
@@ -233,20 +231,6 @@ public class CourseService {
         newSubmissionFile.setContent(fileDTO.getContent());
         newSubmissionFile.setTaskFile(getTaskFileById(fileDTO.getTaskFileId()));
         submission.getFiles().add(newSubmissionFile);
-    }
-
-    public void initSubmission(String userId) {
-        if (isSubmitting(userId))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are too fast! Please try again in a few seconds...");
-        submissionCache.put(userId, Boolean.TRUE);
-    }
-
-    public void endSubmission(String userId) {
-        submissionCache.put(userId, Boolean.FALSE);
-    }
-
-    public boolean isSubmitting(String userId) {
-        return submissionCache.getOrDefault(userId, Boolean.FALSE);
     }
 
     public Submission createSubmission(SubmissionDTO submissionDTO) {
@@ -283,17 +267,19 @@ public class CourseService {
                             .withBinds(Bind.parse(submissionDir + ":" + submissionDir))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
-                    .exec(new WaitContainerResultCallback()).awaitStatusCode(evaluator.getTimeLimit(), TimeUnit.MINUTES);
+                    .exec(new WaitContainerResultCallback()).awaitStatusCode(30, TimeUnit.SECONDS);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
             submission.setLogs(FileUtils.readLines(submissionDir.resolve("logs.txt").toFile(),
                     Charset.defaultCharset()).stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
             if (submission.isGraded())
                 submission.parseResults(readJsonFile(submissionDir, evaluator.getResultsFile(), Results.class));
             FileUtils.deleteQuietly(submissionDir.toFile());
+        } catch (SocketTimeoutException e) {
+            submission.setOutput("Time limit exceeded");
         } catch (IOException | NullPointerException e) {
             log.error("Failed to read or write file: {}", e.toString());
-        } catch (DockerClientException e) {
-            submission.setOutput(e.getMessage());
+        } catch (RuntimeException e) {
+            submission.setOutput(e.getMessage().contains("timeout") ? "Time limit exceeded" : e.getMessage());
         }
         evaluationRepository.saveAndFlush(evaluation);
     }

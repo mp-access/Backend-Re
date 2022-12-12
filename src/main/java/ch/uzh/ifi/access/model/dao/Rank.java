@@ -6,6 +6,8 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class Rank {
+
+    Long evaluationId;
     String email;
     Double score;
 }
