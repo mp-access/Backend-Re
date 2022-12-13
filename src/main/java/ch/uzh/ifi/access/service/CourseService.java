@@ -206,12 +206,14 @@ public class CourseService {
 
     public Integer getRank(Long courseId) {
         String userId = verifyUserId(null);
+        List<Rank> leaderboard = getLeaderboard(courseId);
+        log.info("Board: {}", leaderboard);
         return ListUtils.indexOf(getLeaderboard(courseId), rank -> rank.getEmail().equals(userId)) + 1;
     }
 
     public List<Rank> getLeaderboard(Long courseId) {
         return evaluationRepository.getCourseRanking(courseId).stream()
-                .sorted(Comparator.comparingDouble(Rank::getScore).reversed().thenComparing(Rank::getEvaluationId)).toList();
+                .sorted(Comparator.comparingDouble(Rank::getScore).reversed()).toList();
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
