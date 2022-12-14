@@ -318,22 +318,23 @@ public class CourseService {
         return readJsonFile(localDirPath, "config.json", targetDTO);
     }
 
-    private boolean isImage(Path path) {
-        try {
-            return StringUtils.contains(tika.detect(path), "image");
-        } catch (IOException e) {
-            log.error("Failed to detect file type at: {}", path);
-            return false;
-        }
+    private String readLanguage(String filePath) {
+        String extension = FileNameUtils.getExtension(filePath);
+        if (extension.equals("py"))
+            return "python";
+        return extension;
     }
 
-    private String readContent(Path path, boolean image) {
+    private TaskFileDTO readContent(Path path) {
+        TaskFileDTO file = new TaskFileDTO();
         try {
-            return image ? Base64.encodeBase64URLSafeString(Files.readAllBytes(path)) : Files.readString(path);
+            String uri = "data:%s;base64,".formatted(tika.detect(path));
+            file.setImage(StringUtils.contains(uri, "image"));
+            file.setTemplate(file.isImage() ? uri + Base64.encodeBase64String(Files.readAllBytes(path)) : Files.readString(path));
         } catch (IOException e) {
             log.error("Failed to read file at: {}", path);
-            return "";
         }
+        return file;
     }
 
     private TaskFile createOrUpdateTaskFile(Task task, Path parentPath, String filePath) {
@@ -342,11 +343,10 @@ public class CourseService {
                 .orElseGet(task::createFile);
         if (!taskFile.isEnabled()) {
             Path taskFilePath = parentPath.resolve(filePath);
+            modelMapper.map(readContent(taskFilePath), taskFile);
             taskFile.setName(taskFilePath.getFileName().toString());
+            taskFile.setLanguage(readLanguage(filePath));
             taskFile.setPath(filePath);
-            taskFile.setLanguage(FileNameUtils.getExtension(filePath));
-            taskFile.setImage(isImage(taskFilePath));
-            taskFile.setTemplate(readContent(taskFilePath, taskFile.isImage()));
             taskFile.setEnabled(true);
         }
         return taskFile;
@@ -377,7 +377,7 @@ public class CourseService {
                 pullDockerImage(taskConfig.getEvaluator().getDockerImage());
                 modelMapper.map(taskConfig, task);
                 task.setEnabled(true);
-                task.setInstructions(readContent(taskPath.resolve(taskConfig.getInstructions()), false));
+                task.setInstructions(readContent(taskPath.resolve(taskConfig.getInstructions())).getTemplate());
                 task.getFiles().forEach(file -> file.setEnabled(false));
                 taskConfig.getEvaluator().getResources().forEach(filePath ->
                         createOrUpdateTaskFile(task, coursePath, filePath).setGrading(true));
