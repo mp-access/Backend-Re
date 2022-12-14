@@ -1,11 +1,9 @@
 package ch.uzh.ifi.access.config;
 
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import lombok.AllArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.representations.AccessToken;
 import org.springframework.boot.web.servlet.ServletListenerRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,14 +12,16 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.core.GrantedAuthorityDefaults;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.session.SessionRegistry;
-import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.data.repository.query.SecurityEvaluationContextExtension;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
+
+import java.util.Collection;
 
 @AllArgsConstructor
 @Configuration
@@ -31,26 +31,19 @@ public class SecurityConfigurer {
 
     private Environment env;
 
-    private JsonMapper jsonMapper;
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer().jwt();
-        return http.build();
+    private Collection<GrantedAuthority> parsAuthorities(Jwt token) {
+        return CollectionUtils.collect(token.getClaimAsStringList("enrollments"), SimpleGrantedAuthority::new);
     }
 
     @Bean
-    public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setPrincipalClaimName("email");
-        converter.setJwtGrantedAuthoritiesConverter(source -> {
-            AccessToken.Access realmAccess = jsonMapper.convertValue(source.getClaimAsMap("realm_access"), AccessToken.Access.class);
-            return CollectionUtils.collect(realmAccess.getRoles(), SimpleGrantedAuthority::new);
-        });
-        return converter;
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.sessionManagement().maximumSessions(1).sessionRegistry(activityRegistry());
+        http.authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer().jwt().jwtAuthenticationConverter(source ->
+                        new JwtAuthenticationToken(source, parsAuthorities(source), source.getClaimAsString("email")));
+        return http.build();
     }
 
     @Bean
@@ -59,8 +52,8 @@ public class SecurityConfigurer {
     }
 
     @Bean
-    public SessionRegistry sessionRegistry() {
-        return new SessionRegistryImpl();
+    public ActivityRegistry activityRegistry() {
+        return new ActivityRegistry();
     }
 
     @Bean

@@ -25,6 +25,7 @@ import org.apache.commons.collections4.SetUtils;
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.math3.util.Precision;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.tika.Tika;
 import org.eclipse.jgit.api.Git;
@@ -40,7 +41,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,7 +48,6 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -180,8 +179,8 @@ public class CourseService {
     }
 
     public Double calculateAvgTaskPoints(Long taskId) {
-        return evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId)
-                .stream().mapToDouble(Evaluation::getBestScore).average().orElse(0.0);
+        return Precision.round(evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId)
+                .stream().mapToDouble(Evaluation::getBestScore).average().orElse(0.0), 2);
     }
 
     public Double calculateTaskPoints(Long taskId, String userId) {
@@ -200,14 +199,8 @@ public class CourseService {
         return getAssignments(courseURL).stream().mapToDouble(AssignmentOverview::getMaxPoints).sum();
     }
 
-    public Integer getOnlineCount(Long courseId) {
-        return submissionRepository.countOnlineByCourse(courseId, now().minus(5, ChronoUnit.MINUTES)).size() + 1;
-    }
-
     public Integer getRank(Long courseId) {
         String userId = verifyUserId(null);
-        List<Rank> leaderboard = getLeaderboard(courseId);
-        log.info("Board: {}", leaderboard);
         return ListUtils.indexOf(getLeaderboard(courseId), rank -> rank.getEmail().equals(userId)) + 1;
     }
 
@@ -276,11 +269,7 @@ public class CourseService {
             if (submission.isGraded())
                 submission.parseResults(readJsonFile(submissionDir, evaluator.getResultsFile(), Results.class));
             FileUtils.deleteQuietly(submissionDir.toFile());
-        } catch (SocketTimeoutException e) {
-            submission.setOutput("Time limit exceeded");
-        } catch (IOException | NullPointerException e) {
-            log.error("Failed to read or write file: {}", e.toString());
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             submission.setOutput(e.getMessage().contains("timeout") ? "Time limit exceeded" : e.getMessage());
         }
         evaluationRepository.saveAndFlush(evaluation);

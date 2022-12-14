@@ -16,6 +16,6 @@ public interface CourseOverview extends CourseFeature {
     @Value("#{@courseService.getAssignments(target.url).size()}")
     Integer getAssignmentsCount();
 
-    @Value("#{@courseService.getOnlineCount(target.id)}")
-    Integer getOnlineCount();
+    @Value("#{@activityRegistry.getOnlineCount(target.url)}")
+    Long getOnlineCount();
 }
