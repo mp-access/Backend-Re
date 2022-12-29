@@ -21,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
 
+import java.nio.file.Path;
 import java.util.Collection;
 
 @AllArgsConstructor
@@ -31,7 +32,7 @@ public class SecurityConfigurer {
 
     private Environment env;
 
-    private Collection<GrantedAuthority> parsAuthorities(Jwt token) {
+    private Collection<GrantedAuthority> parseAuthorities(Jwt token) {
         return CollectionUtils.collect(token.getClaimAsStringList("enrollments"), SimpleGrantedAuthority::new);
     }
 
@@ -42,7 +43,7 @@ public class SecurityConfigurer {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer().jwt().jwtAuthenticationConverter(source ->
-                        new JwtAuthenticationToken(source, parsAuthorities(source), source.getClaimAsString("email")));
+                        new JwtAuthenticationToken(source, parseAuthorities(source), source.getClaimAsString("email")));
         return http.build();
     }
 
@@ -77,8 +78,8 @@ public class SecurityConfigurer {
     }
 
     @Bean
-    public String workingDir() {
-        return env.getProperty("WORKING_DIR", "/tmp/access");
+    public Path workingDir() {
+        return Path.of(env.getProperty("WORKING_DIR", "/workspace/data"));
     }
 
     @Bean

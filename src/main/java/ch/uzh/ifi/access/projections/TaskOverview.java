@@ -4,27 +4,28 @@ import ch.uzh.ifi.access.model.Task;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
+import java.time.Duration;
+
 @Projection(types = {Task.class})
 public interface TaskOverview {
-
     Long getId();
-
-    String getUrl();
 
     String getTitle();
 
-    @Value("#{'Task ' + target.ordinalNum.toString()}")
-    String getName();
-
-    Integer getOrdinalNum();
-
-    String getInstructions();
+    String getUrl();
 
     Double getMaxPoints();
 
     Integer getMaxAttempts();
 
+    Duration getAttemptWindow();
+
+    Integer getOrdinalNum();
+
     void setUserId(String userId);
+
+    @Value("#{target.assignment.id}")
+    Long getAssignmentId();
 
     @Value("#{target.assignment.published}")
     boolean isPublished();

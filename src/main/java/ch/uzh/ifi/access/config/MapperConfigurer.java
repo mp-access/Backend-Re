@@ -45,11 +45,11 @@ public class MapperConfigurer {
                 .setMatchingStrategy(MatchingStrategies.STRICT)
                 .setSkipNullEnabled(true);
         modelMapper.typeMap(CourseDTO.class, Course.class)
-                .addMappings(mapping -> mapping.skip(CourseDTO::getAssignments, Course::setAssignments));
+                .addMappings(mapping -> mapping.skip(Course::setAssignments));
         modelMapper.typeMap(AssignmentDTO.class, Assignment.class)
-                .addMappings(mapping -> mapping.skip(AssignmentDTO::getTasks, Assignment::setTasks));
+                .addMappings(mapping -> mapping.skip(Assignment::setTasks));
         modelMapper.typeMap(TaskDTO.class, Task.class)
-                .addMappings(mapping -> mapping.skip(TaskDTO::getFiles, Task::setFiles));
+                .addMappings(mapping -> mapping.skip(Task::setFiles));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
                 .addMappings(mapping -> mapping.skip(Submission::setFiles));
         return modelMapper;

@@ -1,6 +1,5 @@
 package ch.uzh.ifi.access.model.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -11,20 +10,12 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class AssignmentDTO {
-
+    Long id;
     Integer ordinalNum;
-
     String title;
-
     String url;
-
     String description;
-
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     LocalDateTime startDate;
-
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     LocalDateTime endDate;
-
-    List<String> tasks = new ArrayList<>();
+    List<TaskDTO> tasks = new ArrayList<>();
 }

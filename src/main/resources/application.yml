@@ -8,6 +8,10 @@ server:
 
 spring:
   jackson:
+    time-zone: Europe/Zurich
+    deserialization:
+      FAIL_ON_IGNORED_PROPERTIES: false
+      FAIL_ON_UNKNOWN_PROPERTIES: false
     mapper:
       ACCEPT_CASE_INSENSITIVE_ENUMS: true
   datasource:

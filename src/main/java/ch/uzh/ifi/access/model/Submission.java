@@ -1,11 +1,12 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.SubmissionType;
+import ch.uzh.ifi.access.model.constants.Command;
 import ch.uzh.ifi.access.model.dao.Results;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -32,7 +33,7 @@ public class Submission {
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
-    private SubmissionType type;
+    private Command command;
 
     @CreationTimestamp
     private LocalDateTime createdAt;
@@ -52,16 +53,16 @@ public class Submission {
     @JoinColumn(name = "evaluation_id")
     private Evaluation evaluation;
 
-    public String getName() {
-        return type.formatName(ordinalNum);
-    }
-
     public Double getMaxPoints() {
         return evaluation.getTask().getMaxPoints();
     }
 
+    public String getName() {
+        return "%s %s".formatted(StringUtils.capitalize(command.getName()), ordinalNum);
+    }
+
     public boolean isGraded() {
-        return type.isGraded();
+        return command.isGraded();
     }
 
     public void parseResults(Results results) {

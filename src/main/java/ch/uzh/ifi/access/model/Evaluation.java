@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.SubmissionType;
+import ch.uzh.ifi.access.model.constants.Command;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -45,14 +45,14 @@ public class Evaluation {
         return task.getAssignment().isActive();
     }
 
-    public Long countSubmissionsByType(SubmissionType type) {
-        return submissions.stream().filter(submission -> submission.getType().equals(type)).count();
+    public Long countSubmissionsByCommand(Command command) {
+        return submissions.stream().filter(submission -> submission.getCommand().equals(command)).count();
     }
 
     public Submission addSubmission(Submission newSubmission) {
         submissions.add(newSubmission);
         newSubmission.setEvaluation(this);
-        newSubmission.setOrdinalNum(countSubmissionsByType(newSubmission.getType()));
+        newSubmission.setOrdinalNum(countSubmissionsByCommand(newSubmission.getCommand()));
         return newSubmission;
     }
 

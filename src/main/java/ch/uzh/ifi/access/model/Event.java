@@ -17,7 +17,7 @@ public class Event {
     @GeneratedValue
     private Long id;
 
-    private String type;
+    private String category;
 
     private String description;
 

@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.model;
 
+import ch.uzh.ifi.access.model.constants.Command;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,7 +17,6 @@ public class Task {
     @GeneratedValue
     private Long id;
 
-    @Column(nullable = false)
     private Integer ordinalNum;
 
     @Column(nullable = false)
@@ -25,22 +25,24 @@ public class Task {
     @Column(nullable = false)
     private String url;
 
-    @Column(columnDefinition = "text")
-    private String instructions;
-
     private Double maxPoints;
 
     private Integer maxAttempts;
 
     private Duration attemptWindow;
 
-    private boolean enabled;
+    @Column(nullable = false)
+    private String dockerImage;
+
+    private String runCommand;
+
+    private String testCommand;
+
+    private String gradeCommand;
+
+    private Integer timeLimit = 30;
 
     @ManyToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "task_evaluator_id")
-    private Evaluator evaluator;
-
-    @ManyToOne
     @JoinColumn(name = "assignment_id")
     private Assignment assignment;
 
@@ -53,18 +55,33 @@ public class Task {
     @Transient
     private String userId;
 
-    public TaskFile createFile() {
+    public String getInstructions() {
+        return files.stream().filter(file -> file.getContext().isInstructions()).findFirst()
+                .map(file -> file.getTemplate().getContent()).orElse("");
+    }
+
+    public TaskFile createFile(TemplateFile templateFile) {
         TaskFile newTaskFile = new TaskFile();
-        files.add(newTaskFile);
+        newTaskFile.setTemplate(templateFile);
+        templateFile.getTaskFiles().add(newTaskFile);
         newTaskFile.setTask(this);
+        files.add(newTaskFile);
         return newTaskFile;
     }
 
     public Evaluation createEvaluation() {
         Evaluation newEvaluation = new Evaluation();
-        evaluations.add(newEvaluation);
         newEvaluation.setTask(this);
         newEvaluation.setRemainingAttempts(maxAttempts);
+        evaluations.add(newEvaluation);
         return newEvaluation;
+    }
+
+    public String formCommand(Command type) {
+        return switch (type) {
+            case RUN -> runCommand;
+            case TEST -> testCommand;
+            case GRADE -> gradeCommand;
+        };
     }
 }

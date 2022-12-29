@@ -12,6 +12,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @PostAuthorize("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and returnObject.get().published)")
     Optional<TaskWorkspace> findByAssignment_Course_UrlAndAssignment_UrlAndUrl(String courseURL, String assignmentURL, String taskURL);
 
-    Optional<Task> findByAssignment_IdAndOrdinalNum(Long assignmentId, Integer taskNum);
+    Optional<Task> getByAssignment_Course_UrlAndAssignment_UrlAndUrl(String courseURL, String assignmentURL, String taskURL);
+
+    boolean existsByAssignment_Course_UrlAndAssignment_UrlAndUrl(String courseURL, String assignmentURL, String taskURL);
 
 }

@@ -1,14 +1,11 @@
 package ch.uzh.ifi.access.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import ch.uzh.ifi.access.model.constants.Context;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
 import java.util.Objects;
-
-import static java.time.LocalDateTime.now;
 
 @Getter
 @Setter
@@ -20,32 +17,49 @@ public class TaskFile {
 
     private String path;
 
-    private String name;
-
-    private String language;
-
-    private LocalDateTime publishDate;
-
-    @Column(columnDefinition = "text")
-    private String template;
-
-    @JsonIgnore
-    @ManyToOne
-    @JoinColumn(name = "task_id")
-    private Task task;
-
-    private boolean image;
-
-    private boolean enabled;
+    @Enumerated(EnumType.STRING)
+    private Context context;
 
     private boolean editable;
 
-    private boolean grading;
+    @ManyToOne
+    @JoinColumn(name = "template_id")
+    private TemplateFile template;
+
+    @ManyToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "task_id")
+    private Task task;
 
     @Transient
-    private String content;
+    private String latest;
 
-    public boolean isPublished() {
-        return Objects.nonNull(publishDate) && publishDate.isBefore(now());
+    public String getPath() {
+        return Objects.requireNonNullElse(path, template.getPath());
+    }
+
+    public boolean isReleased() {
+        return switch (context) {
+            case TASK -> task.getAssignment().isPublished();
+            case SOLUTION -> task.getAssignment().isPastDue();
+            default -> false;
+        };
+    }
+
+    public boolean inContext(boolean isGrading) {
+        return switch (context) {
+            case TASK -> true;
+            case GRADING -> isGrading;
+            default -> false;
+        };
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return Objects.nonNull(o) && getClass().equals(o.getClass()) && id.equals(((TaskFile) o).getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 }

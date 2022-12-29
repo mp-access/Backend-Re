@@ -8,6 +8,7 @@ import org.hibernate.annotations.OrderBy;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,13 +40,7 @@ public class Assignment {
     @Column(nullable = false)
     private LocalDateTime endDate;
 
-    private String duration;
-
-    private Double maxPoints;
-
-    private boolean enabled;
-
-    @ManyToOne
+    @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "course_id")
     private Course course;
 
@@ -68,6 +63,16 @@ public class Assignment {
         return isPublished() && !isPastDue();
     }
 
+    public Double getMaxPoints() {
+        return tasks.stream().mapToDouble(Task::getMaxPoints).sum();
+    }
+
+    public String getDuration() {
+        String start = startDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        String end = endDate.format(DateTimeFormatter.ofPattern("MMM. d, HH:mm"));
+        return "%s ~ %s".formatted(start, end);
+    }
+
     public List<Timer> getCountDown() {
         Duration remaining = Duration.between(now(), endDate);
         return List.of(
@@ -81,6 +86,7 @@ public class Assignment {
         Task newTask = new Task();
         tasks.add(newTask);
         newTask.setAssignment(this);
+        newTask.setOrdinalNum(tasks.size());
         return newTask;
     }
 }

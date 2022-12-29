@@ -10,22 +10,15 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class CourseDTO {
-
+    Long id;
     String title;
-
     String url;
-
-    String repository;
-
     String description;
-
+    String avatar;
     LocalDate startDate;
-
     LocalDate endDate;
-
     String university;
-
     String semester;
-
-    List<String> assignments = new ArrayList<>();
+    List<String> teachers = new ArrayList<>();
+    List<AssignmentDTO> assignments = new ArrayList<>();
 }
