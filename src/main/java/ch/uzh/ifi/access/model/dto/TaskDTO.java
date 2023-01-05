@@ -23,5 +23,5 @@ public class TaskDTO {
     String gradeCommand;
     Integer timeLimit;
     List<TaskFileDTO> files = new ArrayList<>();
-    List<String> paths = new ArrayList<>();
+    List<String> templates = new ArrayList<>();
 }

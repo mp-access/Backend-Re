@@ -1,0 +1,13 @@
+package ch.uzh.ifi.access.model.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class MemberDTO {
+    String name;
+    String email;
+}

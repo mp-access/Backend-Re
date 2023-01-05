@@ -49,7 +49,7 @@ public class Submission {
     private List<SubmissionFile> files = new ArrayList<>();
 
     @JsonIgnore
-    @ManyToOne
+    @ManyToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "evaluation_id")
     private Evaluation evaluation;
 
@@ -58,7 +58,7 @@ public class Submission {
     }
 
     public String getName() {
-        return "%s %s".formatted(StringUtils.capitalize(command.getName()), ordinalNum);
+        return "%s %s".formatted(StringUtils.capitalize(command.getDisplayName()), ordinalNum);
     }
 
     public boolean isGraded() {

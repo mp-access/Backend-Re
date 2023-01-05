@@ -29,11 +29,13 @@ import org.apache.logging.log4j.util.Strings;
 import org.apache.tika.Tika;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.keycloak.admin.client.CreatedResponseUtil;
 import org.keycloak.admin.client.resource.RealmResource;
+import org.keycloak.admin.client.resource.RoleResource;
+import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.modelmapper.ModelMapper;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -98,9 +100,9 @@ public class CourseService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The task URL is not available");
     }
 
-    public Task getTaskById(Long taskId) {
-        return taskRepository.findById(taskId).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID " + taskId));
+    public Task getTaskByURL(String courseURL, String assignmentURL, String taskURL) {
+        return taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the URL " + taskURL));
     }
 
     public TaskFile getTaskFileById(Long fileId) {
@@ -113,8 +115,8 @@ public class CourseService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No template file found at " + filePath));
     }
 
-    public List<TemplateFile> getTemplateFiles() {
-        return templateFileRepository.findAll(Sort.by("path"));
+    public List<TemplateOverview> getTemplateFiles() {
+        return templateFileRepository.findAllByOrderByPath();
     }
 
     public List<CourseOverview> getCourses() {
@@ -135,6 +137,11 @@ public class CourseService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No assignment found with the URL " + assignmentURL));
     }
 
+    public TaskInfo getTask(String courseURL, String assignmentURL, String taskURL) {
+        return taskRepository.queryByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the URL " + taskURL));
+    }
+
     public TaskWorkspace getTask(String courseURL, String assignmentURL, String taskURL, String userId) {
         TaskWorkspace workspace = taskRepository.findByAssignment_Course_UrlAndAssignment_UrlAndUrl(
                 courseURL, assignmentURL, taskURL).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -145,6 +152,10 @@ public class CourseService {
 
     public List<TaskFileOverview> getTaskFiles(Long taskId) {
         return taskFileRepository.findByTask_IdOrderByIdAscPathAsc(taskId);
+    }
+
+    public List<TaskFileInfo> getTaskFilesInfo(Long taskId) {
+        return taskFileRepository.getByTask_Id(taskId);
     }
 
     public List<TaskFile> getTaskFilesByContext(Long taskId, boolean isGrading) {
@@ -175,20 +186,6 @@ public class CourseService {
     public LocalDateTime getNextAttemptAt(Long taskId, String userId) {
         return getEvaluation(taskId, verifyUserId(userId))
                 .map(Evaluation::getNextAttemptAt).orElse(null);
-    }
-
-    public Event createEvent(Integer ordinalNum, LocalDateTime date, String category) {
-        Event newEvent = new Event();
-        newEvent.setDate(date);
-        newEvent.setCategory(category);
-        newEvent.setDescription("Assignment %s is %s.".formatted(ordinalNum, category));
-        return newEvent;
-    }
-
-    public List<Event> getEvents(String courseURL) {
-        return getAssignments(courseURL).stream().flatMap(assignment -> Stream.of(
-                createEvent(assignment.getOrdinalNum(), assignment.getStartDate(), "published"),
-                createEvent(assignment.getOrdinalNum(), assignment.getEndDate(), "due"))).toList();
     }
 
     public Double calculateAvgTaskPoints(Long taskId) {
@@ -222,15 +219,18 @@ public class CourseService {
                 .sorted(Comparator.comparingDouble(Rank::getScore).reversed()).toList();
     }
 
+    public List<MemberOverview> getTeamMembers(List<String> memberIds) {
+        return memberIds.stream().map(memberId -> courseRepository.getTeamMemberName(memberId)).toList();
+    }
+
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
         Double coursePoints = calculateCoursePoints(getCourseByURL(courseURL).getAssignments(), user.getEmail());
         return new StudentDTO(user.getFirstName(), user.getLastName(), user.getEmail(), coursePoints);
     }
 
-    private Evaluation createEvaluation(Long taskId, String userId) {
-        Evaluation newEvaluation = getTaskById(taskId).createEvaluation();
-        newEvaluation.setUserId(userId);
-        return evaluationRepository.save(newEvaluation);
+    public List<StudentDTO> getStudents(String courseURL) {
+        return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).getRoleUserMembers().stream()
+                .map(student -> getStudent(courseURL, student)).toList();
     }
 
     private void createSubmissionFile(Submission submission, SubmissionFileDTO fileDTO) {
@@ -241,13 +241,14 @@ public class CourseService {
         submission.getFiles().add(newSubmissionFile);
     }
 
-    public Submission createSubmission(SubmissionDTO submissionDTO) {
-        Evaluation evaluation = getEvaluation(submissionDTO.getTaskId(), submissionDTO.getUserId())
-                .orElseGet(() -> createEvaluation(submissionDTO.getTaskId(), submissionDTO.getUserId()));
+    public Submission createSubmission(String courseURL, String assignmentURL, String taskURL, SubmissionDTO submissionDTO) {
+        Task task = getTaskByURL(courseURL, assignmentURL, taskURL);
+        Evaluation evaluation = getEvaluation(task.getId(), submissionDTO.getUserId())
+                .orElse(evaluationRepository.save(task.createEvaluation(submissionDTO.getUserId())));
         Submission newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission.class));
         if (submissionDTO.isRestricted() && newSubmission.isGraded()) {
-            if (!evaluation.isActive())
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - task is not active!");
+            if (!task.getAssignment().isActive())
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - assignment is not active!");
             if (evaluation.getRemainingAttempts() <= 0)
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
         }
@@ -256,23 +257,18 @@ public class CourseService {
         return submissionRepository.saveAndFlush(newSubmission);
     }
 
-    public void evaluateSubmission(Long taskId, String userId, Long submissionId) {
-        Evaluation evaluation = getEvaluation(taskId, userId).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "No evaluation found for " + userId));
-        Submission submission = evaluation.getSubmissions().stream().filter(saved -> saved.getId().equals(submissionId)).findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No submission found with ID " + submissionId));
+    public void evaluateSubmission(Submission submission) {
         submission.setValid(!submission.isGraded());
         Task task = submission.getEvaluation().getTask();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(task.getDockerImage())) {
             Path submissionDir = workingDir.resolve("submissions").resolve(submission.getId().toString());
-            log.info("Abs: {}, root: {}, name: {}", submissionDir.toAbsolutePath(), submissionDir.getRoot(), submissionDir.getFileName());
             getTaskFilesByContext(task.getId(), submission.isGraded())
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate().getContent()));
             submission.getFiles().forEach(file -> createLocalFile(submissionDir, file.getTaskFile().getPath(), file.getContent()));
             CreateContainerResponse container = containerCmd.withNetworkDisabled(true)
                     .withLabels(Map.of("userId", submission.getUserId())).withWorkingDir(submissionDir.toString())
                     .withCmd("/bin/bash", "-c", task.formCommand(submission.getCommand()) + " &> logs.txt")
-                    .withHostConfig(new HostConfig().withMemory(536870912L).withPrivileged(true).withAutoRemove(true)
+                    .withHostConfig(new HostConfig().withMemory(536870912L).withPrivileged(true)
                             .withBinds(Bind.parse(submissionDir + ":" + submissionDir))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
@@ -286,7 +282,7 @@ public class CourseService {
         } catch (Exception e) {
             submission.setOutput(e.getMessage().contains("timeout") ? "Time limit exceeded" : e.getMessage());
         }
-        evaluationRepository.saveAndFlush(evaluation);
+        submissionRepository.saveAndFlush(submission);
     }
 
     @SneakyThrows
@@ -344,8 +340,8 @@ public class CourseService {
         taskFileRepository.save(taskFile);
     }
 
-    public void createOrUpdateTask(String courseURL, String assignmentURL, TaskDTO taskDTO) {
-        Task task = taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskDTO.getUrl())
+    public void createOrUpdateTask(String courseURL, String assignmentURL, String taskURL, TaskDTO taskDTO) {
+        Task task = taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseGet(getAssignmentByURL(courseURL, assignmentURL)::createTask);
         modelMapper.map(taskDTO, task);
         Task savedTask = taskRepository.save(task);
@@ -353,18 +349,28 @@ public class CourseService {
         pullDockerImage(task.getDockerImage());
     }
 
-    public void createOrUpdateAssignment(String courseURL, AssignmentDTO assignmentDTO) {
-        Assignment assignment = assignmentRepository.getByCourse_UrlAndUrl(courseURL, assignmentDTO.getUrl())
+    public void createOrUpdateTask(String courseURL, String assignmentURL, TaskDTO taskDTO) {
+        createOrUpdateTask(courseURL, assignmentURL, taskDTO.getUrl(), taskDTO);
+    }
+
+    public void createOrUpdateAssignment(String courseURL, String assignmentURL, AssignmentDTO assignmentDTO) {
+        Assignment assignment = assignmentRepository.getByCourse_UrlAndUrl(courseURL, assignmentURL)
                 .orElseGet(getCourseByURL(courseURL)::createAssignment);
         modelMapper.map(assignmentDTO, assignment);
         assignmentRepository.save(assignment);
-        assignmentDTO.getTasks().forEach(taskDTO ->
-                createOrUpdateTask(courseURL, assignment.getUrl(), taskDTO));
+        assignmentDTO.getTasks().forEach(taskDTO -> createOrUpdateTask(courseURL, assignmentDTO.getUrl(), taskDTO));
+    }
+
+    public void createOrUpdateAssignment(String courseURL, AssignmentDTO assignmentDTO) {
+        createOrUpdateAssignment(courseURL, assignmentDTO.getUrl(), assignmentDTO);
     }
 
     public void createOrUpdateCourse(CourseDTO courseDTO) {
         Course course = courseRepository.getByUrl(courseDTO.getUrl()).orElse(new Course());
         modelMapper.map(courseDTO, course);
+        course.setStudentRole(createCourseRoles(course.getUrl()));
+        course.setAssistants(registerMember(courseDTO.getAssistants(), course.getUrl(), Role.ASSISTANT));
+        course.setSupervisors(registerMember(courseDTO.getSupervisors(), course.getUrl(), Role.SUPERVISOR));
         courseRepository.save(course);
     }
 
@@ -375,48 +381,61 @@ public class CourseService {
         courseDTO.getAssignments().forEach(assignmentDTO -> createOrUpdateAssignment(courseDTO.getUrl(), assignmentDTO));
     }
 
-    private RoleRepresentation createCourseRole(String courseURL, Role mainRole, @Nullable Role subRole) {
-        RoleRepresentation userRole = new RoleRepresentation();
-        userRole.setName(mainRole.withCourse(courseURL));
-        userRole.setComposite(true);
-        RoleRepresentation.Composites userRoleComposites = new RoleRepresentation.Composites();
-        Set<String> associatedRoles = SetUtils.hashSet(courseURL, mainRole.getName());
-        Optional.ofNullable(subRole).ifPresent(role -> associatedRoles.add(role.withCourse(courseURL)));
-        userRoleComposites.setRealm(associatedRoles);
-        userRole.setComposites(userRoleComposites);
-        return userRole;
+    public String createCourseRoles(String courseURL) {
+        String studentRole = Role.STUDENT.withCourse(courseURL);
+        return accessRealm.roles().list(courseURL, true).stream()
+                .filter(role -> role.getName().equals(studentRole)).findFirst().orElseGet(() -> {
+                    RoleRepresentation basicCourseRole = new RoleRepresentation();
+                    basicCourseRole.setName(courseURL);
+                    accessRealm.roles().create(basicCourseRole);
+                    Arrays.stream(Role.values()).forEach(role -> {
+                        RoleRepresentation userRole = new RoleRepresentation();
+                        userRole.setName(role.withCourse(courseURL));
+                        userRole.setComposite(true);
+                        RoleRepresentation.Composites userRoleComposites = new RoleRepresentation.Composites();
+                        Set<String> associatedRoles = SetUtils.hashSet(courseURL, role.getName());
+                        role.getSubRole().ifPresent(subRole -> associatedRoles.add(subRole.withCourse(courseURL)));
+                        userRoleComposites.setRealm(associatedRoles);
+                        userRole.setComposites(userRoleComposites);
+                        accessRealm.roles().create(userRole);
+                    });
+                    return accessRealm.roles().get(studentRole).toRepresentation();
+                }).getId();
     }
 
-    public void createCourseRoles(String courseURL) {
-        if (accessRealm.roles().list(Role.STUDENT.withCourse(courseURL), true).isEmpty()) {
-            RoleRepresentation basicCourseRole = new RoleRepresentation();
-            basicCourseRole.setName(courseURL);
-            accessRealm.roles().create(basicCourseRole);
-            accessRealm.roles().create(createCourseRole(courseURL, Role.STUDENT, null));
-            accessRealm.roles().create(createCourseRole(courseURL, Role.ASSISTANT, null));
-            accessRealm.roles().create(createCourseRole(courseURL, Role.SUPERVISOR, Role.ASSISTANT));
-        }
+    public String registerMember(MemberDTO memberDTO, List<RoleRepresentation> rolesToAssign) {
+        UserResource member = accessRealm.users().search(memberDTO.getEmail()).stream().findFirst().map(user -> {
+                    UserResource userResource = accessRealm.users().get(user.getId());
+                    if (!user.getAttributes().containsKey("displayName")) {
+                        user.getAttributes().put("displayName", List.of(memberDTO.getName()));
+                        userResource.update(user);
+                    }
+                    return userResource;
+                })
+                .orElseGet(() -> {
+                    UserRepresentation newUser = new UserRepresentation();
+                    newUser.setEmail(memberDTO.getEmail());
+                    newUser.setEnabled(true);
+                    newUser.setEmailVerified(true);
+                    newUser.setAttributes(Map.of("displayName", List.of(memberDTO.getName())));
+                    return accessRealm.users().get(CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser)));
+                });
+        member.roles().realmLevel().add(rolesToAssign);
+        return memberDTO.getEmail();
     }
 
-    public void registerCourseUser(String email, String roleName) {
-        RoleRepresentation realmRole = accessRealm.roles().get(roleName).toRepresentation();
-        accessRealm.users().search(email).stream().findFirst().ifPresent(user ->
-                accessRealm.users().get(user.getId()).roles().realmLevel().add(List.of(realmRole)));
+    public List<String> registerMember(List<MemberDTO> newMembers, String courseURL, Role role) {
+        RoleResource realmRole = accessRealm.roles().get(role.withCourse(courseURL));
+        Set<UserRepresentation> existingMembers = realmRole.getRoleUserMembers();
+        List<RoleRepresentation> rolesToAssign = List.of(realmRole.toRepresentation());
+        return new ArrayList<>(newMembers.stream().map(memberDTO -> existingMembers.stream()
+                .map(UserRepresentation::getEmail).filter(email -> email.equals(memberDTO.getEmail())).findFirst()
+                .orElse(registerMember(memberDTO, rolesToAssign))).toList());
     }
 
-    public void registerCourseSupervisor(String courseURL, String supervisor) {
-        registerCourseUser(supervisor, Role.SUPERVISOR.withCourse(courseURL));
-    }
-
-    public List<StudentDTO> getStudentsByCourse(String courseURL) {
-        return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).getRoleUserMembers().stream()
-                .map(student -> getStudent(courseURL, student)).toList();
-    }
-
-    public List<UserRepresentation> getAssistantsByCourse(String courseURL) {
-        return accessRealm.roles().get(Role.ASSISTANT.withCourse(courseURL)).getRoleUserMembers()
-                .stream().filter(user -> user.getRealmRoles().stream().noneMatch(roleName ->
-                        roleName.equals(Role.SUPERVISOR.withCourse(courseURL)))).toList();
+    public void registerSupervisor(String courseURL, String supervisor) {
+        RoleRepresentation role = accessRealm.roles().get(Role.SUPERVISOR.withCourse(courseURL)).toRepresentation();
+        registerMember(new MemberDTO(supervisor, supervisor), List.of(role));
     }
 
     private void pullDockerImage(String imageName) {

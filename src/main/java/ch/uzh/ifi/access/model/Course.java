@@ -30,10 +30,10 @@ public class Course {
     private String description;
 
     @Column(columnDefinition = "text")
+
     private String avatar;
 
     private String university;
-
     private String semester;
 
     @Column(nullable = false)
@@ -42,6 +42,9 @@ public class Course {
     @Column(nullable = false)
     private LocalDate endDate;
 
+    @Column(nullable = false)
+    private String studentRole;
+
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
     private List<Assignment> assignments = new ArrayList<>();
 
@@ -49,10 +52,12 @@ public class Course {
     private List<Event> events = new ArrayList<>();
 
     @ElementCollection
-    private List<String> teachers = new ArrayList<>();
+    private List<String> supervisors = new ArrayList<>();
 
-    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u " +
-            "WHERE u.role_id=(SELECT r.id from keycloak_role r WHERE r.name=url))")
+    @ElementCollection
+    private List<String> assistants = new ArrayList<>();
+
+    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=student_role)")
     private Long studentsCount = 0L;
 
     @Transient

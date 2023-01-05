@@ -7,7 +7,6 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Getter
 @Setter
@@ -35,14 +34,4 @@ public class TemplateFile {
     @JsonIgnore
     @OneToMany(mappedBy = "template", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<TaskFile> taskFiles = new ArrayList<>();
-
-    @Override
-    public boolean equals(Object o) {
-        return Objects.nonNull(o) && getClass().equals(o.getClass()) && id.equals(((TemplateFile) o).getId());
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
 }

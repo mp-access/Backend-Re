@@ -41,10 +41,6 @@ public class Evaluation {
     @Transient
     private LocalDateTime nextAttemptAt;
 
-    public boolean isActive() {
-        return task.getAssignment().isActive();
-    }
-
     public Long countSubmissionsByCommand(Command command) {
         return submissions.stream().filter(submission -> submission.getCommand().equals(command)).count();
     }

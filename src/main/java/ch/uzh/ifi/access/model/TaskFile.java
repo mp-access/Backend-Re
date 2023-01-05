@@ -17,10 +17,12 @@ public class TaskFile {
 
     private String path;
 
+    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Context context;
 
-    private boolean editable;
+    @Column(nullable = false)
+    private boolean editable = false;
 
     @ManyToOne
     @JoinColumn(name = "template_id")

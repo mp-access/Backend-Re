@@ -24,9 +24,6 @@ public interface TaskOverview {
 
     void setUserId(String userId);
 
-    @Value("#{target.assignment.id}")
-    Long getAssignmentId();
-
     @Value("#{target.assignment.published}")
     boolean isPublished();
 

@@ -25,8 +25,10 @@ public class Task {
     @Column(nullable = false)
     private String url;
 
+    @Column(nullable = false)
     private Double maxPoints;
 
+    @Column(nullable = false)
     private Integer maxAttempts;
 
     private Duration attemptWindow;
@@ -40,6 +42,7 @@ public class Task {
 
     private String gradeCommand;
 
+    @Column(nullable = false)
     private Integer timeLimit = 30;
 
     @ManyToOne(cascade = CascadeType.ALL)
@@ -69,8 +72,9 @@ public class Task {
         return newTaskFile;
     }
 
-    public Evaluation createEvaluation() {
+    public Evaluation createEvaluation(String userId) {
         Evaluation newEvaluation = new Evaluation();
+        newEvaluation.setUserId(userId);
         newEvaluation.setTask(this);
         newEvaluation.setRemainingAttempts(maxAttempts);
         evaluations.add(newEvaluation);

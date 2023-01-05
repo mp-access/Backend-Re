@@ -19,6 +19,10 @@ public class CourseDTO {
     LocalDate endDate;
     String university;
     String semester;
-    List<String> teachers = new ArrayList<>();
+    String studentRole;
+    String assistantRole;
+    String supervisorRole;
+    List<MemberDTO> supervisors = new ArrayList<>();
+    List<MemberDTO> assistants = new ArrayList<>();
     List<AssignmentDTO> assignments = new ArrayList<>();
 }
