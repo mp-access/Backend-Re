@@ -28,6 +28,8 @@ public interface CourseOverview {
 
     String getDuration();
 
+    String getDescription();
+
     @Value("#{@courseService.calculateCoursePoints(target.assignments, null)}")
     Double getPoints();
 

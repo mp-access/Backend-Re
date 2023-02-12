@@ -33,6 +33,11 @@ public class CourseController {
         courseService.registerSupervisor(courseDTO.getUrl(), authentication.getName());
     }
 
+    @PostMapping("/contact")
+    public void sendMessage(@RequestBody ContactDTO contactDTO) {
+        courseService.sendMessage(contactDTO);
+    }
+
     @PostMapping("/{course}")
     @PreAuthorize("hasRole(#course + '-supervisor')")
     public void updateCourse(@PathVariable String course, @RequestBody CourseDTO courseDTO) {

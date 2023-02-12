@@ -47,6 +47,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -318,6 +319,7 @@ public class CourseService {
             file.setLanguage(readLanguage(filePath));
             file.setName(localPath.getFileName().toString());
             templateFileRepository.save(file);
+            log.info("Parsed file: {}", file.getPath());
         } catch (IOException e) {
             log.error("Failed to read file at: {}", localPath);
         }
@@ -329,7 +331,7 @@ public class CourseService {
             templatesRepo.pull().call();
             filePaths.forEach(filePath -> readContent(templatesPath, filePath));
         } catch (GitAPIException | IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse template file: " + e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to parse template files: " + e.getMessage());
         }
     }
 
@@ -445,5 +447,10 @@ public class CourseService {
             log.error("Failed to pull docker image {}", imageName);
             Thread.currentThread().interrupt();
         }
+    }
+
+    public void sendMessage(ContactDTO contactDTO) {
+        createLocalFile(workingDir.resolve("contact"),
+                LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), contactDTO.formatContent());
     }
 }

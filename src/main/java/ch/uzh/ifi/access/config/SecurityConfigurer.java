@@ -39,8 +39,9 @@ public class SecurityConfigurer {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.sessionManagement().maximumSessions(1).sessionRegistry(activityRegistry());
+        http.csrf().disable();
         http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer().jwt().jwtAuthenticationConverter(source ->
                         new JwtAuthenticationToken(source, parseAuthorities(source), source.getClaimAsString("email")));
