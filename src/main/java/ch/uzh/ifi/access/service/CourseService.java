@@ -408,8 +408,10 @@ public class CourseService {
     public String registerMember(MemberDTO memberDTO, List<RoleRepresentation> rolesToAssign) {
         UserResource member = accessRealm.users().search(memberDTO.getEmail()).stream().findFirst().map(user -> {
                     UserResource userResource = accessRealm.users().get(user.getId());
-                    if (!user.getAttributes().containsKey("displayName")) {
-                        user.getAttributes().put("displayName", List.of(memberDTO.getName()));
+                    Map<String, List<String>> attributes = Optional.ofNullable(user.getAttributes()).orElse(new HashMap<>());
+                    if (!attributes.containsKey("displayName")) {
+                        attributes.put("displayName", List.of(memberDTO.getName()));
+                        user.setAttributes(attributes);
                         userResource.update(user);
                     }
                     return userResource;
