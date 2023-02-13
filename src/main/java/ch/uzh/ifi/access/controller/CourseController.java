@@ -129,4 +129,10 @@ public class CourseController {
     public List<StudentDTO> getStudents(@PathVariable String course) {
         return courseService.getStudents(course);
     }
+
+    @PostMapping("/{course}/students")
+    @PreAuthorize("hasRole(#course + '-supervisor')")
+    public void registerStudents(@PathVariable String course, List<String> students) {
+        courseService.registerStudents(course, students);
+    }
 }

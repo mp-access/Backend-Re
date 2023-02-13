@@ -46,8 +46,10 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -275,8 +277,10 @@ public class CourseService {
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
                     .exec(new WaitContainerResultCallback()).awaitStatusCode(30, TimeUnit.SECONDS);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
-            submission.setLogs(FileUtils.readLines(submissionDir.resolve("logs.txt").toFile(),
-                    Charset.defaultCharset()).stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
+            Path logsPath = submissionDir.resolve("logs.txt");
+            if (Files.exists(logsPath))
+                submission.setLogs(FileUtils.readLines(logsPath.toFile(), Charset.defaultCharset())
+                        .stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
             if (submission.isGraded())
                 submission.parseResults(readResultsFile(submissionDir));
             FileUtils.deleteQuietly(submissionDir.toFile());
@@ -346,6 +350,8 @@ public class CourseService {
         Task task = taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseGet(getAssignmentByURL(courseURL, assignmentURL)::createTask);
         modelMapper.map(taskDTO, task);
+        if (Objects.nonNull(taskDTO.getAttemptRefill()) && taskDTO.getAttemptRefill() > 0)
+            task.setAttemptWindow(Duration.of(taskDTO.getAttemptRefill(), ChronoUnit.HOURS));
         Task savedTask = taskRepository.save(task);
         taskDTO.getFiles().forEach(fileDTO -> createOrUpdateTaskFile(savedTask, fileDTO));
         pullDockerImage(task.getDockerImage());
@@ -428,6 +434,19 @@ public class CourseService {
         return memberDTO.getEmail();
     }
 
+    public void registerMember(String email, List<RoleRepresentation> rolesToAssign) {
+        UserResource member = accessRealm.users().search(email).stream().findFirst()
+                .map(user -> accessRealm.users().get(user.getId()))
+                .orElseGet(() -> {
+                    UserRepresentation newUser = new UserRepresentation();
+                    newUser.setEmail(email);
+                    newUser.setEnabled(true);
+                    newUser.setEmailVerified(true);
+                    return accessRealm.users().get(CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser)));
+                });
+        member.roles().realmLevel().add(rolesToAssign);
+    }
+
     public List<String> registerMember(List<MemberDTO> newMembers, String courseURL, Role role) {
         RoleResource realmRole = accessRealm.roles().get(role.withCourse(courseURL));
         Set<UserRepresentation> existingMembers = realmRole.getRoleUserMembers();
@@ -440,6 +459,11 @@ public class CourseService {
     public void registerSupervisor(String courseURL, String supervisor) {
         RoleRepresentation role = accessRealm.roles().get(Role.SUPERVISOR.withCourse(courseURL)).toRepresentation();
         registerMember(new MemberDTO(supervisor, supervisor), List.of(role));
+    }
+
+    public void registerStudents(String courseURL, List<String> students) {
+        RoleRepresentation role = accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).toRepresentation();
+        students.forEach(student -> registerMember(student, List.of(role)));
     }
 
     private void pullDockerImage(String imageName) {

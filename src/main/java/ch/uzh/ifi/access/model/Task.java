@@ -8,6 +8,7 @@ import lombok.Setter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Getter
 @Setter
@@ -61,6 +62,10 @@ public class Task {
     public String getInstructions() {
         return files.stream().filter(file -> file.getContext().isInstructions()).findFirst()
                 .map(file -> file.getTemplate().getContent()).orElse("");
+    }
+
+    public Integer getAttemptRefill() {
+        return Objects.nonNull(attemptWindow) ? Math.toIntExact(attemptWindow.toHours()) : null;
     }
 
     public TaskFile createFile(TemplateFile templateFile) {

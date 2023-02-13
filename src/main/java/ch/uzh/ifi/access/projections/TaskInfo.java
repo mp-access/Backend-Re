@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.Task;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
 
-import java.time.Duration;
 import java.util.List;
 
 @Projection(types = {Task.class})
@@ -24,7 +23,7 @@ public interface TaskInfo {
 
     Integer getMaxAttempts();
 
-    Duration getAttemptWindow();
+    Integer getAttemptRefill();
 
     String getDockerImage();
 

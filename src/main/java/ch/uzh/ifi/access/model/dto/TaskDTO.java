@@ -3,7 +3,6 @@ package ch.uzh.ifi.access.model.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +15,7 @@ public class TaskDTO {
     String url;
     Double maxPoints;
     Integer maxAttempts;
-    Duration attemptWindow;
+    Integer attemptRefill;
     String dockerImage;
     String runCommand;
     String testCommand;
