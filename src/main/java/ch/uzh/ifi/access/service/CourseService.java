@@ -461,7 +461,7 @@ public class CourseService {
         registerMember(new MemberDTO(supervisor, supervisor), List.of(role));
     }
 
-    public void registerStudents(String courseURL, List<String> students) {
+    public void registerParticipants(String courseURL, List<String> students) {
         RoleRepresentation role = accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).toRepresentation();
         students.forEach(student -> registerMember(student, List.of(role)));
     }

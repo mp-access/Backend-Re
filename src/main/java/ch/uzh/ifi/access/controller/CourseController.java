@@ -130,9 +130,18 @@ public class CourseController {
         return courseService.getStudents(course);
     }
 
-    @PostMapping("/{course}/students")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
-    public void registerStudents(@PathVariable String course, List<String> students) {
-        courseService.registerStudents(course, students);
+    @GetMapping("/{course}/summary")
+    public CourseWorkspace getCourseSummary(@PathVariable String course) {
+        return courseService.getCourse(course);
+    }
+
+    @GetMapping("/{course}/participants")
+    public List<StudentDTO> getParticipants(@PathVariable String course) {
+        return courseService.getStudents(course);
+    }
+
+    @PostMapping("/{course}/participants")
+    public void registerParticipants(@PathVariable String course, @RequestBody List<String> students) {
+        courseService.registerParticipants(course, students);
     }
 }

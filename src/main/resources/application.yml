@@ -30,4 +30,5 @@ spring:
 logging:
   level:
     org.springframework:
+      security: debug
       web.filter.CommonsRequestLoggingFilter: debug
