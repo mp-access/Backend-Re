@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.repository;
 
 import ch.uzh.ifi.access.model.Evaluation;
 import ch.uzh.ifi.access.model.dao.Rank;
+import ch.uzh.ifi.access.projections.EvaluationSummary;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -10,7 +11,9 @@ import java.util.Optional;
 
 public interface EvaluationRepository extends JpaRepository<Evaluation, Long> {
 
-    Optional<Evaluation> findTopByTask_IdAndUserIdOrderById(Long taskId, String userId);
+    Optional<Evaluation> getTopByTask_IdAndUserIdOrderById(Long taskId, String userId);
+
+    Optional<EvaluationSummary> findTopByTask_IdAndUserIdOrderById(Long taskId, String userId);
 
     List<Evaluation> findByTask_IdAndBestScoreNotNull(Long taskId);
 

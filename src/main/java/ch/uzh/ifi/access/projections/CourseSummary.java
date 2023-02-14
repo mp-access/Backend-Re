@@ -9,10 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Projection(types = {Course.class})
-public interface CourseInfo {
-
-    Long getId();
-
+public interface CourseSummary {
     String getUrl();
 
     String getTitle();
@@ -32,9 +29,6 @@ public interface CourseInfo {
     @Value("#{@courseService.getMaxPoints(target.url)}")
     Double getMaxPoints();
 
-    @Value("#{@activityRegistry.getOnlineCount(target.url)}")
-    Long getOnlineCount();
-
     Long getStudentsCount();
 
     @Value("#{@courseService.getTeamMembers(target.supervisors)}")
@@ -46,5 +40,5 @@ public interface CourseInfo {
     @Value("#{@courseService.getStudents(target.url)}")
     List<StudentDTO> getStudents();
 
-    List<AssignmentInfo> getAssignments();
+    List<AssignmentSummary> getAssignments();
 }

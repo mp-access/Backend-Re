@@ -126,7 +126,7 @@ public class CourseService {
         return courseRepository.findCoursesBy();
     }
 
-    public CourseInfo getCourseSummary(String courseURL) {
+    public CourseSummary getCourseSummary(String courseURL) {
         return courseRepository.findCourseByUrl(courseURL).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));
     }
@@ -183,7 +183,7 @@ public class CourseService {
     }
 
     public Optional<Evaluation> getEvaluation(Long taskId, String userId) {
-        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(taskId, userId);
+        return evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId);
     }
 
     public Integer getRemainingAttempts(Long taskId, String userId, Integer maxAttempts) {
@@ -229,6 +229,31 @@ public class CourseService {
 
     public List<MemberOverview> getTeamMembers(List<String> memberIds) {
         return memberIds.stream().map(memberId -> courseRepository.getTeamMemberName(memberId)).toList();
+    }
+
+    private Optional<EvaluationSummary> getTaskProgress(Task task, String userId) {
+        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.getId(), userId);
+    }
+
+    public EvaluationSummary getTaskProgress(String courseURL, String assignmentURL, String taskURL, String userId) {
+        return getTaskProgress(getTaskByURL(courseURL, assignmentURL, taskURL), userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No submissions found for " + userId));
+    }
+
+    private List<EvaluationSummary> getTasksProgress(Assignment assignment, String userId) {
+        return assignment.getTasks().stream().map(task ->
+                getTaskProgress(task, userId).orElse(null)).filter(Objects::nonNull).toList();
+    }
+
+    public AssignmentProgressDTO getAssignmentProgress(String courseURL, String assignmentURL, String userId) {
+        Assignment assignment = getAssignmentByURL(courseURL, assignmentURL);
+        return new AssignmentProgressDTO(userId, assignmentURL, getTasksProgress(assignment, userId));
+    }
+
+    public CourseProgressDTO getCourseProgress(String courseURL, String userId) {
+        Course course = getCourseByURL(courseURL);
+        return new CourseProgressDTO(userId, course.getAssignments().stream().map(assignment ->
+                new AssignmentProgressDTO(assignment.getUrl(), getTasksProgress(assignment, userId))).toList());
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
@@ -482,6 +507,10 @@ public class CourseService {
             log.error("Failed to pull docker image {}", imageName);
             Thread.currentThread().interrupt();
         }
+    }
+
+    public String encodeContent(String content) {
+        return Base64.encodeBase64String(content.getBytes());
     }
 
     public void sendMessage(ContactDTO contactDTO) {

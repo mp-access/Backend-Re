@@ -131,8 +131,13 @@ public class CourseController {
     }
 
     @GetMapping("/{course}/summary")
-    public CourseInfo getCourseSummary(@PathVariable String course) {
+    public CourseSummary getCourseSummary(@PathVariable String course) {
         return courseService.getCourseSummary(course);
+    }
+
+    @PostMapping("/{course}/participants")
+    public void registerParticipants(@PathVariable String course, @RequestBody List<String> students) {
+        courseService.registerParticipants(course, students);
     }
 
     @GetMapping("/{course}/participants")
@@ -140,8 +145,19 @@ public class CourseController {
         return courseService.getStudents(course);
     }
 
-    @PostMapping("/{course}/participants")
-    public void registerParticipants(@PathVariable String course, @RequestBody List<String> students) {
-        courseService.registerParticipants(course, students);
+    @GetMapping("/{course}/participants/{participant}")
+    public CourseProgressDTO getCourseProgress(@PathVariable String course, @PathVariable String participant) {
+        return courseService.getCourseProgress(course, participant);
+    }
+
+    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
+    public AssignmentProgressDTO getAssignmentProgress(@PathVariable String course, @PathVariable String assignment, @PathVariable String participant) {
+        return courseService.getAssignmentProgress(course, assignment, participant);
+    }
+
+    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
+    public EvaluationSummary getTaskProgress(@PathVariable String course, @PathVariable String assignment,
+                                             @PathVariable String task, @PathVariable String participant) {
+        return courseService.getTaskProgress(course, assignment, task, participant);
     }
 }

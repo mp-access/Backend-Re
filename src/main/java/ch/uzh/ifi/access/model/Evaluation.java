@@ -38,6 +38,7 @@ public class Evaluation {
     @OneToMany(mappedBy = "evaluation", cascade = CascadeType.ALL)
     @OrderBy(clause = "CREATED_AT DESC")
     private List<Submission> submissions = new ArrayList<>();
+
     @Transient
     private LocalDateTime nextAttemptAt;
 

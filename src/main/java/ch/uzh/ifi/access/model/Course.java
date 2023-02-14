@@ -63,6 +63,9 @@ public class Course {
     @Transient
     private Double points;
 
+    @Transient
+    private String userId;
+
     public String getDuration() {
         return StringUtils.join(Stream.of(startDate, endDate).map(date ->
                 date.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"))).toList(), " ~ ");
