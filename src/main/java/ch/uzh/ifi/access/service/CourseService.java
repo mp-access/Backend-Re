@@ -126,6 +126,11 @@ public class CourseService {
         return courseRepository.findCoursesBy();
     }
 
+    public CourseInfo getCourseSummary(String courseURL) {
+        return courseRepository.findCourseByUrl(courseURL).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));
+    }
+
     public CourseWorkspace getCourse(String courseURL) {
         return courseRepository.findByUrl(courseURL).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL " + courseURL));
@@ -462,8 +467,12 @@ public class CourseService {
     }
 
     public void registerParticipants(String courseURL, List<String> students) {
-        RoleRepresentation role = accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).toRepresentation();
-        students.forEach(student -> registerMember(student, List.of(role)));
+        RoleResource role = accessRealm.roles().get(Role.STUDENT.withCourse(courseURL));
+        List<RoleRepresentation> rolesToAdd = List.of(role.toRepresentation());
+        role.getRoleUserMembers().stream()
+                .filter(member -> students.stream().noneMatch(student -> student.equals(member.getEmail())))
+                .forEach(member -> accessRealm.users().get(member.getId()).roles().realmLevel().remove(rolesToAdd));
+        students.forEach(student -> registerMember(student, rolesToAdd));
     }
 
     private void pullDockerImage(String imageName) {

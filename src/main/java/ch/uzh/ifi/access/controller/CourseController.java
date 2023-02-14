@@ -131,8 +131,8 @@ public class CourseController {
     }
 
     @GetMapping("/{course}/summary")
-    public CourseWorkspace getCourseSummary(@PathVariable String course) {
-        return courseService.getCourse(course);
+    public CourseInfo getCourseSummary(@PathVariable String course) {
+        return courseService.getCourseSummary(course);
     }
 
     @GetMapping("/{course}/participants")

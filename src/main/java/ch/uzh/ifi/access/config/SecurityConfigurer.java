@@ -57,7 +57,7 @@ public class SecurityConfigurer {
         http.csrf().disable();
         http.authorizeHttpRequests()
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
-                .requestMatchers("/courses/{course}/participants", "/courses/{course}/summary").access((authentication, context) ->
+                .requestMatchers("/courses/{course}/participants/**", "/courses/{course}/summary").access((authentication, context) ->
                         new AuthorityAuthorizationDecision(isAuthorizedAPIKey(context), parseAuthorities(List.of("supervisor"))))
                 .anyRequest().authenticated().and()
                 .oauth2ResourceServer().jwt().jwtAuthenticationConverter(source ->
