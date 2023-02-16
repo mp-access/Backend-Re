@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class TaskFileDTO {
     Long id;
+    Long templateId;
     String templatePath;
     String path;
     Context context;

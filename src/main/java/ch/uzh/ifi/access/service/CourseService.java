@@ -113,9 +113,9 @@ public class CourseService {
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID " + fileId));
     }
 
-    public TemplateFile getTemplateFileByPath(String filePath) {
-        return templateFileRepository.findByPath(filePath).orElseThrow(() ->
-                new ResponseStatusException(HttpStatus.NOT_FOUND, "No template file found at " + filePath));
+    public TemplateFile getTemplateFileById(Long templateId) {
+        return templateFileRepository.findById(templateId).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "No template file found with the ID " + templateId));
     }
 
     public List<TemplateOverview> getTemplateFiles() {
@@ -305,7 +305,7 @@ public class CourseService {
                             .withBinds(Bind.parse(submissionDir + ":" + submissionDir))).exec();
             dockerClient.startContainerCmd(container.getId()).exec();
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
-                    .exec(new WaitContainerResultCallback()).awaitStatusCode(30, TimeUnit.SECONDS);
+                    .exec(new WaitContainerResultCallback()).awaitStatusCode(Math.min(task.getTimeLimit(), 180), TimeUnit.SECONDS);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
             Path logsPath = submissionDir.resolve("logs.txt");
             if (Files.exists(logsPath))
@@ -370,8 +370,8 @@ public class CourseService {
     }
 
     public void createOrUpdateTaskFile(Task task, TaskFileDTO fileDTO) {
-        TaskFile taskFile = taskFileRepository.findByTask_IdAndTemplatePath(task.getId(), fileDTO.getTemplatePath())
-                .orElseGet(() -> task.createFile(getTemplateFileByPath(fileDTO.getTemplatePath())));
+        TaskFile taskFile = taskFileRepository.findByTask_IdAndTemplate_Id(task.getId(), fileDTO.getTemplateId())
+                .orElseGet(() -> task.createFile(getTemplateFileById(fileDTO.getTemplateId())));
         modelMapper.map(fileDTO, taskFile);
         taskFileRepository.save(taskFile);
     }
@@ -382,6 +382,8 @@ public class CourseService {
         modelMapper.map(taskDTO, task);
         if (Objects.nonNull(taskDTO.getAttemptRefill()) && taskDTO.getAttemptRefill() > 0)
             task.setAttemptWindow(Duration.of(taskDTO.getAttemptRefill(), ChronoUnit.HOURS));
+        task.getFiles().removeIf(file -> taskDTO.getFiles().stream().noneMatch(fileDTO ->
+                file.getTemplate().getId().equals(fileDTO.getTemplateId())));
         Task savedTask = taskRepository.save(task);
         taskDTO.getFiles().forEach(fileDTO -> createOrUpdateTaskFile(savedTask, fileDTO));
         pullDockerImage(task.getDockerImage());

@@ -21,5 +21,5 @@ public interface TaskFileRepository extends JpaRepository<TaskFile, Long> {
     @Transactional
     List<TaskFile> findByTask_Id(Long taskId);
 
-    Optional<TaskFile> findByTask_IdAndTemplatePath(Long taskId, String path);
+    Optional<TaskFile> findByTask_IdAndTemplate_Id(Long taskId, Long templateId);
 }
