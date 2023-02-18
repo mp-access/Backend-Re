@@ -60,6 +60,8 @@ public class Evaluation {
 
     @PostLoad
     private void updateRemainingAttempts() {
+        if (remainingAttempts > task.getMaxAttempts())
+            remainingAttempts = task.getMaxAttempts();
         if (Objects.nonNull(task.getAttemptWindow()))
             submissions.stream().filter(submission -> submission.isGraded() && submission.isValid())
                     .map(Submission::getCreatedAt).filter(createdAt -> createdAt.isBefore(now())).findFirst()

@@ -1,6 +1,5 @@
 package ch.uzh.ifi.access.controller;
 
-import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.dto.*;
 import ch.uzh.ifi.access.projections.*;
 import ch.uzh.ifi.access.service.CourseService;
@@ -120,8 +119,7 @@ public class CourseController {
     public void evaluateSubmission(@PathVariable String course, @PathVariable String assignment, @PathVariable String task,
                                    @RequestBody SubmissionDTO submission, Authentication authentication) {
         submission.setUserId(authentication.getName());
-        Submission createdSubmission = courseService.createSubmission(course, assignment, task, submission);
-        courseService.evaluateSubmission(createdSubmission);
+        courseService.createSubmission(course, assignment, task, submission);
     }
 
     @GetMapping("/{course}/students")

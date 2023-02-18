@@ -13,6 +13,7 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.WaitContainerResultCallback;
+import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.HostConfig;
 import lombok.AllArgsConstructor;
@@ -42,6 +43,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -75,7 +77,7 @@ public class CourseService {
     private Tika tika;
 
     private String verifyUserId(@Nullable String userId) {
-        return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().getAuthentication().getName());
+        return Optional.ofNullable(userId).orElseGet(() -> SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
     public void existsCourseByURL(String courseURL) {
@@ -183,17 +185,15 @@ public class CourseService {
     }
 
     public Optional<Evaluation> getEvaluation(Long taskId, String userId) {
-        return evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId);
+        return evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, verifyUserId(userId));
     }
 
     public Integer getRemainingAttempts(Long taskId, String userId, Integer maxAttempts) {
-        return getEvaluation(taskId, verifyUserId(userId))
-                .map(Evaluation::getRemainingAttempts).orElse(maxAttempts);
+        return getEvaluation(taskId, verifyUserId(userId)).map(Evaluation::getRemainingAttempts).orElse(maxAttempts);
     }
 
     public LocalDateTime getNextAttemptAt(Long taskId, String userId) {
-        return getEvaluation(taskId, verifyUserId(userId))
-                .map(Evaluation::getNextAttemptAt).orElse(null);
+        return getEvaluation(taskId, verifyUserId(userId)).map(Evaluation::getNextAttemptAt).orElse(null);
     }
 
     public Double calculateAvgTaskPoints(Long taskId) {
@@ -272,12 +272,13 @@ public class CourseService {
         newSubmissionFile.setContent(fileDTO.getContent());
         newSubmissionFile.setTaskFile(getTaskFileById(fileDTO.getTaskFileId()));
         submission.getFiles().add(newSubmissionFile);
+        submissionRepository.saveAndFlush(submission);
     }
 
-    public Submission createSubmission(String courseURL, String assignmentURL, String taskURL, SubmissionDTO submissionDTO) {
+    public void createSubmission(String courseURL, String assignmentURL, String taskURL, SubmissionDTO submissionDTO) {
         Task task = getTaskByURL(courseURL, assignmentURL, taskURL);
         Evaluation evaluation = getEvaluation(task.getId(), submissionDTO.getUserId())
-                .orElse(evaluationRepository.save(task.createEvaluation(submissionDTO.getUserId())));
+                .orElseGet(() -> task.createEvaluation(submissionDTO.getUserId()));
         Submission newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission.class));
         if (submissionDTO.isRestricted() && newSubmission.isGraded()) {
             if (!task.getAssignment().isActive())
@@ -285,14 +286,10 @@ public class CourseService {
             if (evaluation.getRemainingAttempts() <= 0)
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no remaining attempts!");
         }
+        Submission submission = submissionRepository.saveAndFlush(newSubmission);
         submissionDTO.getFiles().stream().filter(fileDTO -> Objects.nonNull(fileDTO.getContent()))
-                .forEach(fileDTO -> createSubmissionFile(newSubmission, fileDTO));
-        return submissionRepository.saveAndFlush(newSubmission);
-    }
-
-    public void evaluateSubmission(Submission submission) {
+                .forEach(fileDTO -> createSubmissionFile(submission, fileDTO));
         submission.setValid(!submission.isGraded());
-        Task task = submission.getEvaluation().getTask();
         try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(task.getDockerImage())) {
             Path submissionDir = workingDir.resolve("submissions").resolve(submission.getId().toString());
             getTaskFilesByContext(task.getId(), submission.isGraded())
@@ -307,17 +304,14 @@ public class CourseService {
             Integer statusCode = dockerClient.waitContainerCmd(container.getId())
                     .exec(new WaitContainerResultCallback()).awaitStatusCode(Math.min(task.getTimeLimit(), 180), TimeUnit.SECONDS);
             log.info("Container {} finished with status {}", container.getId(), statusCode);
-            Path logsPath = submissionDir.resolve("logs.txt");
-            if (Files.exists(logsPath))
-                submission.setLogs(FileUtils.readLines(logsPath.toFile(), Charset.defaultCharset())
-                        .stream().limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)));
-            if (submission.isGraded())
-                submission.parseResults(readResultsFile(submissionDir));
+            submission.setLogs(readLogsFile(submissionDir));
+            if (newSubmission.isGraded())
+                newSubmission.parseResults(readResultsFile(submissionDir));
             FileUtils.deleteQuietly(submissionDir.toFile());
         } catch (Exception e) {
-            submission.setOutput(e.getMessage().contains("timeout") ? "Time limit exceeded" : e.getMessage());
+            newSubmission.setOutput(e.getMessage().contains("timeout") ? "Time limit exceeded" : e.getMessage());
         }
-        submissionRepository.saveAndFlush(submission);
+        submissionRepository.save(newSubmission);
     }
 
     @SneakyThrows
@@ -327,6 +321,14 @@ public class CourseService {
         if (!filePath.toFile().exists())
             Files.createFile(filePath);
         Files.writeString(filePath, content);
+    }
+
+    private String readLogsFile(Path path) throws IOException {
+        File logsFile = path.resolve("logs.txt").toFile();
+        if (!logsFile.exists())
+            return null;
+        return FileUtils.readLines(logsFile, Charset.defaultCharset()).stream()
+                .limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR));
     }
 
     private Results readResultsFile(Path path) throws IOException {
@@ -343,7 +345,7 @@ public class CourseService {
     }
 
     private void readContent(Path parentPath, String filePath) {
-        TemplateFile file = templateFileRepository.findByPath(filePath).orElse(new TemplateFile());
+        TemplateFile file = templateFileRepository.findByPath(filePath).orElseGet(TemplateFile::new);
         file.setPath(filePath);
         Path localPath = parentPath.resolve(filePath);
         try {
@@ -352,6 +354,7 @@ public class CourseService {
             file.setContent(file.isImage() ? uri + readImage(localPath) : Files.readString(localPath));
             file.setLanguage(readLanguage(filePath));
             file.setName(localPath.getFileName().toString());
+            file.setUpdatedAt(LocalDateTime.now());
             templateFileRepository.save(file);
             log.info("Parsed file: {}", file.getPath());
         } catch (IOException e) {
@@ -382,6 +385,8 @@ public class CourseService {
         modelMapper.map(taskDTO, task);
         if (Objects.nonNull(taskDTO.getAttemptRefill()) && taskDTO.getAttemptRefill() > 0)
             task.setAttemptWindow(Duration.of(taskDTO.getAttemptRefill(), ChronoUnit.HOURS));
+        else
+            task.setAttemptWindow(null);
         task.getFiles().removeIf(file -> taskDTO.getFiles().stream().noneMatch(fileDTO ->
                 file.getTemplate().getId().equals(fileDTO.getTemplateId())));
         Task savedTask = taskRepository.save(task);
@@ -406,7 +411,7 @@ public class CourseService {
     }
 
     public void createOrUpdateCourse(CourseDTO courseDTO) {
-        Course course = courseRepository.getByUrl(courseDTO.getUrl()).orElse(new Course());
+        Course course = courseRepository.getByUrl(courseDTO.getUrl()).orElseGet(Course::new);
         modelMapper.map(courseDTO, course);
         course.setStudentRole(createCourseRoles(course.getUrl()));
         course.setAssistants(registerMember(courseDTO.getAssistants(), course.getUrl(), Role.ASSISTANT));
@@ -446,7 +451,7 @@ public class CourseService {
     public String registerMember(MemberDTO memberDTO, List<RoleRepresentation> rolesToAssign) {
         UserResource member = accessRealm.users().search(memberDTO.getEmail()).stream().findFirst().map(user -> {
                     UserResource userResource = accessRealm.users().get(user.getId());
-                    Map<String, List<String>> attributes = Optional.ofNullable(user.getAttributes()).orElse(new HashMap<>());
+                    Map<String, List<String>> attributes = Optional.ofNullable(user.getAttributes()).orElseGet(HashMap::new);
                     if (!attributes.containsKey("displayName")) {
                         attributes.put("displayName", List.of(memberDTO.getName()));
                         user.setAttributes(attributes);
@@ -485,7 +490,7 @@ public class CourseService {
         List<RoleRepresentation> rolesToAssign = List.of(realmRole.toRepresentation());
         return new ArrayList<>(newMembers.stream().map(memberDTO -> existingMembers.stream()
                 .map(UserRepresentation::getEmail).filter(email -> email.equals(memberDTO.getEmail())).findFirst()
-                .orElse(registerMember(memberDTO, rolesToAssign))).toList());
+                .orElseGet(() -> registerMember(memberDTO, rolesToAssign))).toList());
     }
 
     public void registerSupervisor(String courseURL, String supervisor) {
@@ -505,9 +510,10 @@ public class CourseService {
     private void pullDockerImage(String imageName) {
         try {
             dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete();
-        } catch (InterruptedException e) {
-            log.error("Failed to pull docker image {}", imageName);
-            Thread.currentThread().interrupt();
+        } catch (NotFoundException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Docker image not found, please try again");
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Failed to pull docker image, please try again");
         }
     }
 
