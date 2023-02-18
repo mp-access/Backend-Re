@@ -38,13 +38,13 @@ public class CourseController {
     }
 
     @PostMapping("/{course}")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void updateCourse(@PathVariable String course, @RequestBody CourseDTO courseDTO) {
         courseService.createOrUpdateCourse(courseDTO);
     }
 
     @PostMapping("/{course}/import")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void importCourse(@PathVariable String course, @RequestBody CourseDTO courseDTO) {
         List<String> templates = courseDTO.getAssignments().stream()
                 .flatMap(assignmentDTO -> assignmentDTO.getTasks().stream())
@@ -55,39 +55,39 @@ public class CourseController {
     }
 
     @PostMapping("/{course}/assignments")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void createAssignment(@PathVariable String course, @RequestBody AssignmentDTO assignmentDTO) {
         courseService.existsAssignmentByURL(course, assignmentDTO.getUrl());
         courseService.createOrUpdateAssignment(course, assignmentDTO);
     }
 
     @PostMapping("/{course}/assignments/{assignment}")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void updateAssignment(@PathVariable String course, @PathVariable String assignment, @RequestBody AssignmentDTO assignmentDTO) {
         courseService.createOrUpdateAssignment(course, assignment, assignmentDTO);
     }
 
     @PostMapping("/{course}/assignments/{assignment}/tasks")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void createOrUpdateTask(@PathVariable String course, @PathVariable String assignment, @RequestBody TaskDTO taskDTO) {
         courseService.existsTaskByURL(course, assignment, taskDTO.getUrl());
         courseService.createOrUpdateTask(course, assignment, taskDTO);
     }
 
     @PostMapping("/{course}/assignments/{assignment}/tasks/{task}")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void createOrUpdateTask(@PathVariable String course, @PathVariable String assignment, @PathVariable String task, @RequestBody TaskDTO taskDTO) {
         courseService.createOrUpdateTask(course, assignment, task, taskDTO);
     }
 
     @GetMapping("/{course}/files")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public List<TemplateOverview> getFiles(@PathVariable String course) {
         return courseService.getTemplateFiles();
     }
 
     @PostMapping("/{course}/files")
-    @PreAuthorize("hasRole(#course + '-supervisor')")
+    @PreAuthorize("hasRole(#course + '-assistant')")
     public void createOrUpdateTemplateFiles(@PathVariable String course, @RequestBody TaskDTO taskDTO) {
         courseService.createOrUpdateTemplateFiles(taskDTO.getTemplates());
     }

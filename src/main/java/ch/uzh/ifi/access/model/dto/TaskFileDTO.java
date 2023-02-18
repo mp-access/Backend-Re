@@ -13,4 +13,5 @@ public class TaskFileDTO {
     String path;
     Context context;
     boolean editable;
+    boolean enabled = true;
 }

@@ -24,6 +24,9 @@ public class TaskFile {
     @Column(nullable = false)
     private boolean editable = false;
 
+    @Column(nullable = false)
+    private boolean enabled = true;
+
     @ManyToOne
     @JoinColumn(name = "template_id")
     private TemplateFile template;

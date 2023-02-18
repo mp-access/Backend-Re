@@ -161,15 +161,15 @@ public class CourseService {
     }
 
     public List<TaskFileOverview> getTaskFiles(Long taskId) {
-        return taskFileRepository.findByTask_IdOrderByIdAscPathAsc(taskId);
+        return taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId);
     }
 
     public List<TaskFileInfo> getTaskFilesInfo(Long taskId) {
-        return taskFileRepository.getByTask_Id(taskId);
+        return taskFileRepository.getByTask_IdAndEnabledTrue(taskId);
     }
 
     public List<TaskFile> getTaskFilesByContext(Long taskId, boolean isGrading) {
-        return taskFileRepository.findByTask_Id(taskId).stream().filter(file -> file.inContext(isGrading)).toList();
+        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId).stream().filter(file -> file.inContext(isGrading)).toList();
     }
 
     public String getLatestContent(Long fileId, String userId) {
@@ -383,12 +383,9 @@ public class CourseService {
         Task task = taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseGet(getAssignmentByURL(courseURL, assignmentURL)::createTask);
         modelMapper.map(taskDTO, task);
-        if (Objects.nonNull(taskDTO.getAttemptRefill()) && taskDTO.getAttemptRefill() > 0)
-            task.setAttemptWindow(Duration.of(taskDTO.getAttemptRefill(), ChronoUnit.HOURS));
-        else
-            task.setAttemptWindow(null);
-        task.getFiles().removeIf(file -> taskDTO.getFiles().stream().noneMatch(fileDTO ->
-                file.getTemplate().getId().equals(fileDTO.getTemplateId())));
+        task.setAttemptWindow(Optional.ofNullable(taskDTO.getAttemptRefill()).filter(refill -> refill > 0)
+                .map(refill -> Duration.of(refill, ChronoUnit.HOURS)).orElse(null));
+        task.getFiles().forEach(file -> file.setEnabled(false));
         Task savedTask = taskRepository.save(task);
         taskDTO.getFiles().forEach(fileDTO -> createOrUpdateTaskFile(savedTask, fileDTO));
         pullDockerImage(task.getDockerImage());
