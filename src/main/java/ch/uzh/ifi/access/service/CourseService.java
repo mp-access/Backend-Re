@@ -297,7 +297,7 @@ public class CourseService {
             getTaskFilesByContext(task.getId(), submission.isGraded())
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate().getContent()));
             submission.getFiles().forEach(file -> createLocalFile(submissionDir, file.getTaskFile().getPath(), file.getContent()));
-            CreateContainerResponse container = containerCmd.withNetworkDisabled(true)
+            CreateContainerResponse container = containerCmd
                     .withLabels(Map.of("userId", submission.getUserId())).withWorkingDir(submissionDir.toString())
                     .withCmd("/bin/bash", "-c", task.formCommand(submission.getCommand()) + " &> logs.txt")
                     .withHostConfig(new HostConfig().withMemory(536870912L).withPrivileged(true)
