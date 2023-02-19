@@ -61,8 +61,8 @@ public class Task {
     private String userId;
 
     public String getInstructions() {
-        return files.stream().filter(file -> file.getContext().isInstructions()).findFirst()
-                .map(file -> file.getTemplate().getContent()).orElse("");
+        return files.stream().filter(TaskFile::isEnabled).filter(file -> file.getContext().isInstructions())
+                .findFirst().map(file -> file.getTemplate().getContent()).orElse("");
     }
 
     public Integer getAttemptRefill() {
