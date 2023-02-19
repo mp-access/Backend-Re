@@ -10,6 +10,7 @@ import java.util.List;
 
 @Projection(types = {Task.class})
 public interface TaskWorkspace extends TaskOverview {
+    boolean isTestable();
 
     String getInstructions();
 

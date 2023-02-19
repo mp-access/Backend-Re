@@ -277,6 +277,8 @@ public class CourseService {
 
     public void createSubmission(String courseURL, String assignmentURL, String taskURL, SubmissionDTO submissionDTO) {
         Task task = getTaskByURL(courseURL, assignmentURL, taskURL);
+        if (!task.hasCommand(submissionDTO.getCommand()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Submission rejected - no %s command!".formatted(submissionDTO.getCommand()));
         Evaluation evaluation = getEvaluation(task.getId(), submissionDTO.getUserId())
                 .orElseGet(() -> task.createEvaluation(submissionDTO.getUserId()));
         Submission newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission.class));
@@ -383,6 +385,7 @@ public class CourseService {
         Task task = taskRepository.getByAssignment_Course_UrlAndAssignment_UrlAndUrl(courseURL, assignmentURL, taskURL)
                 .orElseGet(getAssignmentByURL(courseURL, assignmentURL)::createTask);
         modelMapper.map(taskDTO, task);
+        task.setTestCommand(taskDTO.getTestCommand());
         task.setAttemptWindow(Optional.ofNullable(taskDTO.getAttemptRefill()).filter(refill -> refill > 0)
                 .map(refill -> Duration.of(refill, ChronoUnit.HOURS)).orElse(null));
         task.getFiles().forEach(file -> file.setEnabled(false));

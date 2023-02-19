@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.constants.Command;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -92,5 +93,13 @@ public class Task {
             case TEST -> testCommand;
             case GRADE -> gradeCommand;
         };
+    }
+
+    public boolean hasCommand(Command type) {
+        return !StringUtils.isBlank(formCommand(type));
+    }
+
+    public boolean isTestable() {
+        return hasCommand(Command.TEST);
     }
 }
