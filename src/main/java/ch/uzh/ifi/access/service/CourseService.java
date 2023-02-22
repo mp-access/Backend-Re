@@ -403,7 +403,6 @@ public class CourseService {
                 .orElseGet(getCourseByURL(courseURL)::createAssignment);
         modelMapper.map(assignmentDTO, assignment);
         assignmentRepository.save(assignment);
-        assignmentDTO.getTasks().forEach(taskDTO -> createOrUpdateTask(courseURL, assignmentDTO.getUrl(), taskDTO));
     }
 
     public void createOrUpdateAssignment(String courseURL, AssignmentDTO assignmentDTO) {
@@ -423,7 +422,10 @@ public class CourseService {
         if (!courseURL.equals(courseDTO.getUrl()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The course URL does not match the current course");
         createOrUpdateCourse(courseDTO);
-        courseDTO.getAssignments().forEach(assignmentDTO -> createOrUpdateAssignment(courseDTO.getUrl(), assignmentDTO));
+        courseDTO.getAssignments().forEach(assignmentDTO -> {
+            createOrUpdateAssignment(courseDTO.getUrl(), assignmentDTO);
+            assignmentDTO.getTasks().forEach(taskDTO -> createOrUpdateTask(courseURL, assignmentDTO.getUrl(), taskDTO));
+        });
     }
 
     public String createCourseRoles(String courseURL) {
