@@ -262,8 +262,8 @@ public class CourseService {
     }
 
     public List<StudentDTO> getStudents(String courseURL) {
-        return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).getRoleUserMembers().stream()
-                .map(student -> getStudent(courseURL, student)).toList();
+        return accessRealm.roles().get(Role.STUDENT.withCourse(courseURL)).getRoleUserMembers(0, 1000)
+                .stream().map(student -> getStudent(courseURL, student)).toList();
     }
 
     private void createSubmissionFile(Submission submission, SubmissionFileDTO fileDTO) {
