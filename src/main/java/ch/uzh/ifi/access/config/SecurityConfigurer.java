@@ -47,8 +47,9 @@ public class SecurityConfigurer {
     }
 
     private boolean isAuthorizedAPIKey(RequestAuthorizationContext context) {
-        return env.getProperty("API_KEY", "access")
-                .equals(context.getRequest().getHeader("X-API-Key").lines().collect(Collectors.joining()));
+        String apiKey = env.getProperty("API_KEY");
+        if (apiKey == null) return false;
+        return apiKey.equals(context.getRequest().getHeader("X-API-Key").lines().collect(Collectors.joining()));
     }
 
     @Bean
