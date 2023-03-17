@@ -292,7 +292,7 @@ public class CourseService {
         submissionDTO.getFiles().stream().filter(fileDTO -> Objects.nonNull(fileDTO.getContent()))
                 .forEach(fileDTO -> createSubmissionFile(submission, fileDTO));
         submission.setValid(!submission.isGraded());
-        try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(task.getDockerImage()).withEntrypoint("containerd")) {
+        try (CreateContainerCmd containerCmd = dockerClient.createContainerCmd(task.getDockerImage())) {
             Path submissionDir = workingDir.resolve("submissions").resolve(submission.getId().toString());
             getTaskFilesByContext(task.getId(), submission.isGraded())
                     .forEach(file -> createLocalFile(submissionDir, file.getPath(), file.getTemplate().getContent()));
