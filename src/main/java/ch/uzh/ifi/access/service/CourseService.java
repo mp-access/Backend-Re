@@ -515,6 +515,7 @@ public class CourseService {
         } catch (NotFoundException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Docker image not found, please try again");
         } catch (Exception e) {
+            log.error("Failed to pull docker image due to unexpected exception", e);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Failed to pull docker image, please try again");
         }
     }
