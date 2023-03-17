@@ -19,5 +19,7 @@ public class AssignmentProgressDTO {
     @NonNull
     private String url;
     @NonNull
+    private String title;
+    @NonNull
     private List<EvaluationSummary> tasks;
 }

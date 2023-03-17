@@ -14,6 +14,15 @@ public interface EvaluationSummary {
     @Value("#{target.task.url}")
     String getUrl();
 
+    @Value("#{target.task.title}")
+    String getTitle();
+
+    @Value("#{target.task.maxAttempts}")
+    String getMaxAttempts();
+
+    @Value("#{target.task.maxPoints}")
+    String getMaxPoints();
+
     Double getBestScore();
 
     Integer getRemainingAttempts();

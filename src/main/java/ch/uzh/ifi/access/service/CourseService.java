@@ -247,13 +247,13 @@ public class CourseService {
 
     public AssignmentProgressDTO getAssignmentProgress(String courseURL, String assignmentURL, String userId) {
         Assignment assignment = getAssignmentByURL(courseURL, assignmentURL);
-        return new AssignmentProgressDTO(userId, assignmentURL, getTasksProgress(assignment, userId));
+        return new AssignmentProgressDTO(userId, assignmentURL, assignment.getTitle(), getTasksProgress(assignment, userId));
     }
 
     public CourseProgressDTO getCourseProgress(String courseURL, String userId) {
         Course course = getCourseByURL(courseURL);
         return new CourseProgressDTO(userId, course.getAssignments().stream().map(assignment ->
-                new AssignmentProgressDTO(assignment.getUrl(), getTasksProgress(assignment, userId))).toList());
+                new AssignmentProgressDTO(assignment.getUrl(), assignment.getTitle(), getTasksProgress(assignment, userId))).toList());
     }
 
     public StudentDTO getStudent(String courseURL, UserRepresentation user) {
