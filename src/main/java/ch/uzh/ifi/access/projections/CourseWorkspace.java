@@ -12,6 +12,6 @@ public interface CourseWorkspace extends CourseOverview {
     @Value("#{@courseService.getAssignments(target.url)}")
     List<AssignmentWorkspace> getAssignments();
 
-    @Value("#{@courseService.getRank(target.id)}")
-    Integer getRank();
+    //@Value("#{@courseService.getRank(target.id)}")
+    //Integer getRank();
 }
