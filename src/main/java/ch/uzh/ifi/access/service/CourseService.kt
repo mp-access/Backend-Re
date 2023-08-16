@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.stream.Collectors
 import java.util.stream.Stream
+import kotlin.jvm.optionals.getOrElse
 
 @Service
 class CourseService(
@@ -57,22 +58,22 @@ class CourseService(
     }
 
     fun getCourseBySlug(courseSlug: String): Course {
-        return courseRepository.getBySlug(courseSlug)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug") }
+        return courseRepository.getBySlug(courseSlug) ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace {
-        return courseRepository.findBySlug(courseSlug)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug") }
+        return courseRepository.findBySlug(courseSlug) ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
     fun getTaskById(taskId: Long): Task {
-        return taskRepository.findById(taskId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId") }
+        return taskRepository.findById(taskId).get() ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId")
     }
 
     fun getTaskFileById(fileId: Long): TaskFile {
-        return taskFileRepository.findById(fileId)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId") }
+        return taskFileRepository.findById(fileId).get() ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
     }
 
     fun getCourses(): List<CourseOverview> {
@@ -86,8 +87,8 @@ class CourseService(
         return courseRepository.findCoursesByRestrictedFalse();
     }*/
     fun getCourseSummary(courseSlug: String): CourseSummary {
-        return courseRepository.findCourseBySlug(courseSlug)
-            .orElseThrow { ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug") }
+        return courseRepository.findCourseBySlug(courseSlug) ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
 
@@ -98,22 +99,16 @@ class CourseService(
     fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
         return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
             .orElseThrow {
-                ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "No assignment found with the URL $assignmentSlug"
-                )
+                ResponseStatusException( HttpStatus.NOT_FOUND,
+                    "No assignment found with the URL $assignmentSlug" )
             }
     }
 
     fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
         val workspace =
-            taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
-                .orElseThrow {
-                    ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug"
-                    )
-                }
+            taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug) ?:
+            throw ResponseStatusException( HttpStatus.NOT_FOUND,
+                        "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug" )
         workspace.setUserId(userId)
         return workspace
     }
@@ -122,8 +117,8 @@ class CourseService(
         val permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
         permittedFiles.stream().filter { obj: TaskFile -> obj.editable }
             .forEach { file: TaskFile ->
-                submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.id, userId)
-                    .ifPresent { latestSubmissionFile: SubmissionFile -> file.template = latestSubmissionFile.content }
+                val latestSubmissionFile = submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.id, userId)
+                    latestSubmissionFile?.let { file.template = latestSubmissionFile.content}
             }
         return permittedFiles
     }
@@ -141,22 +136,20 @@ class CourseService(
         val restricted =
             submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
         return Stream.concat(unrestricted.stream(), restricted.stream())
-            .sorted(Comparator.comparingLong { obj: Submission -> obj.id }
+            .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
                 .reversed()).toList()
     }
 
-    fun getEvaluation(taskId: Long?, userId: String?): Optional<Evaluation> {
+    fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(taskId, userId)
     }
 
     fun getRemainingAttempts(taskId: Long?, userId: String?, maxAttempts: Int): Int {
-        return getEvaluation(taskId, verifyUserId(userId))
-            .map { obj: Evaluation -> obj.remainingAttempts }.orElse(maxAttempts)
+        return getEvaluation(taskId, verifyUserId(userId))?.remainingAttempts ?: maxAttempts
     }
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        return getEvaluation(taskId, verifyUserId(userId))
-            .map { obj: Evaluation -> obj.nextAttemptAt }.orElse(null)
+        return getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
     }
 
     fun createEvent(ordinalNum: Int?, date: LocalDateTime?, type: String?): Event {
@@ -177,15 +170,12 @@ class CourseService(
     }
 
     fun calculateAvgTaskPoints(taskId: Long?): Double {
-        return Precision.round(
-            evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId)
-                .stream().mapToDouble { obj: Evaluation -> obj.bestScore }.average().orElse(0.0), 2
-        )
+        return evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId).map {
+            it.bestScore!! }.average().takeIf { it.isFinite() } ?: 0.0
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
-        return getEvaluation(taskId, verifyUserId(userId)).map { obj: Evaluation -> obj.bestScore }
-            .orElse(0.0)
+        return getEvaluation(taskId, verifyUserId(userId))?.bestScore ?: 0.0
     }
 
     fun calculateAssignmentPoints(tasks: List<Task>, userId: String?): Double {
@@ -199,7 +189,7 @@ class CourseService(
     }
 
     fun getMaxPoints(courseSlug: String?): Double {
-        return getAssignments(courseSlug).stream().mapToDouble { obj: AssignmentWorkspace -> obj.maxPoints }.sum()
+        return getAssignments(courseSlug).sumOf { it.maxPoints!! }
     }
 
     fun getRank(courseId: Long?): Int {
@@ -213,9 +203,8 @@ class CourseService(
                 .reversed()).toList()
     }
 
-    fun getTeamMembers(memberIds: List<String?>): List<MemberOverview> {
-        return memberIds.stream().map { memberId: String? -> courseRepository.getTeamMemberName(memberId) }
-            .toList()
+    fun getTeamMembers(memberIds: List<String>): List<MemberOverview> {
+        return memberIds.map { courseRepository.getTeamMemberName(it)!! }.toList() // TODO: safety
     }
 
     /*fun getInformation(infoIds: List<String?>): List<CourseInformation> {
@@ -233,11 +222,9 @@ class CourseService(
             courseSlug,
             assignmentSlug,
             taskSlug
-        ).orElseThrow {
-            ResponseStatusException(
+        ) ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
             )
-        }
     }
 
     fun getTaskFilesByContext(taskId: Long?, isGrading: Boolean): List<TaskFile> {
@@ -282,15 +269,14 @@ class CourseService(
             HttpStatus.FORBIDDEN,
             "Submission rejected - no ${submissionDTO.command} command!"
         )
-        val evaluation = getEvaluation(task.id, submissionDTO.userId)
-            .orElseGet { task.createEvaluation(submissionDTO.userId) }
+        val evaluation = getEvaluation(task.id, submissionDTO.userId) ?: task.createEvaluation(submissionDTO.userId)
         val newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
         if (submissionDTO.restricted && newSubmission.isGraded) {
-            if (!task.assignment.isActive) throw ResponseStatusException(
+            if (!task.assignment?.isActive!!) throw ResponseStatusException( // TODO: safety
                 HttpStatus.FORBIDDEN,
                 "Submission rejected - assignment is not active!"
             )
-            if (evaluation.remainingAttempts <= 0) throw ResponseStatusException(
+            if (evaluation.remainingAttempts!! <= 0) throw ResponseStatusException( // TODO: safety
                 HttpStatus.FORBIDDEN,
                 "Submission rejected - no remaining attempts!"
             )
@@ -300,32 +286,44 @@ class CourseService(
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
         submission.valid = !submission.isGraded
         try {
-            dockerClient.createContainerCmd(task.dockerImage).use { containerCmd ->
-                val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
-                getTaskFilesByContext(task.id, submission.isGraded)
-                    .forEach(Consumer { file: TaskFile -> createLocalFile(submissionDir, file.path, file.template) })
-                submission.files.forEach(Consumer { file: SubmissionFile ->
-                    createLocalFile(
-                        submissionDir,
-                        file.taskFile.path,
-                        file.content
-                    )
-                })
-                val container = containerCmd
-                    .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
-                    .withCmd("/bin/bash", "-c", task.formCommand(submission.command) + " &> logs.txt")
-                    .withHostConfig(
-                        HostConfig().withMemory(536870912L).withPrivileged(true)
-                            .withBinds(Bind.parse("$submissionDir:$submissionDir"))
-                    ).exec()
-                dockerClient.startContainerCmd(container.id).exec()
-                val statusCode = dockerClient.waitContainerCmd(container.id)
-                    .exec(WaitContainerResultCallback())
-                    .awaitStatusCode(Math.min(task.timeLimit, 180).toLong(), TimeUnit.SECONDS)
-                //CourseService.log.info("Container {} finished with status {}", container.id, statusCode)
-                submission.logs = readLogsFile(submissionDir)
-                if (newSubmission.isGraded) newSubmission.parseResults(readResultsFile(submissionDir))
-                FileUtils.deleteQuietly(submissionDir.toFile())
+            task.dockerImage?.let {
+                dockerClient.createContainerCmd(it).use { containerCmd ->
+                    val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
+                    getTaskFilesByContext(task.id, submission.isGraded)
+                        .forEach(Consumer { file: TaskFile -> file.path?.let { it1 -> // TODO: cleanup
+                            file.template?.let { it2 ->
+                                createLocalFile(submissionDir,
+                                    it1, it2
+                                )
+                            }
+                        } })
+                    submission.files.forEach(Consumer { file: SubmissionFile ->
+                        file.taskFile?.path?.let { it1 -> // TODO: cleanup
+                            file.content?.let { it2 ->
+                                createLocalFile(
+                                    submissionDir,
+                                    it1,
+                                    it2
+                                )
+                            }
+                        }
+                    })
+                    val container = containerCmd
+                        .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
+                        .withCmd("/bin/bash", "-c", task.formCommand(submission.command) + " &> logs.txt")
+                        .withHostConfig(
+                            HostConfig().withMemory(536870912L).withPrivileged(true)
+                                .withBinds(Bind.parse("$submissionDir:$submissionDir"))
+                        ).exec()
+                    dockerClient.startContainerCmd(container.id).exec()
+                    val statusCode = dockerClient.waitContainerCmd(container.id)
+                        .exec(WaitContainerResultCallback())
+                        .awaitStatusCode(Math.min(task.timeLimit, 180).toLong(), TimeUnit.SECONDS)
+                    //CourseService.log.info("Container {} finished with status {}", container.id, statusCode)
+                    submission.logs = readLogsFile(submissionDir)
+                    if (newSubmission.isGraded) newSubmission.parseResults(readResultsFile(submissionDir))
+                    FileUtils.deleteQuietly(submissionDir.toFile())
+                }
             }
         } catch (e: Exception) {
             newSubmission.output = if (e.message!!.contains("timeout")) "Time limit exceeded" else e.message

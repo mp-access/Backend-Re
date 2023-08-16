@@ -34,7 +34,7 @@ class CourseLifecycle(
 
 
     fun importRepository(course: Course): Course {
-        val coursePath = createLocalRepository(course.repository)
+        val coursePath = createLocalRepository(course.repository!!) // TODO: safety
         val courseDTO = cci.readCourseConfig(coursePath)
         val supervisor = roleService.getCurrentUser()
         val supervisorDTO = MemberDTO(supervisor, supervisor)
@@ -62,39 +62,38 @@ class CourseLifecycle(
                 val task = assignment.tasks.stream()
                     .filter { existing: Task -> existing.slug == taskDTO.slug }.findFirst()
                     .orElseGet { assignment.createTask() }
-                pullDockerImage(taskDTO.evaluator.dockerImage)
+                pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
                 modelMapper.map(taskDTO, task)
                 task.information.forEach { it.value.task = task }
 
                 task.ordinalNum = index + 1
-                task.dockerImage = taskDTO.evaluator.dockerImage
-                task.runCommand = taskDTO.evaluator.runCommand
-                task.testCommand = taskDTO.evaluator.testCommand
-                task.gradeCommand = taskDTO.evaluator.gradeCommand
+                task.dockerImage = taskDTO.evaluator!!.dockerImage // TODO: safety
+                task.runCommand = taskDTO.evaluator!!.runCommand // TODO: safety
+                task.testCommand = taskDTO.evaluator!!.testCommand // TODO: safety
+                task.gradeCommand = taskDTO.evaluator!!.gradeCommand // TODO: safety
 
-                if (Objects.nonNull(taskDTO.refill) && taskDTO.refill > 0) task.attemptWindow =
-                    Duration.of(taskDTO.refill.toLong(), ChronoUnit.SECONDS)
+                if (Objects.nonNull(taskDTO.refill) && taskDTO.refill!! > 0) task.attemptWindow =
+                    Duration.of(taskDTO.refill!!.toLong(), ChronoUnit.SECONDS)
 
                 // Disable all files, re-enable the relevant ones later
                 task.files.forEach { file ->
                     file.enabled = false
                 }
-                taskDTO.files.visible.forEach { filePath ->
+                taskDTO.files?.visible?.forEach { filePath ->
                     createOrUpdateTaskFile(task, taskPath, filePath).visible = true
                 }
-                taskDTO.files.grading.forEach { filePath ->
+                taskDTO.files?.grading?.forEach { filePath ->
                     createOrUpdateTaskFile(task, taskPath, filePath).grading = true
                 }
-                taskDTO.files.editable.forEach { filePath ->
+                taskDTO.files?.editable?.forEach { filePath ->
                     createOrUpdateTaskFile( task, taskPath, filePath ).editable = true
                 }
-                taskDTO.files.solution.forEach { filePath ->
+                taskDTO.files?.solution?.forEach { filePath ->
                     createOrUpdateTaskFile( task, taskPath, filePath ).solution = true
                 }
             }
             //assignment.setMaxPoints(assignment.getTasks().stream().filter(Task::enabled).mapToDouble(Task::getMaxPoints).sum());
-            assignment.maxPoints = assignment.tasks.stream().mapToDouble { obj: Task -> obj.maxPoints }
-                .sum()
+            assignment.maxPoints = assignment.tasks.map { it.maxPoints!! }.sum() // TODO: safety
         }
         return courseRepository.save(course)
     }

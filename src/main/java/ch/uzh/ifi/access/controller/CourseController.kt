@@ -21,7 +21,7 @@ class CourseCreationController(
 ) {
     @PostMapping("/create")
     @PreAuthorize("hasRole('supervisor')")
-    fun createCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String {
+    fun createCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
         return courseService.createCourse(courseDTO.repository).slug
     }
 
@@ -40,7 +40,7 @@ class CourseController (
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun updateCourse(@PathVariable course: String?): String {
+    fun updateCourse(@PathVariable course: String?): String? {
         return courseService.updateCourse(course!!).slug
     }
 

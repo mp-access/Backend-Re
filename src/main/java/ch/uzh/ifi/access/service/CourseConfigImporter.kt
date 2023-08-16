@@ -66,7 +66,7 @@ class CourseConfigImporter(
             assignment.tasks.add(directory.asText())
         }
 
-        config["information"].fields().forEachRemaining { field ->
+        val information = config["information"].fields().forEachRemaining { field ->
             val information = AssignmentInformationDTO()
             val data = field.value
             information.language = field.key
