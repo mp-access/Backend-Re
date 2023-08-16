@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.SubmissionType;
+import ch.uzh.ifi.access.model.constants.Command;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -14,28 +14,28 @@ import lombok.Setter;
 public class Evaluator {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
     @Column(nullable = false)
-    private String dockerImage;
+    public String dockerImage;
 
     @Column(nullable = false)
-    private String runCommand;
+    public String runCommand;
+
+    @Column(nullable = true)
+    public String testCommand;
 
     @Column(nullable = false)
-    private String testCommand;
+    public String gradeCommand;
 
     @Column(nullable = false)
-    private String gradeCommand;
+    public String resultsFile = "grade_results.json";
 
     @Column(nullable = false)
-    private String resultsFile = "grade_results.json";
+    public Integer timeLimit = 30;
 
-    @Column(nullable = false)
-    private Integer timeLimit = 30;
-
-    public String formCommand(SubmissionType type) {
-        return switch (type) {
+    public String formCommand(Command command) {
+        return switch (command) {
             case RUN -> runCommand;
             case TEST -> testCommand;
             case GRADE -> gradeCommand;

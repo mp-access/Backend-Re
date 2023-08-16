@@ -11,7 +11,7 @@ import java.util.Optional;
 public interface TaskFileRepository extends JpaRepository<TaskFile, Long> {
 
     @Transactional
-    @PostFilter("hasRole(filterObject.task.assignment.course.url + '-assistant') or filterObject.published")
+    @PostFilter("hasRole(filterObject.task.assignment.course.slug + '-assistant') or filterObject.published")
     List<TaskFile> findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(Long taskId);
 
     @Transactional

@@ -21,9 +21,10 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${AUTH_SERVER_URL:http://localhost:8080}/realms/access
+          issuer-uri: ${AUTH_SERVER_URL:http://0.0.0.0:8080}/realms/access
 
 logging:
   level:
     org.springframework:
       web.filter.CommonsRequestLoggingFilter: debug
+

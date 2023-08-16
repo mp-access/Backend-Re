@@ -21,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
 
+import java.nio.file.Path;
 import java.util.Collection;
 
 @AllArgsConstructor
@@ -39,7 +40,7 @@ public class SecurityConfigurer {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.sessionManagement().maximumSessions(1).sessionRegistry(activityRegistry());
         http.authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer().jwt().jwtAuthenticationConverter(source ->
                         new JwtAuthenticationToken(source, parsAuthorities(source), source.getClaimAsString("email")));
@@ -77,14 +78,14 @@ public class SecurityConfigurer {
     }
 
     @Bean
-    public String workingDir() {
-        return env.getProperty("WORKING_DIR", "/tmp/access");
+    public Path workingDir() {
+        return Path.of(env.getProperty("WORKING_DIR", "/workspace/data"));
     }
 
     @Bean
     public RealmResource accessRealm() {
         Keycloak keycloakClient = Keycloak.getInstance(
-                env.getProperty("AUTH_SERVER_URL", "http://localhost:8080"), "master",
+                env.getProperty("AUTH_SERVER_URL", "http://0.0.0.0:8080"), "master",
                 env.getProperty("KEYCLOAK_ADMIN", "admin"),
                 env.getProperty("KEYCLOAK_ADMIN_PASSWORD", "admin"),
                 "admin-cli");

@@ -5,9 +5,7 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class TaskFileDTO {
-    String path;
-    String language;
-    String template;
-    boolean image;
+public class AssignmentInformationDTO {
+    public String language;
+    public String title;
 }

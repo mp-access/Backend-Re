@@ -3,27 +3,26 @@ package ch.uzh.ifi.access.model.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 public class TaskDTO {
 
-    Integer ordinalNum;
+    public String slug;
 
-    String title;
+    public Integer ordinalNum;
 
-    String url;
+    public Map<String,TaskInformationDTO> information = new HashMap<>();
 
-    String instructions;
+    public Double maxPoints;
 
-    Double maxPoints;
+    public Integer maxAttempts;
 
-    Integer maxAttempts;
+    public Integer refill;
 
-    Duration attemptWindow;
+    public TaskEvaluatorDTO evaluator;
 
-    TaskEvaluatorDTO evaluator;
-
-    TaskFilesDTO files;
+    public TaskFilesDTO files;
 }

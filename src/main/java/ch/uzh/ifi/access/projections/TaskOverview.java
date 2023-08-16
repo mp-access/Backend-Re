@@ -1,24 +1,25 @@
 package ch.uzh.ifi.access.projections;
 
 import ch.uzh.ifi.access.model.Task;
+import ch.uzh.ifi.access.model.TaskInformation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.rest.core.config.Projection;
+
+import java.util.Map;
 
 @Projection(types = {Task.class})
 public interface TaskOverview {
 
     Long getId();
 
-    String getUrl();
+    Integer getOrdinalNum();
 
-    String getTitle();
+    String getSlug();
 
     @Value("#{'Task ' + target.ordinalNum.toString()}")
     String getName();
 
-    Integer getOrdinalNum();
-
-    String getInstructions();
+    Map<String,TaskInformation> getInformation();
 
     Double getMaxPoints();
 

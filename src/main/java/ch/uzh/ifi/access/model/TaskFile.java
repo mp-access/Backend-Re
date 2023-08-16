@@ -16,34 +16,46 @@ import static java.time.LocalDateTime.now;
 public class TaskFile {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
-    private String path;
+    public String path;
 
-    private String name;
+    public String name;
+
+    public LocalDateTime publishDate;
 
     private String language;
-
-    private LocalDateTime publishDate;
-
-    @Column(columnDefinition = "text")
-    private String template;
 
     @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "task_id")
-    private Task task;
+    public Task task;
 
-    private boolean image;
-
-    private boolean enabled;
-
-    private boolean editable;
-
-    private boolean grading;
+    @Column(nullable = false, columnDefinition = "text")
+    public String template;
 
     @Transient
     private String content;
+
+    public boolean enabled;
+
+    @Column(nullable = false, name = "is_binary")
+    public boolean binary;
+
+    @Column(nullable = false)
+    public boolean visible;
+
+    @Column(nullable = false)
+    public boolean editable;
+
+    @Column(nullable = false)
+    public boolean grading;
+
+    @Column(nullable = false)
+    public boolean solution;
+
+    @Column(nullable = false)
+    public boolean instruction;
 
     public boolean isPublished() {
         return Objects.nonNull(publishDate) && publishDate.isBefore(now());

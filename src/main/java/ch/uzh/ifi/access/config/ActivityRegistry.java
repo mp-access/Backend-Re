@@ -69,7 +69,7 @@ public class ActivityRegistry implements SessionRegistry, ApplicationListener<Ab
         sessions.remove(sessionId);
     }
 
-    public Long getOnlineCount(String courseURL) {
-        return getAllPrincipals().stream().filter(principal -> getPrincipalRoles(principal).contains(courseURL)).count();
+    public Long getOnlineCount(String courseSlug) {
+        return getAllPrincipals().stream().filter(principal -> getPrincipalRoles(principal).contains(courseSlug)).count();
     }
 }

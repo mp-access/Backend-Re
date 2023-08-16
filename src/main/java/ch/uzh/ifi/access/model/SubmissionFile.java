@@ -14,20 +14,20 @@ import lombok.Setter;
 public class SubmissionFile {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
     @Column(columnDefinition = "text")
-    private String content;
+    public String content;
 
     @JsonIgnore
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "task_file_id")
-    private TaskFile taskFile;
+    public TaskFile taskFile;
 
     @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "submission_id")
-    private Submission submission;
+    public Submission submission;
 
     public Long getTaskFileId() {
         return taskFile.getId();

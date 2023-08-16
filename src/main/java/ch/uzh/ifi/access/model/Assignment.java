@@ -9,7 +9,9 @@ import org.hibernate.annotations.OrderBy;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static java.time.LocalDateTime.now;
 
@@ -19,59 +21,61 @@ import static java.time.LocalDateTime.now;
 public class Assignment {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
     @Column(nullable = false)
-    private Integer ordinalNum;
+    public String slug;
 
     @Column(nullable = false)
-    private String url;
+    public Integer ordinalNum;
 
-    @Column(nullable = false)
-    private String title;
+    @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @MapKey(name = "language")
+    public Map<String, AssignmentInformation> information = new HashMap<>();
 
-    @Column(columnDefinition = "text")
-    private String description;
+    @Column(nullable = false, name = "start_date")
+    public LocalDateTime start;
 
-    @Column(nullable = false)
-    private LocalDateTime startDate;
+    @Column(nullable = false, name = "end_date")
+    public LocalDateTime end;
 
-    @Column(nullable = false)
-    private LocalDateTime endDate;
+    public Double maxPoints;
 
-    private String duration;
-
-    private Double maxPoints;
-
-    private boolean enabled;
+    // assignments which are not enabled are not referenced by a course config
+    // it could be that the assignments slug was changed
+    public boolean enabled;
 
     @ManyToOne
     @JoinColumn(name = "course_id")
-    private Course course;
+    public Course course;
 
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL)
     @OrderBy(clause = "ID ASC")
-    private List<Task> tasks = new ArrayList<>();
+    public List<Task> tasks = new ArrayList<>();
 
     @Transient
-    private Double points;
+    public Double points;
 
+    // TODO move to frontend
     public boolean isPublished() {
-        return startDate.isBefore(now());
+        return start.isBefore(now());
     }
 
+    // TODO move to frontend
     public boolean isPastDue() {
-        return endDate.isBefore(now());
+        return end.isBefore(now());
     }
 
+    // TODO move to frontend
     public boolean isActive() {
         return isPublished() && !isPastDue();
     }
 
+    // TODO move to frontend
     public List<Timer> getCountDown() {
-        Duration remaining = Duration.between(now(), endDate);
+        Duration remaining = Duration.between(now(), end);
         return List.of(
-                new Timer("DAYS", remaining.toDays(), Duration.between(startDate, endDate).toDays()),
+                new Timer("DAYS", remaining.toDays(), Duration.between(start, end).toDays()),
                 new Timer("HOURS", (long) remaining.toHoursPart(), 24L),
                 new Timer("MINUTES", (long) remaining.toMinutesPart(), 60L)
         );

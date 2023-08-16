@@ -6,25 +6,27 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 public class AssignmentDTO {
 
-    Integer ordinalNum;
+    public String slug;
 
-    String title;
+    public Integer ordinalNum;
 
-    String url;
+    public String description;
 
-    String description;
-
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
-    LocalDateTime startDate;
+    public Map<String,AssignmentInformationDTO> information = new HashMap<>();
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
-    LocalDateTime endDate;
+    public LocalDateTime start;
 
-    List<String> tasks = new ArrayList<>();
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
+    public LocalDateTime end;
+
+    public List<String> tasks = new ArrayList<>();
 }

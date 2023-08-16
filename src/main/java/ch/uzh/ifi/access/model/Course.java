@@ -1,13 +1,16 @@
 package ch.uzh.ifi.access.model;
 
+import ch.uzh.ifi.access.model.constants.Visibility;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Formula;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -15,48 +18,62 @@ import java.util.List;
 public class Course {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
     @Column(unique = true, nullable = false)
-    private String url;
+    public String slug;
+
+    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @MapKey(name = "language")
+    public Map<String, CourseInformation> information = new HashMap<>();
+
+    public String logo;
 
     @Column(nullable = false)
-    private String title;
-
-    @Column(columnDefinition = "text")
-    private String description;
-
-    private String university;
-
-    private String semester;
+    public String repository;
 
     @Column(nullable = false)
-    private String repository;
+    @Enumerated(EnumType.STRING)
+    public Visibility defaultVisibility;
 
     @Column(nullable = false)
-    private LocalDate startDate;
+    @Enumerated(EnumType.STRING)
+    public Visibility overrideVisibility;
 
     @Column(nullable = false)
-    private LocalDate endDate;
+    public LocalDateTime overrideStart;
 
-    private String role = "";
+    @Column(nullable = false)
+    public LocalDateTime overrideEnd;
 
-    private String feedback;
 
-    private boolean restricted = false;
+    // This refers to the role created in keycloak for this course
+    @Column(nullable = false)
+    public String studentRole;
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
-    private List<Assignment> assignments = new ArrayList<>();
+    public List<Assignment> assignments = new ArrayList<>();
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL)
-    private List<Event> events = new ArrayList<>();
+    public List<Event> events = new ArrayList<>();
 
-    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=role)")
-    private Long studentsCount = 0L;
+    @ElementCollection
+    public List<String> supervisors = new ArrayList<>();
+
+    @ElementCollection
+    public List<String> assistants = new ArrayList<>();
+
+    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=student_role)")
+    public Long studentsCount = 0L;
 
     @Transient
-    private Double points;
+    public Double points;
 
+    // TODO: why is this here?
+    @Transient
+    public String userId;
+
+    // TODO: move to service?
     public Assignment createAssignment() {
         Assignment newAssignment = new Assignment();
         assignments.add(newAssignment);

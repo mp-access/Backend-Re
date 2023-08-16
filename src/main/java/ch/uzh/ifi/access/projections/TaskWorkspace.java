@@ -11,6 +11,7 @@ import java.util.List;
 
 @Projection(types = {Task.class})
 public interface TaskWorkspace extends TaskOverview {
+    boolean isTestable();
 
     @Value("#{@courseService.getTaskFiles(target.id, target.userId)}")
     List<TaskFile> getFiles();

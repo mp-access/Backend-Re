@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.model;
 
-import ch.uzh.ifi.access.model.constants.SubmissionType;
+import ch.uzh.ifi.access.model.constants.Command;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -21,38 +21,38 @@ import static java.time.LocalDateTime.now;
 public class Evaluation {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
     @Column(nullable = false)
-    private String userId;
+    public String userId;
 
-    private Double bestScore;
+    public Double bestScore;
 
-    private Integer remainingAttempts;
+    public Integer remainingAttempts;
 
     @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "task_id")
-    private Task task;
+    public Task task;
 
     @OneToMany(mappedBy = "evaluation", cascade = CascadeType.ALL)
     @OrderBy(clause = "CREATED_AT DESC")
-    private List<Submission> submissions = new ArrayList<>();
+    public List<Submission> submissions = new ArrayList<>();
     @Transient
-    private LocalDateTime nextAttemptAt;
+    public LocalDateTime nextAttemptAt;
 
     public boolean isActive() {
         return task.getAssignment().isActive();
     }
 
-    public Long countSubmissionsByType(SubmissionType type) {
-        return submissions.stream().filter(submission -> submission.getType().equals(type)).count();
+    public Long countSubmissionsByType(Command command) {
+        return submissions.stream().filter(submission -> submission.getCommand().equals(command)).count();
     }
 
     public Submission addSubmission(Submission newSubmission) {
         submissions.add(newSubmission);
         newSubmission.setEvaluation(this);
-        newSubmission.setOrdinalNum(countSubmissionsByType(newSubmission.getType()));
+        newSubmission.setOrdinalNum(countSubmissionsByType(newSubmission.getCommand()));
         return newSubmission;
     }
 
@@ -62,7 +62,7 @@ public class Evaluation {
     }
 
     @PostLoad
-    private void updateRemainingAttempts() {
+    public void updateRemainingAttempts() {
         if (Objects.nonNull(task.getAttemptWindow()))
             submissions.stream().filter(submission -> submission.isGraded() && submission.isValid())
                     .map(Submission::getCreatedAt).filter(createdAt -> createdAt.isBefore(now())).findFirst()

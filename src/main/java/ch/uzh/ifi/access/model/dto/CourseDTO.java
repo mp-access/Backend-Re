@@ -3,29 +3,27 @@ package ch.uzh.ifi.access.model.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
 public class CourseDTO {
-
-    String title;
-
-    String url;
-
-    String repository;
-
-    String description;
-
-    LocalDate startDate;
-
-    LocalDate endDate;
-
-    String university;
-
-    String semester;
-
-    List<String> assignments = new ArrayList<>();
+    public String slug;
+    public String repository;
+    public String logo;
+    public Map<String,CourseInformationDTO> information = new HashMap<>();
+    public String defaultVisibility;
+    public String overrideVisibility;
+    public LocalDateTime overrideStart;
+    public LocalDateTime overrideEnd;
+    public String studentRole;
+    public String assistantRole;
+    public String supervisorRole;
+    public List<MemberDTO> supervisors = new ArrayList<>();
+    public List<MemberDTO> assistants = new ArrayList<>();
+    public List<String> assignments = new ArrayList<>();
 }

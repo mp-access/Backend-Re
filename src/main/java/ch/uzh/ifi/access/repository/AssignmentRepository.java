@@ -1,30 +1,24 @@
 package ch.uzh.ifi.access.repository;
 
 import ch.uzh.ifi.access.model.Assignment;
-import ch.uzh.ifi.access.projections.AssignmentOverview;
 import ch.uzh.ifi.access.projections.AssignmentWorkspace;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.access.prepost.PostAuthorize;
 import org.springframework.security.access.prepost.PostFilter;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
 
-    @PostFilter("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and filterObject.published)")
-    List<AssignmentOverview> findByCourse_UrlAndEnabledTrueOrderByOrdinalNumDesc(String courseURL);
+    @PostFilter("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and filterObject.published)")
+    List<AssignmentWorkspace> findByCourse_SlugOrderByOrdinalNumDesc(String courseSlug);
 
-    @PostFilter("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and filterObject.published)")
-    List<AssignmentOverview> findByCourse_UrlAndEnabledTrueAndEndDateBeforeOrderByEndDateAsc(String courseURL, LocalDateTime end);
+    @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.present and returnObject.get().published)")
+    Optional<AssignmentWorkspace> findByCourse_SlugAndSlug(String courseSlug, String assignmentSlug);
 
-    @PostFilter("hasRole(#courseURL)")
-    List<AssignmentWorkspace> findByCourse_UrlAndEnabledTrueAndStartDateBeforeAndEndDateAfterOrderByEndDateAsc(String courseURL, LocalDateTime start, LocalDateTime end);
+    Optional<Assignment> getByCourse_SlugAndSlug(String courseSlug, String assignmentSlug);
 
-    @PostAuthorize("hasRole(#courseURL + '-assistant') or (hasRole(#courseURL) and returnObject.present and returnObject.get().published)")
-    Optional<AssignmentWorkspace> findByCourse_UrlAndUrl(String courseURL, String assignmentURL);
-
-    Optional<Assignment> findByCourse_UrlAndOrdinalNum(String courseURL, Integer ordinalNum);
+    boolean existsByCourse_SlugAndSlug(String courseSlug, String assignmentSlug);
 
 }

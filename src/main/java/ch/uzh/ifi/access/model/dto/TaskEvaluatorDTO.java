@@ -9,11 +9,11 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class TaskEvaluatorDTO {
-    String dockerImage;
-    String runCommand;
-    String testCommand;
-    String gradeCommand;
-    String gradeResults;
-    Integer timeLimit;
-    List<String> resources = new ArrayList<>();
+    public String dockerImage;
+    public String runCommand;
+    public String testCommand;
+    public String gradeCommand;
+    public String gradeResults;
+    public Integer timeLimit;
+    public List<String> resources = new ArrayList<>();
 }

@@ -15,21 +15,21 @@ import java.time.format.DateTimeFormatter;
 public class Event {
     @Id
     @GeneratedValue
-    private Long id;
+    public Long id;
 
-    private String type;
+    public String type;
 
-    private String description;
+    public String description;
 
     @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDateTime date;
+    public LocalDateTime date;
 
     @ManyToOne
     @JoinColumn(name = "course_id")
-    private Course course;
+    public Course course;
 
     @JsonGetter
-    private String getTime() {
+    public String getTime() {
         return date.format(DateTimeFormatter.ofPattern("HH:mm"));
     }
 
