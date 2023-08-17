@@ -12,13 +12,19 @@ class TaskFile {
     @Id
     @GeneratedValue
     var id: Long? = null
+
+    @Column(nullable = false)
     var path: String? = null
+
+    @Column(nullable = false)
     var name: String? = null
+
+    @Column(nullable = false)
     private val language: String? = null
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "task_id")
+    @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 
     @Column(nullable = false, columnDefinition = "text")

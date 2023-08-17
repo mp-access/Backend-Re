@@ -18,6 +18,8 @@ class Submission {
     @Id
     @GeneratedValue
     var id: Long? = null
+
+    @Column(nullable = false)
     var ordinalNum: Long? = null
 
     @Column(nullable = false)
@@ -30,6 +32,7 @@ class Submission {
     var valid = false
 
     @CreationTimestamp
+    @Column(nullable = false)
     var createdAt: LocalDateTime? = null
 
     @JsonIgnore
@@ -44,7 +47,7 @@ class Submission {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "evaluation_id")
+    @JoinColumn(nullable = false, name = "evaluation_id")
     var evaluation: Evaluation? = null
     val maxPoints: Double?
         get() = evaluation!!.task!!.maxPoints

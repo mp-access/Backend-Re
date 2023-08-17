@@ -25,7 +25,7 @@ class Evaluation {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "task_id")
+    @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 
     @OneToMany(mappedBy = "evaluation", cascade = [CascadeType.ALL])

@@ -11,17 +11,17 @@ class SubmissionFile {
     @GeneratedValue
     var id: Long? = null
 
-    @Column(columnDefinition = "text")
+    @Column(nullable = false, columnDefinition = "text")
     var content: String? = null
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "task_file_id")
+    @JoinColumn(nullable = false, name = "task_file_id")
     var taskFile: TaskFile? = null
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(name = "submission_id")
+    @JoinColumn(nullable = false, name = "submission_id")
     var submission: Submission? = null
     val taskFileId: Long?
         get() = taskFile!!.id

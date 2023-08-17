@@ -24,10 +24,10 @@ class Assignment {
     @MapKey(name = "language")
     var information: MutableMap<String, AssignmentInformation> = HashMap()
 
-    @Column(nullable = false, name = "start_date")
+    @Column(name = "start_date")
     var start: LocalDateTime? = null
 
-    @Column(nullable = false, name = "end_date")
+    @Column(name = "end_date")
     var end: LocalDateTime? = null
 
     // assignments which are not enabled are not referenced by a course config
@@ -35,7 +35,7 @@ class Assignment {
     var enabled = false
 
     @ManyToOne
-    @JoinColumn(name = "course_id")
+    @JoinColumn(nullable = false, name = "course_id")
     var course: Course? = null
 
     @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL])

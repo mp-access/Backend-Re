@@ -22,14 +22,10 @@ class Evaluator {
     @Column(nullable = false)
     var runCommand: String? = null
 
-    @Column(nullable = true)
     var testCommand: String? = null
 
     @Column(nullable = false)
     var gradeCommand: String? = null
-
-    @Column(nullable = false)
-    var resultsFile = "grade_results.json"
 
     @Column(nullable = false)
     var timeLimit = 30

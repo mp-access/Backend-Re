@@ -14,13 +14,16 @@ class Event {
     @GeneratedValue
     var id: Long? = null
     var type: String? = null
+
+    @Column(nullable = false)
     var description: String? = null
 
     @JsonFormat(pattern = "yyyy-MM-dd")
+    @Column(nullable = false)
     var date: LocalDateTime? = null
 
     @ManyToOne
-    @JoinColumn(name = "course_id")
+    @JoinColumn(nullable = false, name = "course_id")
     var course: Course? = null
 
     @get:JsonGetter

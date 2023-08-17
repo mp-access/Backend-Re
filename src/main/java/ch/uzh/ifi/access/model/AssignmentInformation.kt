@@ -13,7 +13,7 @@ class AssignmentInformation {
 
     @JsonIgnore
     @ManyToOne(cascade = [CascadeType.ALL])
-    @JoinColumn(name = "assignment_id")
+    @JoinColumn(nullable = false, name = "assignment_id")
     var assignment: Assignment? = null
 
     @Column(nullable = false)

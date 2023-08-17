@@ -29,19 +29,25 @@ class Task {
 
     @Column(nullable = false)
     var maxAttempts: Int? = null
+
     var attemptWindow: Duration? = null
 
     @Column(nullable = false)
     var dockerImage: String? = null
+
+    @Column(nullable = false)
     var runCommand: String? = null
+
     var testCommand: String? = null
+
+    @Column(nullable = false)
     var gradeCommand: String? = null
 
     @Column(nullable = false)
     var timeLimit = 30
 
     @ManyToOne(cascade = [CascadeType.ALL])
-    @JoinColumn(name = "assignment_id")
+    @JoinColumn(nullable = false, name = "assignment_id")
     var assignment: Assignment? = null
 
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])

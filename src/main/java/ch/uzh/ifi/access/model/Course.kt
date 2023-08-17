@@ -28,14 +28,11 @@ class Course {
     @Enumerated(EnumType.STRING)
     var defaultVisibility: Visibility? = null
 
-    @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var overrideVisibility: Visibility? = null
 
-    @Column(nullable = false)
     var overrideStart: LocalDateTime? = null
 
-    @Column(nullable = false)
     var overrideEnd: LocalDateTime? = null
 
     // This refers to the role created in keycloak for this course

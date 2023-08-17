@@ -278,6 +278,7 @@ class CourseService(
                 "Submission rejected - no remaining attempts!"
             )
         }
+        evaluationRepository.saveAndFlush(evaluation)
         val submission = submissionRepository.saveAndFlush(newSubmission)
         submissionDTO.files.stream().filter { fileDTO: SubmissionFileDTO -> Objects.nonNull(fileDTO.content) }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
