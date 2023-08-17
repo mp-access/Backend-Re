@@ -49,12 +49,6 @@ class CourseController (
         return courseService.getCourses()
     }
 
-    // TODO: remove?
-    /*
-    @GetMapping("/featured")
-    public List<CourseFeature> getFeaturedCourses() {
-        return courseService.getFeaturedCourses();
-    }*/
     @GetMapping("/{course}")
     //@PreAuthorize("hasRole(#course) or hasRole(#course+'-supervisor')")
     @PreAuthorize("hasRole(#course)")

@@ -74,17 +74,17 @@ class Task {
         return newEvaluation
     }
 
-    fun formCommand(type: Command?): String {
+    fun formCommand(type: Command): String? {
         return when (type) {
-            Command.RUN -> runCommand!!
-            Command.TEST -> testCommand!!
-            Command.GRADE -> gradeCommand!!
-            else -> "" // TODO: something better
+            Command.RUN -> runCommand
+            Command.TEST -> testCommand
+            Command.GRADE -> gradeCommand
+            else -> null
         }
     }
 
-    fun hasCommand(type: Command?): Boolean {
-        return !StringUtils.isBlank(formCommand(type))
+    fun hasCommand(type: Command): Boolean {
+        return formCommand(type) != null
     }
 
     val isTestable: Boolean

@@ -12,7 +12,7 @@ interface AssignmentRepository : JpaRepository<Assignment?, Long?> {
     fun findByCourse_SlugOrderByOrdinalNumDesc(courseSlug: String?): List<AssignmentWorkspace>
 
     @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.present and returnObject.get().published)")
-    fun findByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Optional<AssignmentWorkspace>
-    fun getByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Optional<Assignment>
+    fun findByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): AssignmentWorkspace?
+    fun getByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Assignment?
     fun existsByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Boolean
 }

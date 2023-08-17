@@ -54,23 +54,35 @@ class Evaluation {
     }
 
     @PostLoad
-    fun updateRemainingAttempts() { // TODO: safety
-        if (Objects.nonNull(task!!.attemptWindow)) submissions.stream()
-            .filter { submission: Submission -> submission.isGraded && submission.valid }
-            .map { obj: Submission -> obj.createdAt!! }.filter { createdAt: LocalDateTime ->
-                createdAt.isBefore(
-                    LocalDateTime.now()
-                )
-            }
-            .findFirst()
-            .ifPresent { createdAt: LocalDateTime ->
-                val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
-                    task!!.attemptWindow
-                )
-                if (task!!.maxAttempts!! - remainingAttempts!! <= refills) remainingAttempts = task!!.maxAttempts else {
-                    remainingAttempts = remainingAttempts!! + refills.toInt()
-                    nextAttemptAt = createdAt.plus(task!!.attemptWindow!!.multipliedBy(refills + 1))
+    fun updateRemainingAttempts() {
+        task?.attemptWindow.let {
+            submissions
+                .filter { it.isGraded && it.valid }
+                .map {
+                    it.createdAt
+                }.firstOrNull {
+                    it?.isBefore(
+                        LocalDateTime.now()
+                    ) ?: false
+                }?.let { createdAt ->
+                    task?.let {
+                        val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
+                            it.attemptWindow
+                        )
+                        it.maxAttempts?.let { maxAttempts ->
+                            remainingAttempts?.let { remainingAttempts ->
+                                if (maxAttempts - remainingAttempts <= refills) this.remainingAttempts =
+                                    maxAttempts else {
+                                    this.remainingAttempts = remainingAttempts + refills.toInt()
+                                    it.attemptWindow?.let { attemptWindow ->
+                                        nextAttemptAt = createdAt.plus(attemptWindow.multipliedBy(refills + 1))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                 }
-            }
+        }
     }
 }

@@ -35,7 +35,6 @@ import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.stream.Collectors
 import java.util.stream.Stream
-import kotlin.jvm.optionals.getOrElse
 
 @Service
 class CourseService(
@@ -80,12 +79,6 @@ class CourseService(
         return courseRepository.findCoursesBy()
     }
 
-    // TODO: is this necessary?
-    /*
-    public List<CourseFeature> getFeaturedCourses() {
-        return courseRepository.findCoursesByRestrictedFalse();
-        return courseRepository.findCoursesByRestrictedFalse();
-    }*/
     fun getCourseSummary(courseSlug: String): CourseSummary {
         return courseRepository.findCourseBySlug(courseSlug) ?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
@@ -97,11 +90,9 @@ class CourseService(
     }
 
     fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
-        return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
-            .orElseThrow {
-                ResponseStatusException( HttpStatus.NOT_FOUND,
+        return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
+            throw ResponseStatusException( HttpStatus.NOT_FOUND,
                     "No assignment found with the URL $assignmentSlug" )
-            }
     }
 
     fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
@@ -265,10 +256,12 @@ class CourseService(
 
     fun createSubmission(courseSlug: String?, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        if (!task.hasCommand(submissionDTO.command)) throw ResponseStatusException(
-            HttpStatus.FORBIDDEN,
-            "Submission rejected - no ${submissionDTO.command} command!"
-        )
+        submissionDTO.command?.let {
+            if (!task.hasCommand(it)) throw ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Submission rejected - no ${submissionDTO.command} command!"
+            )
+        }
         val evaluation = getEvaluation(task.id, submissionDTO.userId) ?: task.createEvaluation(submissionDTO.userId)
         val newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
         if (submissionDTO.restricted && newSubmission.isGraded) {
@@ -310,7 +303,7 @@ class CourseService(
                     })
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
-                        .withCmd("/bin/bash", "-c", task.formCommand(submission.command) + " &> logs.txt")
+                        .withCmd("/bin/bash", "-c", task.formCommand(submission.command!!) + " &> logs.txt")
                         .withHostConfig(
                             HostConfig().withMemory(536870912L).withPrivileged(true)
                                 .withBinds(Bind.parse("$submissionDir:$submissionDir"))

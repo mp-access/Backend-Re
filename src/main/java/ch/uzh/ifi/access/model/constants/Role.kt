@@ -17,6 +17,6 @@ enum class Role {
         return Joiner.on("-").skipNulls().join(courseSlug, jsonName)
     }
 
-    val subRole: Optional<Role>
-        get() = if (this == SUPERVISOR) Optional.of(ASSISTANT) else Optional.empty()
+    val subRole: Role?
+        get() = if (this == SUPERVISOR) ASSISTANT else null
 }

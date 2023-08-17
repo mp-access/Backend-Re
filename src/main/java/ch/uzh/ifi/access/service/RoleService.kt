@@ -42,7 +42,7 @@ class RoleService(
                     val userRoleComposites = Composites()
                     val associatedRoles: MutableSet<String> =
                         SetUtils.hashSet(courseSlug, role.jsonName)
-                    role.subRole.ifPresent { subRole -> associatedRoles.add(subRole.withCourse(courseSlug)) }
+                    role.subRole?.let { subRole -> associatedRoles.add(subRole.withCourse(courseSlug)) }
                     userRoleComposites.realm = associatedRoles
                     userRole.composites = userRoleComposites
                     accessRealm.roles().create(userRole)
@@ -54,8 +54,7 @@ class RoleService(
     fun registerMember(memberDTO: MemberDTO, rolesToAssign: List<RoleRepresentation>?): String {
         val member = accessRealm.users().search(memberDTO.email).stream().findFirst().map { user: UserRepresentation ->
             val userResource = accessRealm.users()[user.id]
-            val attributes =
-                Optional.ofNullable(user.attributes).orElseGet { HashMap() }
+            val attributes = user.attributes ?: HashMap()
             if (!attributes.containsKey("displayName")) {
                 attributes["displayName"] = listOf(memberDTO.name)
                 user.attributes = attributes

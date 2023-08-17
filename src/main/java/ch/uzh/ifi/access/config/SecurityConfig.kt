@@ -32,21 +32,28 @@ class SecurityConfig(private val env: Environment) {
     }
 
     @Bean
-    @Throws(Exception::class)
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
-        http.sessionManagement().maximumSessions(1).sessionRegistry(activityRegistry())
-        http.authorizeHttpRequests { authorize ->
+        http.sessionManagement {
+            it.sessionConcurrency{
+                it.maximumSessions(1).sessionRegistry(activityRegistry())
+            }
+        }
+        .authorizeHttpRequests { authorize ->
             authorize
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
                 .anyRequest().authenticated()
         }
-            .oauth2ResourceServer().jwt().jwtAuthenticationConverter { source: Jwt ->
-                JwtAuthenticationToken(
-                    source,
-                    parsAuthorities(source),
-                    source.getClaimAsString("email")
-                )
+        .oauth2ResourceServer {
+            it.jwt {
+                it.jwtAuthenticationConverter { source: Jwt ->
+                    JwtAuthenticationToken(
+                        source,
+                        parsAuthorities(source),
+                        source.getClaimAsString("email")
+                    )
+                }
             }
+        }
         return http.build()
     }
 
