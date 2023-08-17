@@ -8,6 +8,7 @@ plugins {
     id("org.sonarqube") version "4.3.0.3225"
     id("io.freefair.lombok") version "8.2.2"
     id("com.github.ben-manes.versions") version "0.47.0"
+    id("org.flywaydb.flyway") version "9.21.1"
     kotlin("jvm") version "1.9.0"
     kotlin("plugin.spring") version "1.9.0"
     kotlin("plugin.jpa") version "1.9.0"
@@ -62,7 +63,8 @@ dependencies {
     implementation("org.apache.httpcomponents:httpcore:4.4.16")
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
     implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
-    implementation("org.apache.tika:tika-core:2.6.0")
+    implementation("org.apache.tika:tika-core:2.8.0")
+    implementation("org.flywaydb:flyway-core")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude("org.mockito", "mockito-core")
@@ -71,9 +73,10 @@ dependencies {
         exclude("org.junit.vintage", "junit-vintage-engine")
         exclude("junit", "junit")
     }
-    testImplementation("com.ninja-squad:springmockk:3.1.1")
-    testImplementation("org.junit.platform:junit-platform-suite:1.9.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.0")
+    testImplementation("com.ninja-squad:springmockk:4.0.2")
+    testImplementation("org.junit.platform:junit-platform-suite:1.10.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testImplementation("io.zonky.test:embedded-database-spring-test:2.3.0")
 }
 /*
 test {
@@ -134,3 +137,8 @@ tasks.withType<Test> {
     }
 }
 
+flyway {
+    url = "jdbc:postgresql://localhost:5432/access"
+    user = "admin"
+    password = "admin"
+}

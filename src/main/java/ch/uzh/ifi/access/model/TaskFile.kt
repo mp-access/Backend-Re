@@ -20,7 +20,7 @@ class TaskFile {
     var name: String? = null
 
     @Column(nullable = false)
-    private val language: String? = null
+    var language: String? = null
 
     @JsonIgnore
     @ManyToOne
