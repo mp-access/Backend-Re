@@ -29,7 +29,6 @@ class Assignment {
 
     @Column(nullable = false, name = "end_date")
     var end: LocalDateTime? = null
-    var maxPoints: Double? = null
 
     // assignments which are not enabled are not referenced by a course config
     // it could be that the assignments slug was changed

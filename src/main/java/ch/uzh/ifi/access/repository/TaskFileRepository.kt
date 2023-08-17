@@ -8,7 +8,8 @@ import java.util.*
 
 interface TaskFileRepository : JpaRepository<TaskFile?, Long?> {
     @Transactional
-    @PostFilter("hasRole(filterObject.task.assignment.course.slug + '-assistant') or filterObject.published")
+    // TODO: visibility based on date
+    //@PostFilter("hasRole(filterObject.task.assignment.course.slug + '-assistant') or filterObject.published")
     fun findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId: Long?): List<TaskFile>
 
     @Transactional

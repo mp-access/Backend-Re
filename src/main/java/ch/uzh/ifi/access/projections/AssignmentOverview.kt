@@ -17,9 +17,9 @@ interface AssignmentOverview {
     val startDate: LocalDateTime?
     val endDate: LocalDateTime?
     val countDown: List<Timer?>?
-    val isPublished: Boolean
     val isPastDue: Boolean
     val isActive: Boolean
+    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
     val maxPoints: Double?
 
     @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")

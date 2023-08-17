@@ -32,9 +32,9 @@ interface AssignmentWorkspace {
     @get:JsonFormat(pattern = "HH:mm")
     val dueTime: LocalDateTime?
     val countDown: List<Timer?>?
-    val isPublished: Boolean
     val isPastDue: Boolean
     val isActive: Boolean
+    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
     val maxPoints: Double?
 
     @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")

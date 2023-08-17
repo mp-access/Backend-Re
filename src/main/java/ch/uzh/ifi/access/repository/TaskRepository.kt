@@ -7,7 +7,9 @@ import org.springframework.security.access.prepost.PostAuthorize
 import java.util.*
 
 interface TaskRepository : JpaRepository<Task?, Long?> {
-    @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.get().published)")
+    // TODO: visibility based on date
+    //@PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.get().published)")
+    @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug))")
     fun findByAssignment_Course_SlugAndAssignment_SlugAndSlug(
         courseSlug: String?,
         assignmentSlug: String?,

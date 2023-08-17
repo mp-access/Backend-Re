@@ -17,9 +17,6 @@ interface TaskOverview {
     val maxAttempts: Int?
     fun setUserId(userId: String?)
 
-    @get:Value("#{target.assignment.published}")
-    val isPublished: Boolean
-
     @get:Value("#{target.assignment.active}")
     val isActive: Boolean
 

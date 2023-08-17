@@ -14,7 +14,6 @@ class TaskFile {
     var id: Long? = null
     var path: String? = null
     var name: String? = null
-    var publishDate: LocalDateTime? = null
     private val language: String? = null
 
     @JsonIgnore
@@ -46,6 +45,4 @@ class TaskFile {
 
     @Column(nullable = false)
     var instruction = false
-    val isPublished: Boolean
-        get() = Objects.nonNull(publishDate) && publishDate!!.isBefore(LocalDateTime.now())
 }

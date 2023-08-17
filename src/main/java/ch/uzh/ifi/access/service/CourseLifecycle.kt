@@ -93,7 +93,7 @@ class CourseLifecycle(
                 }
             }
             //assignment.setMaxPoints(assignment.getTasks().stream().filter(Task::enabled).mapToDouble(Task::getMaxPoints).sum());
-            assignment.maxPoints = assignment.tasks.map { it.maxPoints!! }.sum() // TODO: safety
+            //assignment.maxPoints = assignment.tasks.map { it.maxPoints!! }.sum() // TODO: safety
         }
         return courseRepository.save(course)
     }
