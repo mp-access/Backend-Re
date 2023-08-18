@@ -76,7 +76,6 @@ dependencies {
     testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation("org.junit.platform:junit-platform-suite:1.10.0")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
-    testImplementation("io.zonky.test:embedded-database-spring-test:2.3.0")
 }
 /*
 test {
