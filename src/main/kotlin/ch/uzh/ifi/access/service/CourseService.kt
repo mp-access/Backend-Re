@@ -76,7 +76,8 @@ class CourseService(
     }
 
     fun getCourses(): List<CourseOverview> {
-        return courseRepository.findCoursesBy()
+        //return courseRepository.findCoursesBy()
+        return courseRepository.findCoursesByAndDeletedFalse()
     }
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
@@ -338,19 +339,17 @@ class CourseService(
     }
 
     fun createCourse(repository: String?): Course {
-        val newCourse = Course()
-        newCourse.repository = repository
-        return courseLifecycle.importRepository(newCourse)
+        return courseLifecycle.createFromRepository(repository)
     }
 
     @Transactional
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
-        return courseLifecycle.importRepository(existingCourse)
+        return courseLifecycle.updateFromRepository(existingCourse)
     }
 
     @Transactional
-    fun deleteCourse(courseSlug: String): String {
+    fun deleteCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.delete(existingCourse)
     }

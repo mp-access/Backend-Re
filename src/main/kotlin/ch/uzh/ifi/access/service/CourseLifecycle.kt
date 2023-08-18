@@ -33,8 +33,24 @@ class CourseLifecycle(
 
 
 
-    fun importRepository(course: Course): Course {
-        val coursePath = createLocalRepository(course.repository!!) // TODO: safety
+    fun createFromRepository(repository: String?): Course {
+        val coursePath = cloneRepository(repository!!)
+        return createFromDirectory(coursePath, repository)
+    }
+
+    fun updateFromRepository(existingCourse: Course): Course {
+        val coursePath = cloneRepository(existingCourse.repository!!)
+        return updateFromDirectory(existingCourse, coursePath)
+    }
+
+    fun createFromDirectory(coursePath: Path, repository: String?): Course {
+        val course = Course()
+        course.repository = repository
+        return updateFromDirectory(course, coursePath)
+
+    }
+
+    fun updateFromDirectory(course: Course, coursePath: Path): Course {
         val courseDTO = cci.readCourseConfig(coursePath)
         val supervisor = roleService.getCurrentUser()
         val supervisorDTO = MemberDTO(supervisor, supervisor)
@@ -115,7 +131,7 @@ class CourseLifecycle(
         return taskFile
     }
 
-    private fun createLocalRepository(repository: String): Path {
+    private fun cloneRepository(repository: String): Path {
         val coursePath = workingDir.resolve("courses").resolve("course_" + Instant.now().toEpochMilli())
         return try {
             Git.cloneRepository().setURI(repository).setDirectory(coursePath.toFile()).call()
@@ -134,9 +150,10 @@ class CourseLifecycle(
         }
     }
 
-    fun delete(course: Course): String {
-        // TODO implement
-        return ""
+    fun delete(course: Course): Course {
+        course.deleted = true
+        course.slug = "DELETED_${course.slug}_${UUID.randomUUID()}" // TODO: not exactly elegant
+        return courseRepository.saveAndFlush(course)
     }
 }
 

@@ -13,6 +13,9 @@ class Course {
     @GeneratedValue
     var id: Long? = null
 
+    @Column(nullable = false)
+    var deleted: Boolean? = false
+
     @Column(unique = true, nullable = false)
     var slug: String? = null
 
