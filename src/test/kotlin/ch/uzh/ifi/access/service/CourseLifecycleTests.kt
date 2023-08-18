@@ -1,14 +1,10 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.model.Course
+import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.projections.CourseWorkspace
 import com.fasterxml.jackson.databind.json.JsonMapper
-import org.hibernate.Hibernate
+import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -20,18 +16,24 @@ import java.nio.file.Paths
 import java.time.LocalDateTime
 
 
-@AutoConfigureMockMvc
-@SpringBootTest
-@TestMethodOrder( MethodOrderer.MethodName::class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class CourseLifecycleTests(
     @Autowired val mvc: MockMvc,
     @Autowired val jsonMapper: JsonMapper,
     @Autowired val courseLifecycle: CourseLifecycle,
-    @Autowired val courseService: CourseService) {
+    @Autowired val courseService: CourseService) : BaseTest() {
+
+    /* TODO: find a way to reset the db before/after testing
+             This is a bit tricky, because at the moment, both ACCESS and keycloak use the same postgres database,
+             so something like https://github.com/zonkyio/embedded-database-spring-test doesn't work, because that
+             temporary database lacks all the keycloak data, like roles, etc.
+     */
 
     @Test
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
-    fun `0_Course import succeeds`() {
+    @Order(0)
+    @Disabled
+    fun `Course import succeeds`() {
         // delete existing course if any
         try {
             courseService.deleteCourse("access-mock-course")

@@ -15,7 +15,6 @@ import com.github.dockerjava.api.model.HostConfig
 import jakarta.transaction.Transactional
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
-import org.apache.commons.math3.util.Precision
 import org.apache.logging.log4j.util.Strings
 import org.keycloak.representations.idm.UserRepresentation
 import org.modelmapper.ModelMapper
@@ -36,11 +35,11 @@ import java.util.function.Consumer
 import java.util.stream.Collectors
 import java.util.stream.Stream
 
+// TODO: decide properly which parameters should be nullable
 @Service
 class CourseService(
     private val workingDir: Path,
     private val courseRepository: CourseRepository,
-    private val courseInformationRepository: CourseInformationRepository,
     private val assignmentRepository: AssignmentRepository,
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
@@ -51,6 +50,7 @@ class CourseService(
     private val modelMapper: ModelMapper,
     private val jsonMapper: JsonMapper,
     private val courseLifecycle: CourseLifecycle,
+    private val roleService: RoleService,
 ) {
     private fun verifyUserId(@Nullable userId: String?): String {
         return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().authentication.name)
@@ -86,6 +86,7 @@ class CourseService(
     }
 
 
+    // TODO: clean up these confusing method names
     fun getAssignments(courseSlug: String?): List<AssignmentWorkspace> {
         return assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
@@ -94,6 +95,14 @@ class CourseService(
         return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
             throw ResponseStatusException( HttpStatus.NOT_FOUND,
                     "No assignment found with the URL $assignmentSlug" )
+    }
+
+    fun getAssignmentBySlug(courseSlug: String?, assignmentSlug: String): Assignment {
+        return assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
+        throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No assignment found with the URL $assignmentSlug"
+            )
     }
 
     fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
@@ -133,7 +142,7 @@ class CourseService(
     }
 
     fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
-        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(taskId, userId)
+        return evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
     }
 
     fun getRemainingAttempts(taskId: Long?, userId: String?, maxAttempts: Int): Int {
@@ -208,12 +217,8 @@ class CourseService(
             .toList()
     }*/
 
-    fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
-        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.email)
-        return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
-    }
 
-    fun getTaskBySlug(courseSlug: String?, assignmentSlug: String?, taskSlug: String): Task {
+    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
         return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
             courseSlug,
             assignmentSlug,
@@ -259,7 +264,7 @@ class CourseService(
         submissionRepository.saveAndFlush(submission)
     }
 
-    fun createSubmission(courseSlug: String?, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
+    fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
@@ -360,4 +365,52 @@ class CourseService(
             LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), contactDTO.formatContent()
         )
     }
+
+    fun getStudents(courseSlug: String): List<StudentDTO>? {
+        return roleService.getMembers(courseSlug)?.map { student ->
+            getStudent( courseSlug, student )
+        }?.toList()
+    }
+
+    fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
+        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.email)
+        return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
+    }
+
+    private fun getTaskProgress(task: Task, userId: String): EvaluationSummary? {
+        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
+    }
+
+    fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): EvaluationSummary {
+        return getTaskProgress(getTaskBySlug(courseSlug, assignmentSlug, taskSlug), userId) ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No submissions found for $userId")
+    }
+
+    private fun getTasksProgress(assignment: Assignment, userId: String): List<EvaluationSummary> {
+        return assignment.tasks.mapNotNull { task -> getTaskProgress(task, userId) }
+    }
+
+    fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
+        val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
+        // TODO: now it just takes the "first" information language
+        return AssignmentProgressDTO(userId, assignmentSlug, assignment.information.map {it.value}.first().title, getTasksProgress(assignment, userId))
+    }
+
+    fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
+        val course: Course = getCourseBySlug(courseSlug)
+        return CourseProgressDTO(userId,
+            course.assignments.map { assignment ->
+                AssignmentProgressDTO(
+                    userId,
+                    assignment.slug,
+                    // TODO: now it just takes the "first" information language
+                    assignment.information.map { it.value }.first().title,
+                    getTasksProgress(assignment, userId)
+                )
+            }.toList())
+    }
+
+
+
+
 }

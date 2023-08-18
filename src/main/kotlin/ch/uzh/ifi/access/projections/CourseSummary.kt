@@ -6,12 +6,13 @@ import ch.uzh.ifi.access.model.dto.StudentDTO
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Projection(types = [Course::class])
 interface CourseSummary {
     val slug: String?
-    val startDate: LocalDate?
-    val endDate: LocalDate?
+    val overrideStart: LocalDateTime?
+    val overrideEnd: LocalDateTime?
     val information: Map<String?, CourseInformation?>?
 
     @get:Value("#{@courseService.getMaxPoints(target.slug)}")

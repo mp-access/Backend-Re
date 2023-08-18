@@ -2,9 +2,6 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
 import jakarta.persistence.*
-import lombok.Getter
-import lombok.Setter
-import org.apache.commons.lang3.StringUtils
 import java.time.Duration
 import java.util.*
 
@@ -61,7 +58,7 @@ class Task {
     val instructions: String?
         get() = files.filter { taskFile -> taskFile.enabled && taskFile.instruction }
             .first().template
-    val refill: Int?
+    val attemptRefill: Int?
         get() = if (Objects.nonNull(attemptWindow)) Math.toIntExact(attemptWindow!!.toHours()) else null
 
     fun createFile(): TaskFile {

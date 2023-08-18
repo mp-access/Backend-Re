@@ -3,8 +3,6 @@ package ch.uzh.ifi.access.model
 import com.fasterxml.jackson.annotation.JsonFormat
 import com.fasterxml.jackson.annotation.JsonGetter
 import jakarta.persistence.*
-import lombok.Getter
-import lombok.Setter
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 

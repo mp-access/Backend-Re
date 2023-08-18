@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.model.dto
 
 import lombok.Data
-import lombok.NoArgsConstructor
 
 @Data
 class AssignmentInformationDTO(

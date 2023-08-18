@@ -2,10 +2,6 @@ package ch.uzh.ifi.access.model
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
-import lombok.Getter
-import lombok.Setter
-import java.time.LocalDateTime
-import java.util.*
 
 @Entity
 class TaskFile {

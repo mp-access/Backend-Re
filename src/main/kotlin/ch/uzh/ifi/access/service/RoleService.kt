@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.MemberDTO
-import ch.uzh.ifi.access.model.dto.StudentDTO
 import org.apache.commons.collections4.SetUtils
 import org.keycloak.admin.client.CreatedResponseUtil
 import org.keycloak.admin.client.resource.RealmResource
@@ -16,6 +15,10 @@ import java.util.*
 import java.util.Map
 import java.util.function.Consumer
 import kotlin.collections.set
+import ch.uzh.ifi.access.model.dto.StudentDTO
+
+
+
 
 
 @Service
@@ -130,17 +133,9 @@ class RoleService(
         })
     }
 
-    fun getStudents(courseSlug: String?): List<StudentDTO>? {
-        return listOf()
-        /*return accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)].getRoleUserMembers(0, 1000)
-            .stream().map<Any> { student: UserRepresentation? ->
-                getStudent(
-                    courseSlug,
-                    student
-                )
-            }.toList()
-
-         */
+    fun getMembers(courseSlug: String): MutableList<UserRepresentation>? {
+        return accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
+            .userMembers
     }
 
 }

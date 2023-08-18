@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.model.dto
 
 import ch.uzh.ifi.access.model.constants.Command
 import lombok.Data
-import lombok.NoArgsConstructor
 
 @Data
 class SubmissionDTO(

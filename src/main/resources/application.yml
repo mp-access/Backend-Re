@@ -28,5 +28,6 @@ logging:
   level:
     org.springframework:
       web.filter.CommonsRequestLoggingFilter: debug
+      security: DEBUG
     org.flywaydb: debug
 

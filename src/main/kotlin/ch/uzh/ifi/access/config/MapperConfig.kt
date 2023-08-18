@@ -23,6 +23,7 @@ class MapperConfig {
     fun jsonMapper(): JsonMapper {
         return JsonMapper.builder().addModule(JavaTimeModule())
             .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+            .enable(SerializationFeature.INDENT_OUTPUT)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .build()
@@ -32,6 +33,7 @@ class MapperConfig {
     fun tomlMapper(): TomlMapper {
         return TomlMapper.builder().addModule(JavaTimeModule())
             .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+            .enable(SerializationFeature.INDENT_OUTPUT)
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
             .build()

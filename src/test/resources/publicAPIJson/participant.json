@@ -1,0 +1,19 @@
+{
+  "userId" : "alice@example.org",
+  "assignments" : [ {
+    "userId" : "alice@example.org",
+    "url" : "hello",
+    "title" : "Hello, World!",
+    "tasks" : [ ]
+  }, {
+    "userId" : "alice@example.org",
+    "url" : "basics",
+    "title" : "Basics",
+    "tasks" : [ ]
+  }, {
+    "userId" : "alice@example.org",
+    "url" : "classes",
+    "title" : "Classes",
+    "tasks" : [ ]
+  } ]
+}

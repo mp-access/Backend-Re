@@ -1,13 +1,7 @@
 package ch.uzh.ifi.access.controller
 
-import ch.uzh.ifi.access.model.dto.ContactDTO
-import ch.uzh.ifi.access.model.dto.CourseDTO
-import ch.uzh.ifi.access.model.dto.StudentDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.projections.AssignmentWorkspace
-import ch.uzh.ifi.access.projections.CourseOverview
-import ch.uzh.ifi.access.projections.CourseWorkspace
-import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.model.dto.*
+import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
 import org.springframework.security.access.prepost.PreAuthorize
@@ -75,8 +69,8 @@ class CourseController (
     @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
     fun evaluateSubmission(
-        @PathVariable course: String?,
-        @PathVariable assignment: String?,
+        @PathVariable course: String,
+        @PathVariable assignment: String,
         @PathVariable task: String?,
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
@@ -85,16 +79,48 @@ class CourseController (
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
+    @GetMapping("/{course}/students")
+    @PreAuthorize("hasRole(#course + '-assistant')")
+    fun getStudents(@PathVariable course: String): List<StudentDTO?>? {
+        return courseService.getStudents(course)
+    }
+
+    @GetMapping("/{course}/participants")
+    fun getParticipants(@PathVariable course: String): List<StudentDTO?>? {
+        return courseService.getStudents(course)
+    }
 
     @PostMapping("/{course}/participants")
-    fun registerParticipants(@PathVariable course: String?, @RequestBody students: List<String>) {
+    fun registerParticipants(@PathVariable course: String, @RequestBody students: List<String>) {
         roleService.registerParticipants(course, students)
     }
 
-    @GetMapping("/{course}/students")
-    @PreAuthorize("hasRole(#course + '-assistant')")
-    fun getStudents(@PathVariable course: String?): List<StudentDTO?>? {
-        return roleService.getStudents(course)
+        @GetMapping("/{course}/participants/{participant}")
+        fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
+            return courseService.getCourseProgress(course, participant)
+        }
+
+        @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
+        fun getAssignmentProgress(
+            @PathVariable course: String,
+            @PathVariable assignment: String,
+            @PathVariable participant: String
+        ): AssignmentProgressDTO? {
+            return courseService.getAssignmentProgress(course, assignment, participant)
+        }
+
+        @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
+        fun getTaskProgress(
+            @PathVariable course: String, @PathVariable assignment: String,
+            @PathVariable task: String, @PathVariable participant: String
+        ): EvaluationSummary? {
+            return courseService.getTaskProgress(course, assignment, task, participant)
+        }
+
+        @GetMapping("/{course}/summary")
+    fun getCourseSummary(@PathVariable course: String): CourseSummary? {
+        return courseService.getCourseSummary(course)
     }
 
-}
+
+    }

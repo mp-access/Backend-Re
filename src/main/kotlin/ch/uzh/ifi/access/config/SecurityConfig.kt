@@ -7,6 +7,7 @@ import org.springframework.boot.web.servlet.ServletListenerRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.security.authorization.AuthorityAuthorizationDecision
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
@@ -17,9 +18,12 @@ import org.springframework.security.data.repository.query.SecurityEvaluationCont
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.web.session.HttpSessionEventPublisher
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
+import java.util.stream.Collectors
+
 
 @AllArgsConstructor
 @Configuration
@@ -27,9 +31,21 @@ import java.nio.file.Path
 @EnableMethodSecurity
 class SecurityConfig(private val env: Environment) {
 
-    private fun parsAuthorities(token: Jwt): Collection<GrantedAuthority> {
+    private fun parseAuthorities(authorities: List<String>): Collection<GrantedAuthority> {
+        return authorities.map { role: String? -> SimpleGrantedAuthority(role) }
+    }
+
+
+    private fun parseAuthorities(token: Jwt): Collection<GrantedAuthority> {
         return token.getClaimAsStringList("enrollments").map { role -> SimpleGrantedAuthority(role)}
     }
+
+    private fun isAuthorizedAPIKey(context: RequestAuthorizationContext): Boolean {
+        print(context.toString())
+        val apiKey = env.getProperty("API_KEY") ?: return false
+        return apiKey == context.request.getHeader("X-API-Key").lines().joinToString("")
+    }
+
 
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
@@ -41,14 +57,18 @@ class SecurityConfig(private val env: Environment) {
         .authorizeHttpRequests { authorize ->
             authorize
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
-                .anyRequest().authenticated()
+                .requestMatchers("/courses/{course}/participants/**", "/courses/{course}/summary").access { _, context ->
+                    AuthorityAuthorizationDecision(isAuthorizedAPIKey(context), parseAuthorities(listOf("supervisor")))
+                }
+
+            .anyRequest().authenticated()
         }
         .oauth2ResourceServer {
             it.jwt {
                 it.jwtAuthenticationConverter { source: Jwt ->
                     JwtAuthenticationToken(
                         source,
-                        parsAuthorities(source),
+                        parseAuthorities(source),
                         source.getClaimAsString("email")
                     )
                 }

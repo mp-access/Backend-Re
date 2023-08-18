@@ -1,0 +1,159 @@
+{
+  "assignments" : [ {
+    "start" : "2020-01-01T13:00:00",
+    "tasks" : [ {
+      "information" : {
+        "de" : {
+          "id" : 402,
+          "language" : "de",
+          "title" : "Hallo, Welt!",
+          "instructionsFile" : "instructions_de.md"
+        },
+        "en" : {
+          "id" : 403,
+          "language" : "en",
+          "title" : "Hello, World!",
+          "instructionsFile" : "instructions_en.md"
+        }
+      },
+      "slug" : "hello",
+      "maxPoints" : 1.0,
+      "dockerImage" : "python:latest",
+      "runCommand" : "python script.py",
+      "testCommand" : null,
+      "gradeCommand" : "python -m grading.tests",
+      "timeLimit" : 30,
+      "ordinalNum" : 1,
+      "maxAttempts" : 3,
+      "attemptRefill" : 24
+    } ],
+    "information" : {
+      "en" : {
+        "id" : 402,
+        "language" : "en",
+        "title" : "Hello, World!"
+      }
+    },
+    "slug" : "hello",
+    "maxPoints" : 1.0,
+    "end" : "2020-01-12T13:00:00"
+  }, {
+    "start" : "2023-01-01T13:00:00",
+    "tasks" : [ {
+      "information" : {
+        "de" : {
+          "id" : 404,
+          "language" : "de",
+          "title" : "Variabelzuweisung",
+          "instructionsFile" : "instructions_de.md"
+        },
+        "en" : {
+          "id" : 405,
+          "language" : "en",
+          "title" : "Variable assignment",
+          "instructionsFile" : "instructions_en.md"
+        }
+      },
+      "slug" : "variable-assignment",
+      "maxPoints" : 2.5,
+      "dockerImage" : "python:latest",
+      "runCommand" : "python script.py",
+      "testCommand" : "python -m unittest tests.py -v",
+      "gradeCommand" : "python -m grading.tests",
+      "timeLimit" : 30,
+      "ordinalNum" : 1,
+      "maxAttempts" : 3,
+      "attemptRefill" : 24
+    }, {
+      "information" : {
+        "en" : {
+          "id" : 406,
+          "language" : "en",
+          "title" : "Formula",
+          "instructionsFile" : "instructions_en.md"
+        }
+      },
+      "slug" : "formula",
+      "maxPoints" : 1.0,
+      "dockerImage" : "python:latest",
+      "runCommand" : "python script.py",
+      "testCommand" : "python -m unittest tests.py -v",
+      "gradeCommand" : "python -m grading.tests",
+      "timeLimit" : 30,
+      "ordinalNum" : 2,
+      "maxAttempts" : 10,
+      "attemptRefill" : 0
+    } ],
+    "information" : {
+      "en" : {
+        "id" : 403,
+        "language" : "en",
+        "title" : "Basics"
+      }
+    },
+    "slug" : "basics",
+    "maxPoints" : 3.5,
+    "end" : "2028-01-01T13:00:00"
+  }, {
+    "start" : "2028-01-01T13:00:00",
+    "tasks" : [ {
+      "information" : {
+        "en" : {
+          "id" : 407,
+          "language" : "en",
+          "title" : "Types of cars",
+          "instructionsFile" : "instructions_en.md"
+        }
+      },
+      "slug" : "multiple_inheritance_cars",
+      "maxPoints" : 4.5,
+      "dockerImage" : "python:latest",
+      "runCommand" : "python script.py",
+      "testCommand" : "python -m unittest discover -v public",
+      "gradeCommand" : "python -m unittest discover grading",
+      "timeLimit" : 30,
+      "ordinalNum" : 1,
+      "maxAttempts" : 5,
+      "attemptRefill" : 24
+    } ],
+    "information" : {
+      "en" : {
+        "id" : 404,
+        "language" : "en",
+        "title" : "Classes"
+      }
+    },
+    "slug" : "classes",
+    "maxPoints" : 4.5,
+    "end" : "2028-01-13T13:00:00"
+  } ],
+  "supervisors" : [ {
+    "name" : "supervisor@uzh.ch",
+    "email" : "supervisor@uzh.ch"
+  } ],
+  "information" : {
+    "de" : {
+      "id" : 402,
+      "language" : "de",
+      "title" : "ACCESS Demo-Kurs",
+      "description" : "Dieser Kurs demonstriert, wie man ACCESS-Kurse, -Übungen und -Aufgaben definiert.",
+      "university" : "Universität Zürich",
+      "period" : "Frühlings-Semester 2023"
+    },
+    "en" : {
+      "id" : 403,
+      "language" : "en",
+      "title" : "ACCESS Mock Course",
+      "description" : "This course demonstrates how to define ACCESS courses, assignments and tasks.",
+      "university" : "University of Zurich",
+      "period" : "Spring Semester 2023"
+    }
+  },
+  "slug" : "access-mock-course",
+  "students" : [ ],
+  "maxPoints" : 9.0,
+  "overrideStart" : "2023-01-01T13:00:00",
+  "overrideEnd" : "2028-01-01T13:00:00",
+  "assistants" : [ ],
+  "studentsCount" : 0
+}

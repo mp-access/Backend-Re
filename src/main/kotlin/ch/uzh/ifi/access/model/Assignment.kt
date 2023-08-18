@@ -2,8 +2,6 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.dao.Timer
 import jakarta.persistence.*
-import lombok.Getter
-import lombok.Setter
 import org.hibernate.annotations.OrderBy
 import java.time.Duration
 import java.time.LocalDateTime
