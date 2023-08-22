@@ -9,7 +9,7 @@ import java.time.LocalDateTime
 @Projection(types = [Assignment::class])
 interface AssignmentSummary {
     val slug: String?
-    val information: Map<String?, AssignmentInformation?>?
+    val information: Map<String?, AssignmentInformationPublic?>?
     val start: LocalDateTime?
     val end: LocalDateTime?
     @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")

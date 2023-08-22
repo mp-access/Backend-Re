@@ -21,7 +21,6 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 
 object JsonReference {
     fun get(filename: String): String {
@@ -64,8 +63,8 @@ class PublicAPITests(
     @Test
     @Order(2)
     fun `Can register 2 participants`() {
-        // curl -X POST 'http://localhost:8081/api/courses/access-mock-course/participants' -H 'Content-Type: application/json' -H 'X-API-Key: 1234' --data '["alice@example.org", "bob@example.org"]'
-        val payload = """["alice@example.org", "bob@example.org"]"""
+        // curl -X POST 'http://localhost:8081/api/courses/access-mock-course/participants' -H 'Content-Type: application/json' -H 'X-API-Key: 1234' --data '["alice@example.org", "student@uzh.ch"]'
+        val payload = """["alice@example.org", "student@uzh.ch"]"""
         mvc.perform(
             post("/courses/access-mock-course/participants")
                 .contentType("application/json")
@@ -88,7 +87,7 @@ class PublicAPITests(
             .andExpect(content().contentType("application/json"))
             .andExpect(content().json("""
                 [  { "firstName" : null, "lastName" : null, "email" : "alice@example.org", "points" : 0.0
-                }, { "firstName" : null, "lastName" : null, "email" : "bob@example.org",   "points" : 0.0 } ]
+                }, { "firstName" : "Student", "lastName" : "Test", "email" : "student@uzh.ch",   "points" : 0.0 } ]
                 """))
     }
 

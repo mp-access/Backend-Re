@@ -4,13 +4,11 @@
     "tasks" : [ {
       "information" : {
         "de" : {
-          "id" : 402,
           "language" : "de",
           "title" : "Hallo, Welt!",
           "instructionsFile" : "instructions_de.md"
         },
         "en" : {
-          "id" : 403,
           "language" : "en",
           "title" : "Hello, World!",
           "instructionsFile" : "instructions_en.md"
@@ -25,11 +23,10 @@
       "timeLimit" : 30,
       "ordinalNum" : 1,
       "maxAttempts" : 3,
-      "attemptRefill" : 24
+      "attemptRefill" : 86400
     } ],
     "information" : {
       "en" : {
-        "id" : 402,
         "language" : "en",
         "title" : "Hello, World!"
       }
@@ -42,13 +39,11 @@
     "tasks" : [ {
       "information" : {
         "de" : {
-          "id" : 404,
           "language" : "de",
           "title" : "Variabelzuweisung",
           "instructionsFile" : "instructions_de.md"
         },
         "en" : {
-          "id" : 405,
           "language" : "en",
           "title" : "Variable assignment",
           "instructionsFile" : "instructions_en.md"
@@ -63,11 +58,10 @@
       "timeLimit" : 30,
       "ordinalNum" : 1,
       "maxAttempts" : 3,
-      "attemptRefill" : 24
+      "attemptRefill" : 30
     }, {
       "information" : {
         "en" : {
-          "id" : 406,
           "language" : "en",
           "title" : "Formula",
           "instructionsFile" : "instructions_en.md"
@@ -82,11 +76,10 @@
       "timeLimit" : 30,
       "ordinalNum" : 2,
       "maxAttempts" : 10,
-      "attemptRefill" : 0
+      "attemptRefill" : 30
     } ],
     "information" : {
       "en" : {
-        "id" : 403,
         "language" : "en",
         "title" : "Basics"
       }
@@ -99,7 +92,6 @@
     "tasks" : [ {
       "information" : {
         "en" : {
-          "id" : 407,
           "language" : "en",
           "title" : "Types of cars",
           "instructionsFile" : "instructions_en.md"
@@ -114,11 +106,10 @@
       "timeLimit" : 30,
       "ordinalNum" : 1,
       "maxAttempts" : 5,
-      "attemptRefill" : 24
+      "attemptRefill" : 86400
     } ],
     "information" : {
       "en" : {
-        "id" : 404,
         "language" : "en",
         "title" : "Classes"
       }
@@ -133,7 +124,6 @@
   } ],
   "information" : {
     "de" : {
-      "id" : 402,
       "language" : "de",
       "title" : "ACCESS Demo-Kurs",
       "description" : "Dieser Kurs demonstriert, wie man ACCESS-Kurse, -Übungen und -Aufgaben definiert.",
@@ -141,7 +131,6 @@
       "period" : "Frühlings-Semester 2023"
     },
     "en" : {
-      "id" : 403,
       "language" : "en",
       "title" : "ACCESS Mock Course",
       "description" : "This course demonstrates how to define ACCESS courses, assignments and tasks.",

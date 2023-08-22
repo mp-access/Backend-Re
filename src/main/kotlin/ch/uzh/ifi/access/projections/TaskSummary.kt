@@ -9,7 +9,7 @@ interface TaskSummary {
     val slug: String?
     val ordinalNum: Int?
     val maxPoints: Double?
-    val information: Map<String?, TaskInformation?>?
+    val information: Map<String?, TaskInformationPublic?>?
     val maxAttempts: Int?
     val attemptRefill: Int?
     val dockerImage: String?

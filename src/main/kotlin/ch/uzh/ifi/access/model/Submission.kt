@@ -57,8 +57,8 @@ class Submission {
         get() = command!!.isGraded
 
     fun parseResults(results: Results) {
-        output = results.hint
-        if (Objects.nonNull(results.points)) {
+        output = results.hints?.firstOrNull()
+        if (results.points != null) {
             valid = true
             points = results.points
             evaluation!!.update(points)

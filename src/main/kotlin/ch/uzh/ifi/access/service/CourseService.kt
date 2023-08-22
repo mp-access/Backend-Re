@@ -131,9 +131,9 @@ class CourseService(
 
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
         val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        unrestricted.forEach(Consumer { submission: Submission ->
-            Optional.ofNullable(submission.logs).ifPresent { output: String? -> submission.output = output }
-        })
+        unrestricted.forEach { submission ->
+            submission.logs?.let { output -> submission.output = output }
+        }
         val restricted =
             submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
         return Stream.concat(unrestricted.stream(), restricted.stream())
@@ -234,7 +234,6 @@ class CourseService(
             .toList()
     }
 
-    @Throws(IOException::class)
     private fun readLogsFile(path: Path): String? {
         val logsFile = path.resolve("logs.txt").toFile()
         return if (!logsFile.exists()) null else FileUtils.readLines(
@@ -244,7 +243,6 @@ class CourseService(
             .limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR))
     }
 
-    @Throws(IOException::class)
     private fun readResultsFile(path: Path): Results {
         return jsonMapper.readValue(Files.readString(path.resolve("grade_results.json")), Results::class.java)
     }
@@ -273,6 +271,7 @@ class CourseService(
             )
         }
         val evaluation = getEvaluation(task.id, submissionDTO.userId) ?: task.createEvaluation(submissionDTO.userId)
+        evaluationRepository.saveAndFlush(evaluation)
         val newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
         if (submissionDTO.restricted && newSubmission.isGraded) {
             if (!task.assignment?.isActive!!) throw ResponseStatusException( // TODO: safety
@@ -284,7 +283,6 @@ class CourseService(
                 "Submission rejected - no remaining attempts!"
             )
         }
-        evaluationRepository.saveAndFlush(evaluation)
         val submission = submissionRepository.saveAndFlush(newSubmission)
         submissionDTO.files.stream().filter { fileDTO: SubmissionFileDTO -> Objects.nonNull(fileDTO.content) }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }

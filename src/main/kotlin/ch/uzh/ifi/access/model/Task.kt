@@ -59,7 +59,7 @@ class Task {
         get() = files.filter { taskFile -> taskFile.enabled && taskFile.instruction }
             .first().template
     val attemptRefill: Int?
-        get() = if (Objects.nonNull(attemptWindow)) Math.toIntExact(attemptWindow!!.toHours()) else null
+        get() = if (Objects.nonNull(attemptWindow)) Math.toIntExact(attemptWindow!!.toSeconds()) else null
 
     fun createFile(): TaskFile {
         val newTaskFile = TaskFile()

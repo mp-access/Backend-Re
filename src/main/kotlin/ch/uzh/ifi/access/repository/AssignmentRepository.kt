@@ -14,7 +14,7 @@ interface AssignmentRepository : JpaRepository<Assignment?, Long?> {
 
     // TODO: implement visibility based on date
     //@PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.present and returnObject.get().published)")
-    @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and returnObject.present)")
+    @PostAuthorize("hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug))") // and returnObject.present)")
     fun findByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): AssignmentWorkspace?
     fun getByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Assignment?
     fun existsByCourse_SlugAndSlug(courseSlug: String?, assignmentSlug: String?): Boolean

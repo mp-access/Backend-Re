@@ -27,7 +27,4 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getTeamMemberName(email: String?): MemberOverview?
     fun findCourseBySlug(courseSlug: String?): CourseSummary?
 
-    // TODO: remove?
-    //@PostFilter("not hasRole(filterObject.slug)")
-    //List<CourseFeature> findCoursesByRestrictedFalse();
 }

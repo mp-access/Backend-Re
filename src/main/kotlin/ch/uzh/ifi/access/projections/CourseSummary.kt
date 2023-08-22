@@ -13,7 +13,7 @@ interface CourseSummary {
     val slug: String?
     val overrideStart: LocalDateTime?
     val overrideEnd: LocalDateTime?
-    val information: Map<String?, CourseInformation?>?
+    val information: Map<String?, CourseInformationPublic?>?
 
     @get:Value("#{@courseService.getMaxPoints(target.slug)}")
     val maxPoints: Double?
