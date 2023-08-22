@@ -208,8 +208,8 @@ class CourseService(
                 .reversed()).toList()
     }
 
-    fun getTeamMembers(memberIds: List<String>): List<MemberOverview> {
-        return memberIds.map { courseRepository.getTeamMemberName(it)!! }.toList() // TODO: safety
+    fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {
+        return memberIds.map { courseRepository.getTeamMemberName(it)!! }.toSet() // TODO: safety
     }
 
     /*fun getInformation(infoIds: List<String?>): List<CourseInformation> {

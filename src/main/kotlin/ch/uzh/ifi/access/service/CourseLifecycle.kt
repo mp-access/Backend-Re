@@ -54,11 +54,11 @@ class CourseLifecycle(
         val courseDTO = cci.readCourseConfig(coursePath)
         val supervisor = roleService.getCurrentUser()
         val supervisorDTO = MemberDTO(supervisor, supervisor)
-        courseDTO.supervisors.add(supervisorDTO)
+        //courseDTO.supervisors.add(supervisorDTO)
         modelMapper.map(courseDTO, course)
         course.information.forEach { it.value.course = course }
         course.studentRole = roleService.createCourseRoles(course.slug)
-        course.supervisors = roleService.registerMember(courseDTO.supervisors, course.slug, Role.SUPERVISOR)
+        course.supervisors.add(roleService.registerMember(supervisorDTO, course.slug, Role.SUPERVISOR))
 
         // Disable all assignments, re-enable the relevant ones later
         course.assignments.forEach{ assignment -> assignment.enabled = false }

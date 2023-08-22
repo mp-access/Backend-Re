@@ -12,7 +12,6 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import java.util.*
-import java.util.Map
 import java.util.function.Consumer
 import kotlin.collections.set
 import ch.uzh.ifi.access.model.dto.StudentDTO
@@ -71,10 +70,10 @@ class RoleService(
                 newUser.email = memberDTO.email
                 newUser.isEnabled = true
                 newUser.isEmailVerified = true
-                newUser.attributes = Map.of(
+                newUser.attributes = mapOf(Pair(
                     "displayName",
-                    java.util.List.of(memberDTO.name)
-                )
+                    listOf(memberDTO.name)
+                ))
                 accessRealm.users()[CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser))]
             }
         member.roles().realmLevel().add(rolesToAssign)
@@ -97,17 +96,13 @@ class RoleService(
         member.roles().realmLevel().add(rolesToAssign)
     }
 
-    fun registerMember(newMembers: List<MemberDTO>, courseSlug: String?, role: Role): MutableList<String> {
+    fun registerMember(newMember: MemberDTO, courseSlug: String?, role: Role): String {
         val realmRole = accessRealm.roles()[role.withCourse(courseSlug)]
-        val existingMembers = realmRole.roleUserMembers
+        val existingMembers = realmRole.userMembers
         val rolesToAssign = listOf(realmRole.toRepresentation())
-        return newMembers.stream().map { memberDTO: MemberDTO ->
-            existingMembers.stream()
-                .map { obj: UserRepresentation -> obj.email }
-                .filter { email: String -> email == memberDTO.email }
-                .findFirst()
-                .orElseGet { registerMember(memberDTO, rolesToAssign) }
-        }.toList()
+        return existingMembers.map { obj -> obj.email }
+            .filter { email: String -> email == newMember.email }
+            .firstOrNull() ?: registerMember(newMember, rolesToAssign)
     }
 
     fun registerSupervisor(courseSlug: String?, supervisor: String?) {
@@ -118,7 +113,7 @@ class RoleService(
     fun registerParticipants(courseSlug: String?, students: List<String>) {
         val role = accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
         val rolesToAdd = java.util.List.of(role.toRepresentation())
-        role.roleUserMembers.stream()
+        role.userMembers.stream()
             .filter { member: UserRepresentation ->
                 students.stream().noneMatch { student: String -> student == member.email }
             }

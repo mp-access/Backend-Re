@@ -8,5 +8,4 @@ import org.springframework.data.rest.core.config.Projection
 interface CourseWorkspace : CourseOverview {
     @get:Value("#{@courseService.getAssignments(target.slug)}")
     val assignments: List<AssignmentWorkspace?>?
-    //Integer getRank();
 }

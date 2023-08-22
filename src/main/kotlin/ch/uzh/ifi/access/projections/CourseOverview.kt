@@ -26,8 +26,8 @@ interface CourseOverview {
     val studentsCount: Long?
 
     @get:Value("#{@courseService.getTeamMembers(target.supervisors)}")
-    val supervisors: List<MemberOverview?>?
+    val supervisors: Set<MemberOverview>?
 
     @get:Value("#{@courseService.getTeamMembers(target.assistants)}")
-    val assistants: List<MemberOverview?>?
+    val assistants: Set<MemberOverview>?
 }

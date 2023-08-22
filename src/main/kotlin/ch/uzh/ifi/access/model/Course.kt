@@ -20,6 +20,8 @@ class Course {
     @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     @MapKey(name = "language")
     var information: MutableMap<String, CourseInformation> = HashMap()
+
+    @Column(columnDefinition = "text")
     var logo: String? = null
 
     @Column(nullable = false)
@@ -47,10 +49,10 @@ class Course {
     var events: MutableList<Event> = ArrayList()
 
     @ElementCollection
-    var supervisors: MutableList<String> = ArrayList()
+    var supervisors: MutableSet<String> = mutableSetOf()
 
     @ElementCollection
-    var assistants: MutableList<String> = ArrayList()
+    var assistants: MutableSet<String> = mutableSetOf()
 
     @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=student_role)")
     var studentsCount = 0L

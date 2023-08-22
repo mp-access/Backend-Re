@@ -16,7 +16,7 @@ class CourseDTO (
     var studentRole: String? = null,
     var assistantRole: String? = null,
     var supervisorRole: String? = null,
-    var supervisors: MutableList<MemberDTO> = ArrayList(),
-    var assistants: MutableList<MemberDTO> = ArrayList(),
+    var supervisors: MutableSet<MemberDTO> = mutableSetOf(),
+    var assistants: MutableSet<MemberDTO> = mutableSetOf(),
     var assignments: MutableList<String> = ArrayList()
 )
