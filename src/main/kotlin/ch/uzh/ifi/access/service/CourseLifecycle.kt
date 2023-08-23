@@ -1,9 +1,6 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.model.Assignment
-import ch.uzh.ifi.access.model.Course
-import ch.uzh.ifi.access.model.Task
-import ch.uzh.ifi.access.model.TaskFile
+import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.MemberDTO
 import ch.uzh.ifi.access.repository.CourseRepository
@@ -59,6 +56,13 @@ class CourseLifecycle(
         course.information.forEach { it.value.course = course }
         course.studentRole = roleService.createCourseRoles(course.slug)
         course.supervisors.add(roleService.registerMember(supervisorDTO, course.slug, Role.SUPERVISOR))
+
+        // Disable all global files, re-enable the relevant ones later
+        course.globalFiles.forEach{ file -> file.enabled = false }
+        courseDTO.globalFiles
+        courseDTO.globalFiles?.grading?.forEach { filePath ->
+            createOrUpdateGlobalFile(course, coursePath, filePath).grading = true
+        }
 
         // Disable all assignments, re-enable the relevant ones later
         course.assignments.forEach{ assignment -> assignment.enabled = false }
@@ -133,6 +137,21 @@ class CourseLifecycle(
         taskFile.path = rootedFilePath
         taskFile.enabled = true
         return taskFile
+    }
+
+    private fun createOrUpdateGlobalFile(course: Course, parentPath: Path, path: String): GlobalFile {
+        val rootedFilePath = if (path.startsWith("/")) path else "/$path"
+        val unrootedFilePath = if (!path.startsWith("/")) path else path.substring(1)
+        val globalFile = course.globalFiles.stream()
+            .filter { existing -> existing.path == rootedFilePath }.findFirst()
+            .orElseGet { course.createFile() }
+        val globalFilePath = parentPath.resolve(unrootedFilePath)
+        val globalFileDTO = cci.readFile(globalFilePath)
+        modelMapper.map(globalFileDTO, globalFile)
+        globalFile.name = globalFilePath.fileName.toString()
+        globalFile.path = rootedFilePath
+        globalFile.enabled = true
+        return globalFile
     }
 
     private fun cloneRepository(repository: String): Path {

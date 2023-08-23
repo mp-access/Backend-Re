@@ -50,6 +50,22 @@ class CourseConfigImporter(
             course.information[field.key] = information
         }
 
+        val files = CourseFilesDTO()
+        config["global_files"].fields().forEachRemaining { field ->
+            val data = field.value
+            val filenames = ArrayList<String>()
+            data.forEach { filename ->
+                filenames.add(filename.asText())
+            }
+            when (field.key) {
+                "visible" -> files.visible = filenames
+                "editable" -> files.editable = filenames
+                "grading" -> files.grading = filenames
+                "solution" -> files.solution = filenames
+            }
+        }
+        course.globalFiles = files
+
         return course
 
     }

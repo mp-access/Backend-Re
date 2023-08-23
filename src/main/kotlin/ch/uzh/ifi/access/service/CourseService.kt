@@ -284,9 +284,11 @@ class CourseService(
             )
         }
         val submission = submissionRepository.saveAndFlush(newSubmission)
-        submissionDTO.files.stream().filter { fileDTO: SubmissionFileDTO -> Objects.nonNull(fileDTO.content) }
+        submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
         submission.valid = !submission.isGraded
+        val course = getCourseBySlug(courseSlug)
+        val globalFiles = course.globalFiles
         try {
             task.dockerImage?.let {
                 dockerClient.createContainerCmd(it).use { containerCmd ->
@@ -299,7 +301,7 @@ class CourseService(
                                 )
                             }
                         } })
-                    submission.files.forEach(Consumer { file: SubmissionFile ->
+                    submission.files.forEach { file ->
                         file.taskFile?.path?.let { it1 -> // TODO: cleanup
                             file.content?.let { it2 ->
                                 createLocalFile(
@@ -309,7 +311,15 @@ class CourseService(
                                 )
                             }
                         }
-                    })
+                    }
+                    globalFiles.forEach { file ->
+                        file.path?.let { it1 ->
+                            file.template?.let { it2 ->
+                                createLocalFile(submissionDir, it1, it2
+                                )
+                            }
+                        }
+                    }
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
                         .withCmd("/bin/bash", "-c", task.formCommand(submission.command!!) + " &> logs.txt")
@@ -319,7 +329,7 @@ class CourseService(
                         ).exec()
                     dockerClient.startContainerCmd(container.id).exec()
                     val statusCode = dockerClient.waitContainerCmd(container.id)
-                        .exec(WaitContainerResultCallback())
+                       .exec(WaitContainerResultCallback())
                         .awaitStatusCode(Math.min(task.timeLimit, 180).toLong(), TimeUnit.SECONDS)
                     //CourseService.log.info("Container {} finished with status {}", container.id, statusCode)
                     submission.logs = readLogsFile(submissionDir)

@@ -10,3 +10,5 @@ class TaskFilesDTO(
     var grading: List<String> = ArrayList(),
     var solution: List<String> = ArrayList()
 )
+
+class CourseFilesDTO : TaskFilesDTO()

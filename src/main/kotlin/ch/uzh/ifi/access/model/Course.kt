@@ -46,6 +46,9 @@ class Course {
     var assignments: MutableList<Assignment> = ArrayList()
 
     @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    var globalFiles: MutableList<GlobalFile> = java.util.ArrayList()
+
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
     var events: MutableList<Event> = ArrayList()
 
     @ElementCollection
@@ -70,5 +73,12 @@ class Course {
         assignments.add(newAssignment)
         newAssignment.course = this
         return newAssignment
+    }
+
+    fun createFile(): GlobalFile {
+        val newGlobalFile = GlobalFile()
+        globalFiles.add(newGlobalFile)
+        newGlobalFile.course = this
+        return newGlobalFile
     }
 }
