@@ -90,14 +90,15 @@ class CourseConfigImporter(
         task.refill = config["refill"].asInt()
         task.maxPoints = config["max_points"].asDouble()
 
-        config["information"].fields().forEachRemaining { field ->
+        val instructionFiles = config["information"].fields().asSequence().map { field ->
             val information = TaskInformationDTO()
             val data = field.value
             information.language = field.key
             information.title = data.get("title").asText()
             information.instructionsFile = data.get("instructions_file").asText()
             task.information[field.key] = information
-        }
+            information.instructionsFile!!
+        }.toList()
 
         val evaluator = TaskEvaluatorDTO()
         evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
@@ -107,6 +108,7 @@ class CourseConfigImporter(
         task.evaluator = evaluator
 
         val files = TaskFilesDTO()
+        files.instruction = instructionFiles
         config["files"].fields().forEachRemaining { field ->
             val data = field.value
             val filenames = ArrayList<String>()

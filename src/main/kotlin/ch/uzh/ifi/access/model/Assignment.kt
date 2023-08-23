@@ -42,17 +42,17 @@ class Assignment {
 
     @Transient
     var points: Double? = null
+
     val isPublished: Boolean
-        // TODO move to frontend
         get() = start!!.isBefore(LocalDateTime.now())
+
     val isPastDue: Boolean
-        // TODO move to frontend
         get() = end!!.isBefore(LocalDateTime.now())
+
     val isActive: Boolean
-        // TODO move to frontend
         get() = isPublished && !isPastDue
+
     val countDown: List<Timer>
-        // TODO move to frontend
         get() {
             val remaining = Duration.between(LocalDateTime.now(), end)
             return listOf(

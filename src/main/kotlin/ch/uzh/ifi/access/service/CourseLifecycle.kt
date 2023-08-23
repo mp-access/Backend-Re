@@ -81,6 +81,7 @@ class CourseLifecycle(
                 pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
                 modelMapper.map(taskDTO, task)
                 task.information.forEach { it.value.task = task }
+                val instructionFiles = task.information.values.map { it.instructionsFile }
 
                 task.ordinalNum = index + 1
                 task.dockerImage = taskDTO.evaluator!!.dockerImage // TODO: safety
@@ -94,6 +95,9 @@ class CourseLifecycle(
                 // Disable all files, re-enable the relevant ones later
                 task.files.forEach { file ->
                     file.enabled = false
+                }
+                taskDTO.files?.instruction?.forEach { filePath ->
+                    createOrUpdateTaskFile(task, taskPath, filePath).instruction = true
                 }
                 taskDTO.files?.visible?.forEach { filePath ->
                     createOrUpdateTaskFile(task, taskPath, filePath).visible = true

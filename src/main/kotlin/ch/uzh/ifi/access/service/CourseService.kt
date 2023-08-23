@@ -116,7 +116,7 @@ class CourseService(
 
     fun getTaskFiles(taskId: Long?, userId: String?): List<TaskFile> {
         val permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
-        permittedFiles.stream().filter { obj: TaskFile -> obj.editable }
+        permittedFiles.filter { file -> file.editable }
             .forEach { file: TaskFile ->
                 val latestSubmissionFile = submissionFileRepository.findTopByTaskFile_IdAndSubmission_UserIdOrderByIdDesc(file.id, userId)
                     latestSubmissionFile?.let { file.template = latestSubmissionFile.content}

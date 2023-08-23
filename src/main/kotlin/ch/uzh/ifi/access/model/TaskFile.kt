@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.model
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
+import java.time.LocalDateTime
 
 @Entity
 class TaskFile {
@@ -47,4 +48,7 @@ class TaskFile {
 
     @Column(nullable = false)
     var instruction = false
+
+    val isPublished: Boolean
+        get() = !grading && instruction || visible || (solution && task?.assignment?.isPastDue?: false)
 }

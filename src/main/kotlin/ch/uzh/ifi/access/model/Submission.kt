@@ -60,7 +60,8 @@ class Submission {
         output = results.hints?.firstOrNull()
         if (results.points != null) {
             valid = true
-            points = results.points
+            // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
+            points = minOf(results.points!!, maxPoints!!)
             evaluation!!.update(points)
         }
     }

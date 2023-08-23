@@ -4,6 +4,7 @@ import lombok.Data
 
 @Data
 class TaskFilesDTO(
+    var instruction: List<String> = ArrayList(),
     var visible: List<String> = ArrayList(),
     var editable: List<String> = ArrayList(),
     var grading: List<String> = ArrayList(),
