@@ -109,16 +109,15 @@ sonarqube {
  * These are already defined in the deployment environment (as GitHub Actions secrets).
  * For usage see the deployment script under .github/workflows/backend.yml.
  */
-/*
-bootBuildImage {
+
+tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     if (project.hasProperty("username")) {
-        imageName = "sealuzh/access-backend:re"
-        publish = true
-        docker.publishRegistry.username = project.property("username")
-        docker.publishRegistry.password = project.property("password")
+        imageName.set("sealuzh/access-backend:x")
+        publish.set(true)
+        docker.publishRegistry.username.set(project.property("username") as String)
+        docker.publishRegistry.password.set(project.property("password") as String)
     }
 }
- */
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
