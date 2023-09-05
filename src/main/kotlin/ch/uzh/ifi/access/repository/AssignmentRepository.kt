@@ -8,7 +8,7 @@ import org.springframework.security.access.prepost.PostFilter
 import java.util.*
 
 interface AssignmentRepository : JpaRepository<Assignment?, Long?> {
-    @PostFilter("filterObject.enabled and (hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and filterObject.isPublished))")
+    @PostFilter("filterObject.enabled and (hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and filterObject.isPublished) or hasRole(#courseSlug + '-supervisor'))")
     fun findByCourse_SlugOrderByOrdinalNumDesc(courseSlug: String?): List<AssignmentWorkspace>
 
     // TODO: implement visibility based on date

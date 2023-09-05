@@ -54,6 +54,7 @@ class SecurityConfig(private val env: Environment) {
                 it.maximumSessions(1).sessionRegistry(activityRegistry())
             }
         }
+        .csrf { it.ignoringRequestMatchers("/courses/{course}/participants/**", "/courses/{course}/summary") }
         .authorizeHttpRequests { authorize ->
             authorize
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
