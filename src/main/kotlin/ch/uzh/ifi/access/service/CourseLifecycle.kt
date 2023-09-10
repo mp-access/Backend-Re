@@ -2,11 +2,13 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Role
+import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.modelmapper.ModelMapper
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -30,19 +32,21 @@ class CourseLifecycle(
 
 
 
-    fun createFromRepository(repository: String?): Course {
-        val coursePath = cloneRepository(repository!!)
-        return createFromDirectory(coursePath, repository)
+    fun createFromRepository(courseDTO: CourseDTO): Course {
+        val coursePath = cloneRepository(courseDTO)
+        val course = Course()
+        course.repository = courseDTO.repository
+        course.repositoryUser = courseDTO.repositoryUser
+        course.repositoryPassword = courseDTO.repositoryPassword
+        return createFromDirectory(coursePath, course)
     }
 
     fun updateFromRepository(existingCourse: Course): Course {
-        val coursePath = cloneRepository(existingCourse.repository!!)
+        val coursePath = cloneRepository(existingCourse)
         return updateFromDirectory(existingCourse, coursePath)
     }
 
-    fun createFromDirectory(coursePath: Path, repository: String?): Course {
-        val course = Course()
-        course.repository = repository
+    fun createFromDirectory(coursePath: Path, course: Course): Course {
         return updateFromDirectory(course, coursePath)
 
     }
@@ -154,10 +158,24 @@ class CourseLifecycle(
         return globalFile
     }
 
-    private fun cloneRepository(repository: String): Path {
+    private fun cloneRepository(course: Course): Path {
+        return cloneRepository(course.repository!!, course.repositoryUser, course.repositoryPassword,)
+    }
+    private fun cloneRepository(courseDTO: CourseDTO): Path {
+        return cloneRepository(courseDTO.repository!!, courseDTO.repositoryUser, courseDTO.repositoryPassword, )
+
+    }
+    private fun cloneRepository(url: String, user: String?, password: String?): Path {
         val coursePath = workingDir.resolve("courses").resolve("course_" + Instant.now().toEpochMilli())
         return try {
-            Git.cloneRepository().setURI(repository).setDirectory(coursePath.toFile()).call()
+            val git = Git.cloneRepository()
+                .setURI(url)
+                .setDirectory(coursePath.toFile())
+            if (user != null && password != null) {
+                git
+                .setCredentialsProvider(UsernamePasswordCredentialsProvider(user, password))
+            }
+            git.call()
             coursePath
         } catch (e: GitAPIException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to clone repository")

@@ -351,8 +351,8 @@ class CourseService(
         Files.writeString(filePath, content)
     }
 
-    fun createCourse(repository: String?): Course {
-        return courseLifecycle.createFromRepository(repository)
+    fun createCourse(course: CourseDTO): Course {
+        return courseLifecycle.createFromRepository(course)
     }
 
     @Transactional

@@ -7,6 +7,8 @@ import java.time.LocalDateTime
 class CourseDTO (
     var slug: String? = null,
     var repository: String? = null,
+    var repositoryUser: String? = null,
+    var repositoryPassword: String? = null,
     var logo: String? = null,
     var information: MutableMap<String, CourseInformationDTO> = HashMap(),
     var defaultVisibility: String? = null,

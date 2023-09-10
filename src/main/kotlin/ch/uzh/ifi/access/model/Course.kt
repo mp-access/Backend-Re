@@ -27,6 +27,12 @@ class Course {
     @Column(nullable = false)
     var repository: String? = null
 
+    @Column(nullable = true)
+    var repositoryUser: String? = null
+
+    @Column(nullable = true)
+    var repositoryPassword: String? = null
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var defaultVisibility: Visibility? = null

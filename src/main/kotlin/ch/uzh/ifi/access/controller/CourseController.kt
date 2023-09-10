@@ -16,7 +16,7 @@ class CourseCreationController(
     @PostMapping("/create")
     @PreAuthorize("hasRole('supervisor')")
     fun createCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
-        return courseService.createCourse(courseDTO.repository).slug
+        return courseService.createCourse(courseDTO).slug
     }
 
 }
