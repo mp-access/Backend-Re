@@ -33,6 +33,9 @@ class Course {
     @Column(nullable = true)
     var repositoryPassword: String? = null
 
+    @Column(nullable = true)
+    var webhookSecret: String? = null
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var defaultVisibility: Visibility? = null

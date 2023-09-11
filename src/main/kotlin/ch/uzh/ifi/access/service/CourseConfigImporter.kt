@@ -98,9 +98,6 @@ class CourseConfigImporter(
         val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
         val task = TaskDTO()
 
-        config["authors"]?: throw InvalidCourseException()
-        config["license"]?: throw InvalidCourseException()
-
         task.slug = config["slug"].asText()
         task.maxAttempts = config["max_attempts"].asInt()
         task.refill = config["refill"].asInt()

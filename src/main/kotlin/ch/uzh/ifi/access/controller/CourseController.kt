@@ -5,12 +5,13 @@ import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
 import org.springframework.security.access.prepost.PreAuthorize
+import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 
 
 @RestController
-class CourseCreationController(
+class CourseRootController(
     private val courseService: CourseService,
 ) {
     @PostMapping("/create")
@@ -19,7 +20,27 @@ class CourseCreationController(
         return courseService.createCourse(courseDTO).slug
     }
 
+    @PostMapping("/contact")
+    fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
+        courseService.sendMessage(contactDTO!!)
+    }
+
 }
+
+@RestController
+@RequestMapping("/webhooks")
+class WebhooksController(
+    private val courseService: CourseService,
+) {
+    @PostMapping("/courses/{course}/update/gitlab")
+    fun updateCourse(@PathVariable("course") course: String,
+                     @RequestHeader("X-Gitlab-Token") secret: String) {
+        courseService.webhookUpdateCourse(course, secret)
+    }
+
+}
+
+
 @RestController
 @RequestMapping("/courses")
 class CourseController (
@@ -27,10 +48,6 @@ class CourseController (
     private val roleService: RoleService
 )
     {
-    @PostMapping("/contact")
-    fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
-        courseService.sendMessage(contactDTO!!)
-    }
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")

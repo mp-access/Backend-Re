@@ -9,6 +9,7 @@ class CourseDTO (
     var repository: String? = null,
     var repositoryUser: String? = null,
     var repositoryPassword: String? = null,
+    var webhookSecret: String? = null,
     var logo: String? = null,
     var information: MutableMap<String, CourseInformationDTO> = HashMap(),
     var defaultVisibility: String? = null,

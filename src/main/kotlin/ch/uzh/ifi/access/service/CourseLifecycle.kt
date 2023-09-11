@@ -38,6 +38,7 @@ class CourseLifecycle(
         course.repository = courseDTO.repository
         course.repositoryUser = courseDTO.repositoryUser
         course.repositoryPassword = courseDTO.repositoryPassword
+        course.webhookSecret = courseDTO.webhookSecret
         return createFromDirectory(coursePath, course)
     }
 

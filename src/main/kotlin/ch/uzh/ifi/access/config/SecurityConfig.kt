@@ -41,7 +41,6 @@ class SecurityConfig(private val env: Environment) {
     }
 
     private fun isAuthorizedAPIKey(context: RequestAuthorizationContext): Boolean {
-        print(context.toString())
         val apiKey = env.getProperty("API_KEY") ?: return false
         return apiKey == context.request.getHeader("X-API-Key").lines().joinToString("")
     }
@@ -54,11 +53,24 @@ class SecurityConfig(private val env: Environment) {
                 it.maximumSessions(1).sessionRegistry(activityRegistry())
             }
         }
-        .csrf { it.ignoringRequestMatchers("/courses/{course}/participants/**", "/courses/{course}/summary") }
+        .csrf { it.ignoringRequestMatchers(
+            "/courses/contact/**",
+            "/courses/{course}/summary",
+            "/courses/{course}/participants/**",
+            "/webhooks/**")
+        }
         .authorizeHttpRequests { authorize ->
             authorize
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/courses/contact/**").permitAll()
-                .requestMatchers("/courses/{course}/participants/**", "/courses/{course}/summary").access { _, context ->
+                .requestMatchers(
+                    "/v3/api-docs/**",
+                    "/swagger-ui/**",
+                    "/courses/contact/**",
+                    "/webhooks/**"
+                ).permitAll()
+                .requestMatchers(
+                    "/courses/{course}/participants/**",
+                    "/courses/{course}/summary"
+                ).access { _, context ->
                     AuthorityAuthorizationDecision(isAuthorizedAPIKey(context), parseAuthorities(listOf("supervisor")))
                 }
 

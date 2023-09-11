@@ -356,6 +356,15 @@ class CourseService(
     }
 
     @Transactional
+    fun webhookUpdateCourse(courseSlug: String, secret: String): Course? {
+        val existingCourse = getCourseBySlug(courseSlug)
+        if (existingCourse.webhookSecret != null && existingCourse.webhookSecret == secret) {
+            return updateCourse(courseSlug)
+        }
+        throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    }
+
+    @Transactional
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.updateFromRepository(existingCourse)
