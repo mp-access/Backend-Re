@@ -209,14 +209,8 @@ class CourseService(
     }
 
     fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {
-        return memberIds.map { courseRepository.getTeamMemberName(it)!! }.toSet() // TODO: safety
+        return memberIds.map { courseRepository.getTeamMemberName(it) }.filterNotNull().toSet()
     }
-
-    /*fun getInformation(infoIds: List<String?>): List<CourseInformation> {
-        return infoIds.map { infoId -> courseInformationRepository.getReferenceById(infoId) }
-            .toList()
-    }*/
-
 
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
         return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
