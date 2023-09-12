@@ -112,7 +112,7 @@ class RoleService(
 
     fun registerParticipants(courseSlug: String?, students: List<String>) {
         val role = accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
-        val rolesToAdd = java.util.List.of(role.toRepresentation())
+        val rolesToAdd = listOf(role.toRepresentation())
         role.userMembers.stream()
             .filter { member: UserRepresentation ->
                 students.stream().noneMatch { student: String -> student == member.email }
@@ -120,12 +120,34 @@ class RoleService(
             .forEach { member: UserRepresentation ->
                 accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
             }
-        students.forEach(Consumer { student: String? ->
-            registerMember(
+        students.forEach(Consumer { student: String ->
+            // this should just be student without brackets, but keycloak adds them when
+            // importing the CLAIM.swissEduIDLinkedAffiliationUniqueID attribute
+            // this is fixed in later keycloak versions (but only 20 runs on our kvm for now)
+            // TODO: revert to normal when upgrading to keycloak 21+
+            registerMemberWorkaround(
                 student,
+                "[${student}]",
                 rolesToAdd
             )
         })
+    }
+    // TODO: remove when upgrading keycloak
+    fun registerMemberWorkaround(email: String, username: String, rolesToAssign: List<RoleRepresentation>?) {
+        val member = accessRealm.users().search(username).stream().findFirst()
+            .map { user: UserRepresentation ->
+                accessRealm.users()[user.id]
+            }
+            .orElseGet {
+                val newUser =
+                    UserRepresentation()
+                newUser.email = email
+                newUser.username = username
+                newUser.isEnabled = true
+                newUser.isEmailVerified = true
+                accessRealm.users()[CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser))]
+            }
+        member.roles().realmLevel().add(rolesToAssign)
     }
 
     fun getMembers(courseSlug: String): MutableList<UserRepresentation>? {
