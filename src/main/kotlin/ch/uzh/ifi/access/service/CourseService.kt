@@ -415,7 +415,7 @@ class CourseService(
     fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
         // TODO: now it just takes the "first" information language
-        return AssignmentProgressDTO(userId, assignmentSlug, assignment.information.map {it.value}.first().title, getTasksProgress(assignment, userId))
+        return AssignmentProgressDTO(userId, assignmentSlug, assignment.information.map {it.value}.first().title!!, getTasksProgress(assignment, userId))
     }
 
     fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
@@ -424,9 +424,9 @@ class CourseService(
             course.assignments.map { assignment ->
                 AssignmentProgressDTO(
                     userId,
-                    assignment.slug,
+                    assignment.slug!!,
                     // TODO: now it just takes the "first" information language
-                    assignment.information.map { it.value }.first().title,
+                    assignment.information.map { it.value }.first().title!!,
                     getTasksProgress(assignment, userId)
                 )
             }.toList())

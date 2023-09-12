@@ -7,11 +7,12 @@ import org.springframework.beans.factory.annotation.Value
 interface EvaluationSummary {
     val userId: String?
 
-    @get:Value("#{target.task.url}")
+    @get:Value("#{target.task.slug}")
     val url: String?
 
-    @get:Value("#{target.task.title}")
-    val title: String?
+    // TODO: remove these once OLAT is updated to new summary spec
+    @get:Value("#{target.task.information?.get(\"en\")?.title?: \"Title unknown\"}")
+    val title: String
 
     @get:Value("#{target.task.maxAttempts}")
     val maxAttempts: String?

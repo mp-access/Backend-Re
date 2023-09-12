@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 class AssignmentProgressDTO (
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     val userId: String? = null,
+    //TODO: rename to slug when olat upgrades
     val url: String? = null,
     val title: String? = null,
     val tasks: List<EvaluationSummary>? = null
