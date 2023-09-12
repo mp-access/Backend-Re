@@ -356,6 +356,17 @@ class CourseService(
     }
 
     @Transactional
+    fun editCourse(course: CourseDTO): Course {
+        val existingCourse = getCourseBySlug(course.slug!!)
+        existingCourse.repository = course.repository
+        existingCourse.repositoryUser = course.repositoryUser
+        existingCourse.repositoryPassword = course.repositoryPassword
+        existingCourse.webhookSecret = course.webhookSecret
+        courseRepository.save(existingCourse)
+        return courseLifecycle.updateFromRepository(existingCourse)
+    }
+
+    @Transactional
     fun webhookUpdateCourse(courseSlug: String, secret: String): Course? {
         val existingCourse = getCourseBySlug(courseSlug)
         if (existingCourse.webhookSecret != null && existingCourse.webhookSecret == secret) {

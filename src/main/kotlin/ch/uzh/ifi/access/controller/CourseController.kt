@@ -20,6 +20,12 @@ class CourseRootController(
         return courseService.createCourse(courseDTO).slug
     }
 
+    @PostMapping("/edit")
+    @PreAuthorize("hasRole('supervisor')")
+    fun editCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
+        return courseService.editCourse(courseDTO).slug
+    }
+
     @PostMapping("/contact")
     fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
         courseService.sendMessage(contactDTO!!)
