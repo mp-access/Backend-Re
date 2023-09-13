@@ -35,6 +35,7 @@ class CourseLifecycle(
     fun createFromRepository(courseDTO: CourseDTO): Course {
         val coursePath = cloneRepository(courseDTO)
         val course = Course()
+        course.slug = courseDTO.slug
         course.repository = courseDTO.repository
         course.repositoryUser = courseDTO.repositoryUser
         course.repositoryPassword = courseDTO.repositoryPassword
@@ -53,11 +54,13 @@ class CourseLifecycle(
     }
 
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
+        val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
         val supervisor = roleService.getCurrentUser()
         val supervisorDTO = MemberDTO(supervisor, supervisor)
         //courseDTO.supervisors.add(supervisorDTO)
         modelMapper.map(courseDTO, course)
+        course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
         course.studentRole = roleService.createCourseRoles(course.slug)
         course.supervisors.add(roleService.registerMember(supervisorDTO, course.slug, Role.SUPERVISOR))
