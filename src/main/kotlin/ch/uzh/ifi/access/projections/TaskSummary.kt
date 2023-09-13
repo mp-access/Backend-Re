@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.projections
 
 import ch.uzh.ifi.access.model.Task
-import ch.uzh.ifi.access.model.TaskInformation
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 

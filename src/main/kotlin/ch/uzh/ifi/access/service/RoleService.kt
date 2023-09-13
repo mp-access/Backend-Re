@@ -14,10 +14,6 @@ import org.springframework.stereotype.Service
 import java.util.*
 import java.util.function.Consumer
 import kotlin.collections.set
-import ch.uzh.ifi.access.model.dto.StudentDTO
-
-
-
 
 
 @Service
@@ -115,7 +111,7 @@ class RoleService(
         val rolesToAdd = listOf(role.toRepresentation())
         role.userMembers.stream()
             .filter { member: UserRepresentation ->
-                students.stream().noneMatch { student: String -> student == member.email }
+                students.stream().noneMatch { student: String -> student == member.username }
             }
             .forEach { member: UserRepresentation ->
                 accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
@@ -134,7 +130,7 @@ class RoleService(
     }
     // TODO: remove when upgrading keycloak
     fun registerMemberWorkaround(email: String, username: String, rolesToAssign: List<RoleRepresentation>?) {
-        val member = accessRealm.users().search(username).stream().findFirst()
+        val member = accessRealm.users().searchByUsername(username, true).stream().findFirst()
             .map { user: UserRepresentation ->
                 accessRealm.users()[user.id]
             }

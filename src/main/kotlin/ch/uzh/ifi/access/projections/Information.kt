@@ -1,12 +1,9 @@
 package ch.uzh.ifi.access.projections
 
-import ch.uzh.ifi.access.model.*
-import ch.uzh.ifi.access.model.dao.Timer
-import com.fasterxml.jackson.annotation.JsonFormat
-import jakarta.persistence.Column
-import org.springframework.beans.factory.annotation.Value
+import ch.uzh.ifi.access.model.AssignmentInformation
+import ch.uzh.ifi.access.model.CourseInformation
+import ch.uzh.ifi.access.model.TaskInformation
 import org.springframework.data.rest.core.config.Projection
-import java.time.LocalDateTime
 
 @Projection(types = [CourseInformation::class])
 interface CourseInformationPublic {

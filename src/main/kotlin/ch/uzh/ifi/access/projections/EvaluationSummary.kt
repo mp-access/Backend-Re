@@ -1,7 +1,7 @@
 package ch.uzh.ifi.access.projections
 import ch.uzh.ifi.access.model.Evaluation
-import org.springframework.data.rest.core.config.Projection
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.rest.core.config.Projection
 
 @Projection(types = [Evaluation::class])
 interface EvaluationSummary {

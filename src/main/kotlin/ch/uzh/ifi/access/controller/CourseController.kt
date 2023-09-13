@@ -5,7 +5,6 @@ import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
 import org.springframework.security.access.prepost.PreAuthorize
-import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 
@@ -136,7 +135,7 @@ class CourseController (
         fun getTaskProgress(
             @PathVariable course: String, @PathVariable assignment: String,
             @PathVariable task: String, @PathVariable participant: String
-        ): EvaluationSummary? {
+        ): TaskProgressDTO? {
             return courseService.getTaskProgress(course, assignment, task, participant)
         }
 

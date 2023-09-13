@@ -4,16 +4,13 @@ import ch.uzh.ifi.access.model.dto.*
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.dataformat.toml.TomlMapper
+import org.apache.commons.codec.binary.Base64
+import org.apache.commons.compress.utils.FileNameUtils
+import org.apache.tika.Tika
 import org.springframework.stereotype.Service
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDateTime
-import java.util.*
-import org.apache.commons.codec.binary.Base64
-import org.apache.commons.compress.utils.FileNameUtils
-import org.apache.tika.Tika;
-import kotlin.collections.ArrayList
 
 @Service
 class CourseConfigImporter(

@@ -23,7 +23,6 @@ import org.springframework.lang.Nullable
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
-import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
@@ -399,17 +398,50 @@ class CourseService(
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
     }
 
-    private fun getTaskProgress(task: Task, userId: String): EvaluationSummary? {
+    private fun getEvaluation(task: Task, userId: String): EvaluationSummary? {
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
     }
 
-    fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): EvaluationSummary {
-        return getTaskProgress(getTaskBySlug(courseSlug, assignmentSlug, taskSlug), userId) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No submissions found for $userId")
+    fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
+        val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
+        val evaluation = getEvaluation(task, userId)
+        if (evaluation == null) {
+            return TaskProgressDTO(
+                userId,
+                taskSlug,
+                task.information?.get("en")?.title?: "Title unknown",
+                0.0,
+                task.maxPoints,
+                task.maxAttempts,
+                task.maxAttempts,
+                listOf()
+            )
+        } else {
+            return TaskProgressDTO(
+                userId,
+                taskSlug,
+                task.information?.get("en")?.title?: "Title unknown",
+                evaluation.bestScore,
+                task.maxPoints,
+                evaluation.remainingAttempts,
+                task.maxAttempts,
+                listOf()
+            )
+        }
     }
 
-    private fun getTasksProgress(assignment: Assignment, userId: String): List<EvaluationSummary> {
-        return assignment.tasks.mapNotNull { task -> getTaskProgress(task, userId) }
+    private fun getEvaluations(assignment: Assignment, userId: String): List<EvaluationSummary> {
+        return assignment.tasks.mapNotNull { task -> getEvaluation(task, userId) }
+    }
+    private fun getTasksProgress(assignment: Assignment, userId: String): List<TaskProgressDTO> {
+        return assignment.tasks.mapNotNull { task ->
+            getTaskProgress(
+                assignment.course!!.slug!!,
+                assignment.slug!!,
+                task.slug!!,
+                userId
+            )
+        }
     }
 
     fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
@@ -421,9 +453,9 @@ class CourseService(
     fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(userId,
-            course.assignments.map { assignment ->
+            course.assignments.filter{ it.isPublished }. map { assignment ->
                 AssignmentProgressDTO(
-                    userId,
+                    null,
                     assignment.slug!!,
                     // TODO: now it just takes the "first" information language
                     assignment.information.map { it.value }.first().title!!,

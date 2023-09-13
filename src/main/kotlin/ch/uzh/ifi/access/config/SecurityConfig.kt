@@ -22,7 +22,6 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.security.web.session.HttpSessionEventPublisher
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
-import java.util.stream.Collectors
 
 
 @AllArgsConstructor
