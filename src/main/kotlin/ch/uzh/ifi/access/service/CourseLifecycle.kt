@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
-import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
 import ch.uzh.ifi.access.repository.CourseRepository
@@ -35,7 +34,9 @@ class CourseLifecycle(
     fun createFromRepository(courseDTO: CourseDTO): Course {
         val coursePath = cloneRepository(courseDTO)
         val course = Course()
-        course.slug = courseDTO.slug
+        if (courseDTO.slug != "") {
+            course.slug = courseDTO.slug
+        }
         course.repository = courseDTO.repository
         course.repositoryUser = courseDTO.repositoryUser
         course.repositoryPassword = courseDTO.repositoryPassword
@@ -63,7 +64,7 @@ class CourseLifecycle(
         course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
         course.studentRole = roleService.createCourseRoles(course.slug)
-        course.supervisors.add(roleService.registerMember(supervisorDTO, course.slug, Role.SUPERVISOR))
+        course.supervisors.add(roleService.registerSupervisor(supervisorDTO, course.slug))
 
         // Disable all global files, re-enable the relevant ones later
         course.globalFiles.forEach{ file -> file.enabled = false }

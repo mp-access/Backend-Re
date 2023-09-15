@@ -62,7 +62,7 @@ class CourseController (
 
     @GetMapping("")
     fun getCourses(): List<CourseOverview> {
-        return courseService.getCourses()
+        return courseService.getCoursesOverview()
     }
 
     @GetMapping("/{course}")
@@ -114,7 +114,10 @@ class CourseController (
 
     @PostMapping("/{course}/participants")
     fun registerParticipants(@PathVariable course: String, @RequestBody students: List<String>) {
-        roleService.registerParticipants(course, students)
+        // set list of course students
+        courseService.registerStudents(course, students)
+        // update keycloak roles
+        roleService.updateStudentRoles(courseService.getCourseBySlug(course))
     }
 
         @GetMapping("/{course}/participants/{participant}")

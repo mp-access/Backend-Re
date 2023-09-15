@@ -73,10 +73,14 @@ class CourseService(
         return taskFileRepository.findById(fileId).get() ?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
     }
-
-    fun getCourses(): List<CourseOverview> {
+    fun getCoursesOverview(): List<CourseOverview> {
         //return courseRepository.findCoursesBy()
         return courseRepository.findCoursesByAndDeletedFalse()
+    }
+
+    fun getCourses(): List<Course> {
+        //return courseRepository.findCoursesBy()
+        return courseRepository.findAllByDeletedFalse()
     }
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
@@ -394,7 +398,7 @@ class CourseService(
     }
 
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
-        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.email)
+        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
     }
 
@@ -464,7 +468,10 @@ class CourseService(
             }.toList())
     }
 
-
-
+    fun registerStudents(courseSlug: String, students: List<String>) {
+        val course: Course = getCourseBySlug(courseSlug)
+        course.registeredStudents = students.toMutableSet()
+        courseRepository.save(course)
+    }
 
 }

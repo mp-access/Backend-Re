@@ -20,6 +20,8 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesByAndDeletedFalse(): List<CourseOverview>
 
+    fun findAllByDeletedFalse(): List<Course>
+
     @Query(
         nativeQuery = true, value = "SELECT a.value AS name, :email AS email FROM user_attribute a " +
                 "WHERE a.name='displayName' AND a.user_id=(SELECT e.id FROM user_entity e WHERE e.email=:email)"

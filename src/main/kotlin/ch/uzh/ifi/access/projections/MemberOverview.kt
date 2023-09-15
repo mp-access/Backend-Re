@@ -2,5 +2,5 @@ package ch.uzh.ifi.access.projections
 
 interface MemberOverview {
     val name: String?
-    val email: String?
+    val username: String?
 }

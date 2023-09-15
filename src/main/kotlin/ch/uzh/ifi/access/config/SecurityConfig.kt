@@ -1,12 +1,16 @@
 package ch.uzh.ifi.access.config
 
+import ch.uzh.ifi.access.service.CourseService
+import ch.uzh.ifi.access.service.RoleService
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
 import org.springframework.boot.web.servlet.ServletListenerRegistrationBean
+import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.security.authentication.event.AuthenticationSuccessEvent
 import org.springframework.security.authorization.AuthorityAuthorizationDecision
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -20,6 +24,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
 import org.springframework.security.web.session.HttpSessionEventPublisher
+import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
 
@@ -133,5 +138,26 @@ class SecurityConfig(private val env: Environment) {
             "admin-cli"
         )
         return keycloakClient.realm("access")
+    }
+}
+
+@Component
+class AuthenticationSuccessListener(
+    val courseService: CourseService,
+    val roleService: RoleService
+) : ApplicationListener<AuthenticationSuccessEvent> {
+
+    override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
+        println("TRIGGER 1")
+        val username = event.authentication.name
+        roleService.getUserRepresentationForUsername(username)?.let {
+            println("TRIGGER 2")
+            if (it.attributes?.containsKey("roles_synced_at") != true) {
+                courseService.getCourses().forEach { course ->
+                    println("TRIGGER 3")
+                    roleService.updateStudentRoles(course, username)
+                }
+            }
+        }
     }
 }

@@ -1,9 +1,9 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.MemberDTO
 import org.apache.commons.collections4.SetUtils
-import org.keycloak.admin.client.CreatedResponseUtil
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
@@ -11,9 +11,9 @@ import org.keycloak.representations.idm.UserRepresentation
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.*
-import java.util.function.Consumer
-import kotlin.collections.set
 
 
 @Service
@@ -24,6 +24,10 @@ class RoleService(
     fun getCurrentUser(): String {
         val authentication: Authentication = SecurityContextHolder.getContext().authentication
         return authentication.name
+    }
+
+    fun getUserRepresentationForUsername(username: String): UserRepresentation? {
+        return accessRealm.users().search(username, true).firstOrNull()
     }
 
     fun createCourseRoles(courseSlug: String?): String? {
@@ -49,106 +53,88 @@ class RoleService(
             }.id
     }
 
-    fun registerMember(memberDTO: MemberDTO, rolesToAssign: List<RoleRepresentation>?): String {
-        val member = accessRealm.users().search(memberDTO.email).stream().findFirst().map { user: UserRepresentation ->
-            val userResource = accessRealm.users()[user.id]
-            val attributes = user.attributes ?: HashMap()
-            if (!attributes.containsKey("displayName")) {
-                attributes["displayName"] = listOf(memberDTO.name)
-                user.attributes = attributes
-                userResource.update(user)
-            }
-            userResource
+    fun registerSupervisor(memberDTO: MemberDTO, rolesToAssign: List<RoleRepresentation>?): String {
+        val member = accessRealm.users().search(memberDTO.username).stream().findFirst().map { user: UserRepresentation ->
+            accessRealm.users()[user.id].roles().realmLevel().add(rolesToAssign)
         }
-            .orElseGet {
-                val newUser =
-                    UserRepresentation()
-                newUser.email = memberDTO.email
-                newUser.isEnabled = true
-                newUser.isEmailVerified = true
-                newUser.attributes = mapOf(Pair(
-                    "displayName",
-                    listOf(memberDTO.name)
-                ))
-                accessRealm.users()[CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser))]
-            }
-        member.roles().realmLevel().add(rolesToAssign)
-        return memberDTO.email!! // TODO: safety
+        return memberDTO.username!! // TODO: safety
     }
 
-    fun registerMember(email: String?, rolesToAssign: List<RoleRepresentation>?) {
-        val member = accessRealm.users().search(email).stream().findFirst()
-            .map { user: UserRepresentation ->
-                accessRealm.users()[user.id]
-            }
-            .orElseGet {
-                val newUser =
-                    UserRepresentation()
-                newUser.email = email
-                newUser.isEnabled = true
-                newUser.isEmailVerified = true
-                accessRealm.users()[CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser))]
-            }
-        member.roles().realmLevel().add(rolesToAssign)
-    }
-
-    fun registerMember(newMember: MemberDTO, courseSlug: String?, role: Role): String {
+    fun registerSupervisor(newMember: MemberDTO, courseSlug: String?): String {
+        val role = Role.SUPERVISOR
         val realmRole = accessRealm.roles()[role.withCourse(courseSlug)]
         val existingMembers = realmRole.userMembers
         val rolesToAssign = listOf(realmRole.toRepresentation())
-        return existingMembers.map { obj -> obj.email }
-            .filter { email: String -> email == newMember.email }
-            .firstOrNull() ?: registerMember(newMember, rolesToAssign)
-    }
-
-    fun registerSupervisor(courseSlug: String?, supervisor: String?) {
-        val role = accessRealm.roles()[Role.SUPERVISOR.withCourse(courseSlug)].toRepresentation()
-        registerMember(MemberDTO(supervisor, supervisor), java.util.List.of(role))
-    }
-
-    fun registerParticipants(courseSlug: String?, students: List<String>) {
-        val role = accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
-        val rolesToAdd = listOf(role.toRepresentation())
-        role.userMembers.stream()
-            .filter { member: UserRepresentation ->
-                students.stream().noneMatch { student: String -> student == member.username }
-            }
-            .forEach { member: UserRepresentation ->
-                accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
-            }
-        students.forEach(Consumer { student: String ->
-            // this should just be student without brackets, but keycloak adds them when
-            // importing the CLAIM.swissEduIDLinkedAffiliationUniqueID attribute
-            // this is fixed in later keycloak versions (but only 20 runs on our kvm for now)
-            // TODO: revert to normal when upgrading to keycloak 21+
-            registerMemberWorkaround(
-                student,
-                "[${student}]",
-                rolesToAdd
-            )
-        })
-    }
-    // TODO: remove when upgrading keycloak
-    fun registerMemberWorkaround(email: String, username: String, rolesToAssign: List<RoleRepresentation>?) {
-        val member = accessRealm.users().searchByUsername(username, true).stream().findFirst()
-            .map { user: UserRepresentation ->
-                accessRealm.users()[user.id]
-            }
-            .orElseGet {
-                val newUser =
-                    UserRepresentation()
-                newUser.email = email
-                newUser.username = username
-                newUser.isEnabled = true
-                newUser.isEmailVerified = true
-                accessRealm.users()[CreatedResponseUtil.getCreatedId(accessRealm.users().create(newUser))]
-            }
-        member.roles().realmLevel().add(rolesToAssign)
+        return existingMembers.map { obj -> obj.username }
+            .filter { username: String -> username == newMember.username }
+            .firstOrNull() ?: registerSupervisor(newMember, rolesToAssign)
     }
 
     fun getMembers(courseSlug: String): MutableList<UserRepresentation>? {
         return accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
             .userMembers
+    }
+
+    fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
+        val matchByUsername = user.username == student
+        val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } ?: false
+        val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } ?: false
+        return (matchByUsername || matchByAffiliationID || matchByPersonID)
+    }
+
+    fun updateRoleTimestamp(user: UserRepresentation): UserRepresentation {
+        val currentAttributes = user.attributes ?: mutableMapOf()
+        currentAttributes["roles_synced_at"] = listOf(LocalDateTime.now().toString())
+        user.attributes = currentAttributes
+        return user
+    }
+
+    // TODO merge the next two methods
+    fun updateStudentRoles(course: Course) {
+        val students = course.registeredStudents
+        val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
+        val rolesToAdd = listOf(role.toRepresentation())
+        role.userMembers.stream()
+            .filter { member: UserRepresentation ->
+                students.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
+            }
+            .forEach { member: UserRepresentation ->
+                accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
+            }
+        accessRealm.users().list().forEach { user ->
+            students
+                .filter { studentMatchesUser(it, user) }
+                .map {
+                    accessRealm.users()[user.id].roles().realmLevel().add(rolesToAdd)
+                    accessRealm.users()[user.id].update(updateRoleTimestamp(user))
+                    println("UPDATE STUDENT ROLES 1")
+                }
+        }
+    }
+
+    fun updateStudentRoles(course: Course, username: String) {
+        val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
+        val rolesToAdd = listOf(role.toRepresentation())
+        println("$$$$$$ 1 $$$$$$$$")
+        role.userMembers.stream()
+            .filter {
+                studentMatchesUser(username, it)
+            }
+            .forEach {
+                println("$$$$ A $$$$")
+                accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
+            }
+        println("$$$$$$ 2 $$$$$$$$")
+        accessRealm.users().list().forEach {
+            println("$$$$$$ filter $$$$$$$$")
+            if (studentMatchesUser(username, it)) {
+                println("$$$$ B $$$$$$$$$$$$$$$$$$$$$$$")
+                accessRealm.users()[it.id].roles().realmLevel().add(rolesToAdd)
+                accessRealm.users()[it.id].update(updateRoleTimestamp(it))
+                println("UPDATE STUDENT ROLES 2")
+            }
+        }
+        println("$$$$$$ 3 $$$$$$$$")
     }
 
 }
