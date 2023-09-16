@@ -292,9 +292,7 @@ class CourseService(
             task.dockerImage?.let {
                 try  {
                     dockerClient.inspectImageCmd(it).exec()
-                    println("found")
                 }catch (e: NotFoundException) {
-                    println("pulling")
                     dockerClient.pullImageCmd(it)
                         .exec(PullImageResultCallback())
                         .awaitCompletion()
