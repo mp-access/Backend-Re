@@ -107,7 +107,6 @@ class RoleService(
                 .map {
                     accessRealm.users()[user.id].roles().realmLevel().add(rolesToAdd)
                     accessRealm.users()[user.id].update(updateRoleTimestamp(user))
-                    println("UPDATE STUDENT ROLES 1")
                 }
         }
     }
@@ -115,26 +114,19 @@ class RoleService(
     fun updateStudentRoles(course: Course, username: String) {
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
-        println("$$$$$$ 1 $$$$$$$$")
         role.userMembers.stream()
             .filter {
                 studentMatchesUser(username, it)
             }
             .forEach {
-                println("$$$$ A $$$$")
                 accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
             }
-        println("$$$$$$ 2 $$$$$$$$")
         accessRealm.users().list().forEach {
-            println("$$$$$$ filter $$$$$$$$")
             if (studentMatchesUser(username, it)) {
-                println("$$$$ B $$$$$$$$$$$$$$$$$$$$$$$")
                 accessRealm.users()[it.id].roles().realmLevel().add(rolesToAdd)
                 accessRealm.users()[it.id].update(updateRoleTimestamp(it))
-                println("UPDATE STUDENT ROLES 2")
             }
         }
-        println("$$$$$$ 3 $$$$$$$$")
     }
 
 }

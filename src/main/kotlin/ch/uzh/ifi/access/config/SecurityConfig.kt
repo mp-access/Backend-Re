@@ -148,13 +148,10 @@ class AuthenticationSuccessListener(
 ) : ApplicationListener<AuthenticationSuccessEvent> {
 
     override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
-        println("TRIGGER 1")
         val username = event.authentication.name
         roleService.getUserRepresentationForUsername(username)?.let {
-            println("TRIGGER 2")
             if (it.attributes?.containsKey("roles_synced_at") != true) {
                 courseService.getCourses().forEach { course ->
-                    println("TRIGGER 3")
                     roleService.updateStudentRoles(course, username)
                 }
             }

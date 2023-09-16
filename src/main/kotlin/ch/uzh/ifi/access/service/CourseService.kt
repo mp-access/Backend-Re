@@ -9,7 +9,9 @@ import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.repository.*
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.command.PullImageResultCallback
 import com.github.dockerjava.api.command.WaitContainerResultCallback
+import com.github.dockerjava.api.exception.NotFoundException
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import jakarta.transaction.Transactional
@@ -288,6 +290,15 @@ class CourseService(
         val globalFiles = course.globalFiles
         try {
             task.dockerImage?.let {
+                try  {
+                    dockerClient.inspectImageCmd(it).exec()
+                    println("found")
+                }catch (e: NotFoundException) {
+                    println("pulling")
+                    dockerClient.pullImageCmd(it)
+                        .exec(PullImageResultCallback())
+                        .awaitCompletion()
+                }
                 dockerClient.createContainerCmd(it).use { containerCmd ->
                     val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
                     getTaskFilesByContext(task.id, submission.isGraded)
@@ -470,8 +481,10 @@ class CourseService(
 
     fun registerStudents(courseSlug: String, students: List<String>) {
         val course: Course = getCourseBySlug(courseSlug)
+        println(students)
         course.registeredStudents = students.toMutableSet()
         courseRepository.save(course)
+        println(course.registeredStudents)
     }
 
 }
