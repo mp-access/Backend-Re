@@ -57,7 +57,7 @@ class Submission {
         get() = command!!.isGraded
 
     fun parseResults(results: Results) {
-        output = results.hints?.firstOrNull()
+        output = results.hints?.filterNotNull()?.firstOrNull()
         if (results.points != null) {
             valid = true
             // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
