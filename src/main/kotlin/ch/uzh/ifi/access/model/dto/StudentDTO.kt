@@ -1,11 +1,13 @@
 package ch.uzh.ifi.access.model.dto
 
-import lombok.Data
+import com.fasterxml.jackson.annotation.JsonInclude
 
-@Data
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 class StudentDTO(
     var firstName: String? = null,
     var lastName: String? = null,
     var email: String? = null,
-    var points: Double? = null
+    var points: Double? = null,
+    var username: String? = null,
+    var registrationId: String? = null
 )

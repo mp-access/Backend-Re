@@ -400,10 +400,20 @@ class CourseService(
         )
     }
 
-    fun getStudents(courseSlug: String): List<StudentDTO>? {
-        return roleService.getMembers(courseSlug)?.map { student ->
-            getStudent( courseSlug, student )
-        }?.toList()
+    fun getStudents(courseSlug: String): List<StudentDTO> {
+        val course = getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            val user = roleService.getUserByUsername(it)
+            if (user != null) {
+                val studentDTO = getStudent(courseSlug, user)
+                studentDTO.username = user.username
+                studentDTO.registrationId = it
+                studentDTO
+            }
+            else {
+                StudentDTO(registrationId = it)
+            }
+        }
     }
 
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {

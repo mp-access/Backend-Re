@@ -76,6 +76,12 @@ class RoleService(
             .userMembers
     }
 
+    fun getUserByUsername(username: String): UserRepresentation? {
+        return accessRealm.users().list().firstOrNull {
+            studentMatchesUser(username, it)
+        }
+    }
+
     fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
         val matchByUsername = user.username == student
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } ?: false

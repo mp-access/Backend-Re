@@ -103,13 +103,18 @@ class CourseController (
 
     @GetMapping("/{course}/students")
     @PreAuthorize("hasRole(#course + '-assistant')")
-    fun getStudents(@PathVariable course: String): List<StudentDTO?>? {
+    fun getStudents(@PathVariable course: String): List<StudentDTO?> {
         return courseService.getStudents(course)
     }
 
     @GetMapping("/{course}/participants")
-    fun getParticipants(@PathVariable course: String): List<StudentDTO?>? {
-        return courseService.getStudents(course)
+    fun getParticipants(@PathVariable course: String): List<StudentDTO?> {
+        return courseService.getStudents(course).map {
+            // setting these fields to null because OLAT can't ignore them TODO: update OLAT
+            it.username = null
+            it.registrationId = null
+            it
+        }.filter { it.email != null }
     }
 
     @PostMapping("/{course}/participants")
