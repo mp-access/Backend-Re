@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.MemberDTO
+import ch.uzh.ifi.access.model.dto.StudentDTO
 import org.apache.commons.collections4.SetUtils
 import org.hibernate.Hibernate
 import org.keycloak.admin.client.resource.RealmResource
@@ -89,11 +90,10 @@ class RoleService(
         return (matchByUsername || matchByAffiliationID || matchByPersonID)
     }
 
-    fun userRegisteredForCourse(user: UserRepresentation, course: Course): Boolean {
-        Hibernate.initialize(course.registeredStudents)
-        val matchByUsername = user.username in course.registeredStudents
-        val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in course.registeredStudents } ?: false
-        val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it in course.registeredStudents } ?: false
+    fun userRegisteredForCourse(user: UserRepresentation, registrationIDs: Set<String>): Boolean {
+        val matchByUsername = user.username in registrationIDs
+        val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in registrationIDs } ?: false
+        val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it in registrationIDs } ?: false
         return (matchByUsername || matchByAffiliationID || matchByPersonID)
     }
 
@@ -126,7 +126,7 @@ class RoleService(
         }
     }
 
-    fun updateStudentRoles(course: Course, username: String) {
+    fun updateStudentRoles(course: Course, registrationIDs: Set<String>, username: String) {
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
         role.userMembers.stream()
@@ -137,7 +137,7 @@ class RoleService(
                 accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
             }
         accessRealm.users().list().forEach {
-            if (studentMatchesUser(username, it) && userRegisteredForCourse(it, course)) {
+            if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registrationIDs)) {
                 accessRealm.users()[it.id].roles().realmLevel().add(rolesToAdd)
                 accessRealm.users()[it.id].update(updateRoleTimestamp(it))
             }

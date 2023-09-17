@@ -416,6 +416,13 @@ class CourseService(
         }
     }
 
+    @Transactional
+    fun updateStudentRoles(username: String) {
+        getCourses().forEach { course ->
+            roleService.updateStudentRoles(course, course.registeredStudents, username)
+        }
+    }
+
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
         val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
