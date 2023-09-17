@@ -5,6 +5,7 @@ import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
+import jakarta.transaction.Transactional
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
@@ -44,6 +45,7 @@ class CourseLifecycle(
         return createFromDirectory(coursePath, course)
     }
 
+    @Transactional
     fun updateFromRepository(existingCourse: Course): Course {
         val coursePath = cloneRepository(existingCourse)
         return updateFromDirectory(existingCourse, coursePath)
@@ -54,6 +56,7 @@ class CourseLifecycle(
 
     }
 
+    @Transactional
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
         val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
