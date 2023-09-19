@@ -14,6 +14,7 @@ import com.github.dockerjava.api.command.WaitContainerResultCallback
 import com.github.dockerjava.api.exception.NotFoundException
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
+import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
@@ -53,6 +54,9 @@ class CourseService(
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
 ) {
+
+    private val logger = KotlinLogging.logger {}
+
     private fun verifyUserId(@Nullable userId: String?): String {
         return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().authentication.name)
     }
@@ -419,6 +423,7 @@ class CourseService(
     @Transactional
     fun updateStudentRoles(username: String) {
         getCourses().forEach { course ->
+            logger.debug { "syncing to ${course.slug}"}
             roleService.updateStudentRoles(course, course.registeredStudents, username)
         }
     }

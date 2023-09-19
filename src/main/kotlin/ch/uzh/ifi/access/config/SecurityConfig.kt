@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.config
 
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
+import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
@@ -147,10 +148,13 @@ class AuthenticationSuccessListener(
     val roleService: RoleService
 ) : ApplicationListener<AuthenticationSuccessEvent> {
 
+    private val logger = KotlinLogging.logger {}
+
     override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
         val username = event.authentication.name
         roleService.getUserRepresentationForUsername(username)?.let { user ->
             if (user.attributes?.containsKey("roles_synced_at") != true) {
+                logger.debug { "syncing $username to courses" }
                 courseService.updateStudentRoles(username)
             }
         }

@@ -98,6 +98,7 @@ class CourseController (
         authentication: Authentication
     ) {
         submission.userId = authentication.name
+        // TODO: what prevents a client from sending a grading command with restricted = false?
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 

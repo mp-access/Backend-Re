@@ -65,7 +65,7 @@ dependencies {
     implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
     implementation("org.apache.tika:tika-core:2.8.0")
     implementation("org.flywaydb:flyway-core")
-    implementation("io.github.microutils:kotlin-logging-jvm:4.0.0-beta-2")
+    implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude("org.mockito", "mockito-core")
