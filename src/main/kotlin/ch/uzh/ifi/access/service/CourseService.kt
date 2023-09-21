@@ -444,22 +444,22 @@ class CourseService(
             return TaskProgressDTO(
                 userId,
                 taskSlug,
-                task.information?.get("en")?.title?: "Title unknown",
                 0.0,
                 task.maxPoints,
                 task.maxAttempts,
                 task.maxAttempts,
+                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
                 listOf()
             )
         } else {
             return TaskProgressDTO(
                 userId,
                 taskSlug,
-                task.information?.get("en")?.title?: "Title unknown",
                 evaluation.bestScore,
                 task.maxPoints,
                 evaluation.remainingAttempts,
                 task.maxAttempts,
+                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
                 listOf()
             )
         }
@@ -481,19 +481,21 @@ class CourseService(
 
     fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
-        // TODO: now it just takes the "first" information language
-        return AssignmentProgressDTO(userId, assignmentSlug, assignment.information.map {it.value}.first().title!!, getTasksProgress(assignment, userId))
+        return AssignmentProgressDTO(userId, assignmentSlug,
+            assignment.information.map { (language, info) -> language to AssignmentInformationDTO(info.language, info.title) }.toMap().toMutableMap(),
+            getTasksProgress(assignment, userId))
     }
 
     fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(userId,
+            course.information.map { (language, info) -> language to CourseInformationDTO(
+                info.language, info.title, info.description, info.university, info.period) }.toMap().toMutableMap(),
             course.assignments.filter{ it.isPublished }. map { assignment ->
                 AssignmentProgressDTO(
                     null,
                     assignment.slug!!,
-                    // TODO: now it just takes the "first" information language
-                    assignment.information.map { it.value }.first().title!!,
+                    assignment.information.map { (language, info) -> language to AssignmentInformationDTO(info.language, info.title) }.toMap().toMutableMap(),
                     getTasksProgress(assignment, userId)
                 )
             }.toList())

@@ -110,14 +110,7 @@ class CourseController (
 
     @GetMapping("/{course}/participants")
     fun getParticipants(@PathVariable course: String): List<StudentDTO?> {
-        return courseService.getStudents(course).map {
-            // OLAT expects email to be registrationID TODO: update OLAT
-            it.email = it.registrationId
-            // setting these fields to null because OLAT can't ignore them TODO: update OLAT
-            it.username = null
-            it.registrationId = null
-            it
-        }.filter { it.email != null && it.firstName != null && it.lastName != null }
+        return courseService.getStudents(course).filter { it.email != null && it.firstName != null && it.lastName != null }
     }
 
     @PostMapping("/{course}/participants")

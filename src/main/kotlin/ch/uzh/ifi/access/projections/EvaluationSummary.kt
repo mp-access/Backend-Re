@@ -10,10 +10,6 @@ interface EvaluationSummary {
     @get:Value("#{target.task.slug}")
     val url: String?
 
-    // TODO: remove these once OLAT is updated to new summary spec
-    @get:Value("#{target.task.information?.get(\"en\")?.title?: \"Title unknown\"}")
-    val title: String
-
     @get:Value("#{target.task.maxAttempts}")
     val maxAttempts: String?
 
