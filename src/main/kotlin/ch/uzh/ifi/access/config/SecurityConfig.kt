@@ -36,6 +36,8 @@ import java.nio.file.Path
 @EnableMethodSecurity
 class SecurityConfig(private val env: Environment) {
 
+    private val logger = KotlinLogging.logger {}
+
     private fun parseAuthorities(authorities: List<String>): Collection<GrantedAuthority> {
         return authorities.map { role: String? -> SimpleGrantedAuthority(role) }
     }
@@ -47,7 +49,11 @@ class SecurityConfig(private val env: Environment) {
 
     private fun isAuthorizedAPIKey(context: RequestAuthorizationContext): Boolean {
         val apiKey = env.getProperty("API_KEY") ?: return false
-        return apiKey == context.request.getHeader("X-API-Key").lines().joinToString("")
+        val headerKey = context.request.getHeader("X-API-Key")?.lines()?.joinToString("")
+        if (headerKey == null) {
+            logger.debug { "${context.request.requestURI}: Missing X-API-Key" }
+        }
+        return apiKey == headerKey
     }
 
 
