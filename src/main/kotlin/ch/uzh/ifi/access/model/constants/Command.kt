@@ -14,7 +14,7 @@ enum class Command {
     val jsonName: String
         get() = this.name.lowercase(Locale.getDefault())
     val displayName: String
-        get() = if (this == GRADE) "Submission" else name
+        get() = if (this == GRADE) "Submission" else name.replaceFirstChar(Char::titlecase)
     val isGraded: Boolean
         get() = this == GRADE
 }

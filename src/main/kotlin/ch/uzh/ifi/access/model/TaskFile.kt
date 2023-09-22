@@ -26,8 +26,7 @@ class TaskFile {
     @Column(nullable = false, columnDefinition = "text")
     var template: String? = null
 
-    @Transient
-    private val content: String? = null
+    @Column(nullable = false)
     var enabled = false
 
     @Column(nullable = false, name = "is_binary")
