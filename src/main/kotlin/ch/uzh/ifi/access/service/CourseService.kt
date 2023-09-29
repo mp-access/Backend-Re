@@ -139,7 +139,9 @@ class CourseService(
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
         val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
         unrestricted.forEach { submission ->
-            submission.logs?.let { output -> submission.output = output }
+            submission.logs?.let { output ->
+                submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+            }
         }
         val restricted =
             submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
