@@ -332,8 +332,11 @@ class CourseService(
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
                         .withCmd("/bin/bash", "-c", task.formCommand(submission.command!!) + " &> logs.txt")
                         .withHostConfig(
-                            HostConfig().withMemory(536870912L).withPrivileged(true)
+                            HostConfig()
+                                .withMemory(536870912L)
+                                .withPrivileged(true)
                                 .withBinds(Bind.parse("$submissionDir:$submissionDir"))
+                                .withAutoRemove(true)
                         ).exec()
                     dockerClient.startContainerCmd(container.id).exec()
                     val statusCode = dockerClient.waitContainerCmd(container.id)
