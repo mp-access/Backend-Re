@@ -377,6 +377,7 @@ class CourseService(
         if (existingCourse.webhookSecret != null && existingCourse.webhookSecret == secret) {
             return updateCourse(courseSlug)
         }
+        logger.debug { "Provided webhook secret does not match secret of course $courseSlug"}
         throw ResponseStatusException(HttpStatus.FORBIDDEN)
     }
 

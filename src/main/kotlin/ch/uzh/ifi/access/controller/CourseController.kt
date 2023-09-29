@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -37,9 +38,13 @@ class CourseRootController(
 class WebhooksController(
     private val courseService: CourseService,
 ) {
+
+    private val logger = KotlinLogging.logger {}
+
     @PostMapping("/courses/{course}/update/gitlab")
     fun updateCourse(@PathVariable("course") course: String,
                      @RequestHeader("X-Gitlab-Token") secret: String) {
+        logger.debug { "webhook triggered for $course"}
         courseService.webhookUpdateCourse(course, secret)
     }
 
