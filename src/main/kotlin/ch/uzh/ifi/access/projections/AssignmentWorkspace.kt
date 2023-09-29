@@ -43,5 +43,7 @@ interface AssignmentWorkspace {
 
     @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
     val points: Double?
+
+    @get:Value("#{@courseService.enabledTasksOnly(target.tasks)}")
     val tasks: List<TaskOverview?>?
 }

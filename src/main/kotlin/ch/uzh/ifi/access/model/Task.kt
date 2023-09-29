@@ -22,6 +22,11 @@ class Task {
     var information: MutableMap<String, TaskInformation> = HashMap()
 
     @Column(nullable = false)
+    // tasks which are not enabled are not referenced by any assignment config
+    // it could be that the assignments slug was changed
+    var enabled = false
+
+    @Column(nullable = false)
     var maxPoints: Double? = null
 
     @Column(nullable = false)

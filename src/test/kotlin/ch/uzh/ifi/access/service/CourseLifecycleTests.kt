@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.BaseTest
+import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.projections.CourseWorkspace
 import com.fasterxml.jackson.databind.json.JsonMapper
 import org.junit.jupiter.api.*
@@ -38,14 +39,14 @@ class CourseLifecycleTests(
         } catch (_: ResponseStatusException) {
         }
 
+        val course = Course()
+        course.slug = "access-mock-course"
+        course.repository = "https://github.com/mp-access/Mock-Course-Re.git"
         val path = "Mock-Course-Re"
         val file = File(path)
         val absolutePath = Paths.get(file.absolutePath)
 
-        courseLifecycle.createFromDirectory(
-            absolutePath,
-            "https://github.com/mp-access/Mock-Course-Re.git"
-        )
+        courseLifecycle.createFromDirectory( absolutePath, course )
 
         courseService.getCourseBySlug("access-mock-course")
     }
@@ -65,12 +66,13 @@ class CourseLifecycleTests(
         assertEquals(LocalDateTime.of(2028,1,1,13,0), getCourse().overrideEnd)
     }
     @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
+    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Imported course number of assignments correct`() {
+        println(getCourse().assignments)
         getCourse().assignments?.let { assertEquals(3, it.size) }
     }
     @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
+    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Imported course assignment numbers correct`() {
         assertEquals(setOf(1,2,3), getCourse().assignments?.map{ it?.ordinalNum }?.distinct()?.toSet())
     }

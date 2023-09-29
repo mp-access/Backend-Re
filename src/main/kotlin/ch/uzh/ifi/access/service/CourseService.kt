@@ -94,6 +94,9 @@ class CourseService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
+    fun enabledTasksOnly(tasks: List<Task>): List<Task> {
+        return tasks.filter { it.enabled }
+    }
 
     // TODO: clean up these confusing method names
     fun getAssignments(courseSlug: String?): List<AssignmentWorkspace> {

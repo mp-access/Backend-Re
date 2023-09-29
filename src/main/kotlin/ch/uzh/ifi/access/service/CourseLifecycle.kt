@@ -78,8 +78,11 @@ class CourseLifecycle(
             createOrUpdateGlobalFile(course, coursePath, filePath).grading = true
         }
 
-        // Disable all assignments, re-enable the relevant ones later
-        course.assignments.forEach{ assignment -> assignment.enabled = false }
+        // Disable all assignments and tasks, re-enable the relevant ones later
+        course.assignments.forEach{ assignment ->
+            assignment.tasks.forEach { task -> task.enabled = false }
+            assignment.enabled = false
+        }
         courseDTO.assignments.forEachIndexed { index, assignmentDir ->
             val assignmentPath = coursePath.resolve(assignmentDir)
             val assignmentDTO = cci.readAssignmentConfig(assignmentPath)
@@ -103,9 +106,7 @@ class CourseLifecycle(
                     }
                 logger.debug { "Updating task ${task.slug}"}
                 pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
-                logger.debug { "Mapping ${taskDTO.information} to ${task.information}"}
                 modelMapper.map(taskDTO, task)
-                logger.debug { "Task ${task.slug} en information title is ${task.information.get("en")?.title}"}
                 task.information.forEach { it.value.task = task }
                 val instructionFiles = task.information.values.map { it.instructionsFile }
 
@@ -114,6 +115,7 @@ class CourseLifecycle(
                 task.runCommand = taskDTO.evaluator!!.runCommand // TODO: safety
                 task.testCommand = taskDTO.evaluator!!.testCommand // TODO: safety
                 task.gradeCommand = taskDTO.evaluator!!.gradeCommand // TODO: safety
+                task.enabled = true
 
                 if (Objects.nonNull(taskDTO.refill) && taskDTO.refill!! > 0) task.attemptWindow =
                     Duration.of(taskDTO.refill!!.toLong(), ChronoUnit.SECONDS)
