@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.controller
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
+import ch.uzh.ifi.access.service.CourseServiceForCaching
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.security.access.prepost.PreAuthorize
@@ -55,6 +56,7 @@ class WebhooksController(
 @RequestMapping("/courses")
 class CourseController (
     private val courseService: CourseService,
+    private val courseServiceForCaching: CourseServiceForCaching,
     private val roleService: RoleService
 )
     {
@@ -107,15 +109,16 @@ class CourseController (
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
-    @GetMapping("/{course}/students")
-    @PreAuthorize("hasRole(#course + '-assistant')")
-    fun getStudents(@PathVariable course: String): List<StudentDTO?> {
-        return courseService.getStudents(course)
+    @GetMapping("/{courseSlug}/students")
+    @PreAuthorize("hasRole(#courseSlug + '-assistant')")
+    fun getStudents(@PathVariable courseSlug: String): List<StudentDTO> {
+        return courseServiceForCaching.getStudents(courseSlug)
     }
 
-    @GetMapping("/{course}/participants")
-    fun getParticipants(@PathVariable course: String): List<StudentDTO?> {
-        return courseService.getStudents(course).filter { it.email != null && it.firstName != null && it.lastName != null }
+    @GetMapping("/{courseSlug}/participants")
+    fun getParticipants(@PathVariable courseSlug: String): List<StudentDTO> {
+        return courseServiceForCaching.getStudents(courseSlug)
+            .filter { it.email != null && it.firstName != null && it.lastName != null }
     }
 
     @PostMapping("/{course}/participants")

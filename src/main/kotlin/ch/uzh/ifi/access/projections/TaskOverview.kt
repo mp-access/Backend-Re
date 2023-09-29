@@ -20,7 +20,7 @@ interface TaskOverview {
     @get:Value("#{target.assignment.active}")
     val isActive: Boolean
 
-    @get:Value("#{@courseService.calculateAvgTaskPoints(target.id)}")
+    @get:Value("#{@courseService.calculateAvgTaskPoints(target.slug)}")
     val avgPoints: Double?
 
     @get:Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")

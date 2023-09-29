@@ -21,6 +21,10 @@ import org.apache.commons.io.FileUtils
 import org.apache.logging.log4j.util.Strings
 import org.keycloak.representations.idm.UserRepresentation
 import org.modelmapper.ModelMapper
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Cacheable
+import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.lang.Nullable
 import org.springframework.security.core.context.SecurityContextHolder
@@ -36,6 +40,29 @@ import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.stream.Collectors
 import java.util.stream.Stream
+
+@Service
+class CourseServiceForCaching(
+    private val roleService: RoleService,
+    private val courseService: CourseService,
+) {
+
+    fun getStudents(courseSlug: String): List<StudentDTO> {
+        val course = courseService.getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            val user = roleService.getUserByUsername(it)
+            if (user != null) {
+                val studentDTO = courseService.getStudent(courseSlug, user)
+                studentDTO.username = user.username
+                studentDTO.registrationId = it
+                studentDTO
+            } else {
+                StudentDTO(registrationId = it)
+            }
+        }
+    }
+
+}
 
 // TODO: decide properly which parameters should be nullable
 @Service
@@ -58,7 +85,7 @@ class CourseService(
     private val logger = KotlinLogging.logger {}
 
     private fun verifyUserId(@Nullable userId: String?): String {
-        return Optional.ofNullable(userId).orElse(SecurityContextHolder.getContext().authentication.name)
+        return userId ?: SecurityContextHolder.getContext().authentication.name
     }
 
     fun getCourseBySlug(courseSlug: String): Course {
@@ -140,7 +167,11 @@ class CourseService(
         val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
         unrestricted.forEach { submission ->
             submission.logs?.let { output ->
-                submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+                if (submission.command == Command.GRADE) {
+                    submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+                } else {
+                    submission.output = output
+                }
             }
         }
         val restricted =
@@ -179,8 +210,9 @@ class CourseService(
         }.toList()
     }
 
-    fun calculateAvgTaskPoints(taskId: Long?): Double {
-        return evaluationRepository.findByTask_IdAndBestScoreNotNull(taskId).map {
+    @Cacheable(value = ["calculateAvgTaskPoints"], key = "#taskSlug")
+    fun calculateAvgTaskPoints(taskSlug: String?): Double {
+        return evaluationRepository.findByTask_SlugAndBestScoreNotNull(taskSlug).map {
             it.bestScore!! }.average().takeIf { it.isFinite() } ?: 0.0
     }
 
@@ -265,6 +297,10 @@ class CourseService(
         submissionRepository.saveAndFlush(submission)
     }
 
+    @Caching(evict = [
+        CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
+        CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
+    )
     fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         submissionDTO.command?.let {
@@ -425,6 +461,7 @@ class CourseService(
     }
 
     @Transactional
+    @CacheEvict(value = ["getUserByUsername"], key = "#username")
     fun updateStudentRoles(username: String) {
         getCourses().forEach { course ->
             logger.debug { "syncing to ${course.slug}"}
@@ -432,6 +469,7 @@ class CourseService(
         }
     }
 
+    @Cacheable(value = ["getStudent"], key = "#courseSlug + '-' + #user.username")
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
         val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
@@ -469,9 +507,6 @@ class CourseService(
         }
     }
 
-    private fun getEvaluations(assignment: Assignment, userId: String): List<EvaluationSummary> {
-        return assignment.tasks.mapNotNull { task -> getEvaluation(task, userId) }
-    }
     private fun getTasksProgress(assignment: Assignment, userId: String): List<TaskProgressDTO> {
         return assignment.tasks.mapNotNull { task ->
             getTaskProgress(

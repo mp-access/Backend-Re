@@ -11,6 +11,8 @@ import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
+import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Cacheable
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
@@ -80,6 +82,7 @@ class RoleService(
             .getUserMembers(0, -1)
     }
 
+    @Cacheable(value = ["getUserByUsername"], key = "#username")
     fun getUserByUsername(username: String): UserRepresentation? {
         return accessRealm.users().list(0, -1).firstOrNull {
             studentMatchesUser(username, it)

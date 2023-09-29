@@ -14,7 +14,7 @@ interface EvaluationRepository : JpaRepository<Evaluation?, Long?> {
 
     fun findTopByTask_IdAndUserIdOrderById(taskId: Long?, userId: String?): EvaluationSummary?
 
-    fun findByTask_IdAndBestScoreNotNull(taskId: Long?): List<Evaluation>
+    fun findByTask_SlugAndBestScoreNotNull(taskSlug: String?): List<Evaluation>
 
 
     @Query(
