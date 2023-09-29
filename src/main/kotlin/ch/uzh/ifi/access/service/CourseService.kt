@@ -243,7 +243,7 @@ class CourseService(
             logsFile,
             Charset.defaultCharset()
         ).stream()
-            .limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR))
+            .limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)).replace("\u0000", "")
     }
 
     private fun readResultsFile(path: Path): Results {
