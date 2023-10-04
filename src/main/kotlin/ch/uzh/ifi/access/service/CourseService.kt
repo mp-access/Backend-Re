@@ -274,8 +274,10 @@ class CourseService(
         return if (!logsFile.exists()) null else FileUtils.readLines(
             logsFile,
             Charset.defaultCharset()
-        ).stream()
-            .limit(50).collect(Collectors.joining(Strings.LINE_SEPARATOR)).replace("\u0000", "")
+        ).take(101).let { lines ->
+            if (lines.size > 100) lines.dropLast(1) + "[...]"
+            else lines
+        }.joinToString(separator = "\n").replace("\u0000", "")
     }
 
     private fun readResultsFile(path: Path): Results {
@@ -380,9 +382,17 @@ class CourseService(
                     val statusCode = dockerClient.waitContainerCmd(container.id)
                        .exec(WaitContainerResultCallback())
                         .awaitStatusCode(Math.min(task.timeLimit, 180).toLong(), TimeUnit.SECONDS)
-                    //CourseService.log.info("Container {} finished with status {}", container.id, statusCode)
                     submission.logs = readLogsFile(submissionDir)
-                    if (newSubmission.isGraded) newSubmission.parseResults(readResultsFile(submissionDir))
+                    if (newSubmission.isGraded) {
+                        // 137 means "out of memory"
+                        val results = if (statusCode == 137) {
+                            Results(null, listOf("Ran out of memory while grading solution. Make sure you aren't creating gigantic data structures."))
+                        }
+                        else {
+                            readResultsFile(submissionDir)
+                        }
+                        newSubmission.parseResults(results)
+                    }
                     FileUtils.deleteQuietly(submissionDir.toFile())
                 }
             }
@@ -545,7 +555,8 @@ class CourseService(
         println(students)
         course.registeredStudents = students.toMutableSet()
         courseRepository.save(course)
-        println(course.registeredStudents)
+        logger.debug { "Registered ${course.registeredStudents.size} in course $courseSlug"}
+        println()
     }
 
 }
