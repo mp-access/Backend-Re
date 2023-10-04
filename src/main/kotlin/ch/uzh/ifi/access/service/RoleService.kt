@@ -115,17 +115,20 @@ class RoleService(
         val students = course.registeredStudents
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
+        logger.debug { "A: updating roles for all students (roles to add: ${rolesToAdd})"}
         role.getUserMembers(0, -1)
             .filter { member: UserRepresentation ->
-                students.stream().noneMatch { student: String ->studentMatchesUser(student, member) }
+                students.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
             }
             .forEach { member: UserRepresentation ->
+                logger.debug { "A: removing roles ${rolesToAdd} from ${member.username}"}
                 accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
             }
         accessRealm.users().list(0, -1).forEach { user ->
             students
                 .filter { studentMatchesUser(it, user) }
                 .map {
+                    logger.debug { "A: adding roles ${rolesToAdd} from ${user.username}"}
                     accessRealm.users()[user.id].roles().realmLevel().add(rolesToAdd)
                     accessRealm.users()[user.id].update(updateRoleTimestamp(user))
                 }
@@ -135,17 +138,18 @@ class RoleService(
     fun updateStudentRoles(course: Course, registrationIDs: Set<String>, username: String) {
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
+        logger.debug { "B: updating roles for ${username} (roles to add: ${rolesToAdd})"}
         role.getUserMembers(0, -1)
             .filter {
                 studentMatchesUser(username, it)
             }
             .forEach {
-                logger.debug { "removing ${rolesToAdd} from ${username}"}
+                logger.debug { "B: removing ${rolesToAdd} from ${username}"}
                 accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
             }
         accessRealm.users().list(0, -1).forEach {
             if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registrationIDs)) {
-                logger.debug { "adding roles ${rolesToAdd} to ${it.username}" }
+                logger.debug { "B: adding roles ${rolesToAdd} to ${it.username}" }
                 accessRealm.users()[it.id].roles().realmLevel().add(rolesToAdd)
                 accessRealm.users()[it.id].update(updateRoleTimestamp(it))
             }
