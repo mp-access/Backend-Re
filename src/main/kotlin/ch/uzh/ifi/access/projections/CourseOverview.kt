@@ -21,7 +21,7 @@ interface CourseOverview {
     @get:Value("#{@courseService.getMaxPoints(target.slug)}")
     val maxPoints: Double?
 
-    @get:Value("#{@activityRegistry.getOnlineCount(target.slug)}")
+    @get:Value("#{@roleService.getOnlineCount(target.slug)}")
     val onlineCount: Long?
     val studentsCount: Long?
 

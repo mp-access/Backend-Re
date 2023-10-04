@@ -61,7 +61,7 @@ class SecurityConfig(private val env: Environment) {
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http.sessionManagement {
             it.sessionConcurrency{
-                it.maximumSessions(1).sessionRegistry(activityRegistry())
+                it.maximumSessions(1)
             }
         }
         .csrf { it.ignoringRequestMatchers(
@@ -107,18 +107,8 @@ class SecurityConfig(private val env: Environment) {
     }
 
     @Bean
-    fun activityRegistry(): ActivityRegistry {
-        return ActivityRegistry()
-    }
-
-    @Bean
     fun securityEvaluationContextExtension(): SecurityEvaluationContextExtension {
         return SecurityEvaluationContextExtension()
-    }
-
-    @Bean
-    fun httpSessionEventPublisher(): ServletListenerRegistrationBean<HttpSessionEventPublisher> {
-        return ServletListenerRegistrationBean(HttpSessionEventPublisher())
     }
 
     @Bean

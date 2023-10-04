@@ -8,6 +8,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.collections4.SetUtils
 import org.hibernate.Hibernate
 import org.keycloak.admin.client.resource.RealmResource
+import org.keycloak.admin.client.resource.UserResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
@@ -89,6 +90,11 @@ class RoleService(
         }
     }
 
+    @Cacheable(value = ["getUserRoles"], key = "#username")
+    fun getUserRoles(username: String, userId: String): MutableList<RoleRepresentation> {
+        return accessRealm.users()[userId].roles().realmLevel().listEffective()
+    }
+
     fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
         val matchByUsername = user.username == student
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
@@ -156,4 +162,17 @@ class RoleService(
         }
     }
 
+    fun getOnlineCount(courseSlug: String): Int {
+        val clientRepresentation = accessRealm.clients().findByClientId("access-client").get(0)
+        val resource = accessRealm.clients().get(clientRepresentation.id)
+        val sessions = resource.getUserSessions(0, 1000).filter {
+            // only care about users who are students in the given course
+            val roles = getUserRoles(it.username, it.userId)
+            val matchesRole = roles.any { role -> role.name == "$courseSlug-student"}
+            // users who were active in the last 5 minutes are considered online
+            val recentActivity = it.lastAccess + 300 < System.currentTimeMillis()
+            matchesRole && recentActivity
+        }
+        return sessions.size
+    }
 }

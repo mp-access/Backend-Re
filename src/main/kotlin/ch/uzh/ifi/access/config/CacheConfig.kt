@@ -15,6 +15,7 @@ class CacheConfig {
         return ConcurrentMapCacheManager(
             "calculateAvgTaskPoints",
             "getUserByUsername",
+            "getUserRoles",
             "getStudent")
     }
 }

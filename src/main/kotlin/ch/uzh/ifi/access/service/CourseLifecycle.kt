@@ -73,7 +73,6 @@ class CourseLifecycle(
 
         // Disable all global files, re-enable the relevant ones later
         course.globalFiles.forEach{ file -> file.enabled = false }
-        courseDTO.globalFiles
         courseDTO.globalFiles?.grading?.forEach { filePath ->
             createOrUpdateGlobalFile(course, coursePath, filePath).grading = true
         }

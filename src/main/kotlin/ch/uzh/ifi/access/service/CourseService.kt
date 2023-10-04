@@ -471,7 +471,10 @@ class CourseService(
     }
 
     @Transactional
-    @CacheEvict(value = ["getUserByUsername"], key = "#username")
+    @Caching(evict = [
+        CacheEvict(value = ["getUserByUsername"], key = "#username"),
+        CacheEvict(value = ["getUserRoles"], key = "#username")
+    ])
     fun updateStudentRoles(username: String) {
         getCourses().forEach { course ->
             logger.debug { "syncing to ${course.slug}"}
