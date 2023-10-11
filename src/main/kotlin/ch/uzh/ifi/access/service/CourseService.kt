@@ -368,21 +368,37 @@ class CourseService(
                             }
                         }
                     }
+                    // The student code is run on the tmpfs.
+                    // Main reason for this is that we have no other way of enforcing a disk quota.
+                    // TODO: make this size configurable in task config.toml?
+                    val tmpfs: Map<String, String> = mapOf(
+                        "/workspace" to "size=50M",
+                    )
+                    val command = (
+"""
+/bin/cp -R /submission/* /workspace/;
+${task.formCommand(submission.command!!)} &> logs.txt;
+/bin/cp /workspace/grade_results.json /submission/;
+/bin/cp /workspace/logs.txt /submission/;
+"""
+                    )
                     val container = containerCmd
-                        .withLabels(mapOf("userId" to submission.userId)).withWorkingDir(submissionDir.toString())
-                        .withCmd("/bin/bash", "-c", task.formCommand(submission.command!!) + " &> logs.txt")
+                        .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
+                        .withCmd("/bin/bash", "-c", command)
                         .withHostConfig(
                             HostConfig()
+                                .withTmpFs(tmpfs)
                                 .withMemory(536870912L)
                                 .withPrivileged(true)
-                                .withBinds(Bind.parse("$submissionDir:$submissionDir"))
+                                .withBinds(Bind.parse("$submissionDir:/submission"))
                                 .withAutoRemove(true)
                         ).exec()
                     dockerClient.startContainerCmd(container.id).exec()
                     val statusCode = dockerClient.waitContainerCmd(container.id)
                        .exec(WaitContainerResultCallback())
-                        .awaitStatusCode(Math.min(task.timeLimit, 180).toLong(), TimeUnit.SECONDS)
+                        .awaitStatusCode(task.timeLimit.coerceAtMost(180).toLong(), TimeUnit.SECONDS)
                     submission.logs = readLogsFile(submissionDir)
+                    println(statusCode)
                     if (newSubmission.isGraded) {
                         // 137 means "out of memory"
                         val results = if (statusCode == 137) {

@@ -163,7 +163,7 @@ class RoleService(
     }
 
     fun getOnlineCount(courseSlug: String): Int {
-        val clientRepresentation = accessRealm.clients().findByClientId("access-client").get(0)
+        val clientRepresentation = accessRealm.clients().findByClientId("access-client")[0]
         val resource = accessRealm.clients().get(clientRepresentation.id)
         val sessions = resource.getUserSessions(0, 1000).filter {
             // only care about users who are students in the given course
