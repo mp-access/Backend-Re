@@ -269,14 +269,17 @@ class CourseService(
             .toList()
     }
 
-    private fun readLogsFile(path: Path): String? {
+    private fun readLogsFile(path: Path): String {
         val logsFile = path.resolve("logs.txt").toFile()
-        return if (!logsFile.exists()) null else FileUtils.readLines(
-            logsFile,
-            Charset.defaultCharset()
-        ).take(101).let { lines ->
-            if (lines.size > 100) lines.dropLast(1) + "[...]"
-            else lines
+
+        return if (!logsFile.exists()) {
+            listOf("no log file")
+        } else {
+            val lines = FileUtils.readLines(logsFile, Charset.defaultCharset())
+            when {
+                lines.size > 100 -> lines.take(50) + "[... ${lines.size - 100} more lines ...]" + lines.takeLast(50)
+                else -> lines
+            }
         }.joinToString(separator = "\n").replace("\u0000", "")
     }
 
