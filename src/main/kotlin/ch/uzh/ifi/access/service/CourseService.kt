@@ -32,10 +32,12 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.nio.charset.Charset
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.stream.Collectors
@@ -398,26 +400,53 @@ ${task.formCommand(submission.command!!)} &> logs.txt;
                                 .withAutoRemove(true)
                         ).exec()
                     dockerClient.startContainerCmd(container.id).exec()
+
+                    val scheduler = Executors.newScheduledThreadPool(1)
+                    var killedContainer = false
+                    scheduler.schedule({
+                        try {
+                            dockerClient.stopContainerCmd(container.id).withTimeout(0).exec()
+                            killedContainer = true
+                            logger.debug { "Stopped container ${container.id}"}
+                        } catch (e: Exception) {
+                            logger.debug { "Container ${container.id} probably stopped already"}
+                        }
+                    }, task.timeLimit.coerceAtMost(180).toLong(), TimeUnit.SECONDS)
+
                     val statusCode = dockerClient.waitContainerCmd(container.id)
-                       .exec(WaitContainerResultCallback())
-                        .awaitStatusCode(task.timeLimit.coerceAtMost(180).toLong(), TimeUnit.SECONDS)
+                        .exec(WaitContainerResultCallback())
+                        .awaitStatusCode()
+
+                    scheduler.shutdown()
+
                     submission.logs = readLogsFile(submissionDir)
-                    println(statusCode)
+                    logger.debug { "Submission $submissionDir finished with statusCode $statusCode"}
                     if (newSubmission.isGraded) {
                         // 137 means "out of memory"
                         val results = if (statusCode == 137) {
-                            Results(null, listOf("Ran out of memory while grading solution. Make sure you aren't creating gigantic data structures."))
+                            logger.debug { "Submission $submissionDir exit code is 137"}
+                            if (killedContainer) {
+                                Results(0.0, listOf("Your solution ran out of time. Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters."))
+                            }
+                            else {
+                                Results(0.0, listOf("Your solution ran out of memory. Make sure you aren't creating gigantic data structures."))
+                            }
                         }
                         else {
-                            readResultsFile(submissionDir)
+                            try {
+                                readResultsFile(submissionDir)
+                            } catch (e: NoSuchFileException) {
+                                Results(0.0, listOf("Your solution generated too much data written to files or printed to the command line (printing in an infinite loop?)"))
+                            }
                         }
                         newSubmission.parseResults(results)
                     }
+                    // TODO: move to finally? For the moment, we keep failed submission dirs around for debugging.
                     FileUtils.deleteQuietly(submissionDir.toFile())
                 }
             }
         } catch (e: Exception) {
-            newSubmission.output = if (e.message!!.contains("timeout")) "Time limit exceeded" else e.message
+            newSubmission.output = "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug (providing as much detail as possible)."
         }
         submissionRepository.save(newSubmission)
     }
