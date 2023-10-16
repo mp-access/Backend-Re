@@ -212,8 +212,9 @@ class CourseService(
 
     @Cacheable(value = ["calculateAvgTaskPoints"], key = "#taskSlug")
     fun calculateAvgTaskPoints(taskSlug: String?): Double {
-        return evaluationRepository.findByTask_SlugAndBestScoreNotNull(taskSlug).map {
-            it.bestScore!! }.average().takeIf { it.isFinite() } ?: 0.0
+        return 0.0
+        //return evaluationRepository.findByTask_SlugAndBestScoreNotNull(taskSlug).map {
+        //    it.bestScore!! }.average().takeIf { it.isFinite() } ?: 0.0
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
