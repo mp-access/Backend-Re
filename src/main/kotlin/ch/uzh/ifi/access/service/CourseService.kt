@@ -382,10 +382,22 @@ class CourseService(
                     )
                     val command = (
 """
+# copy submitted files to tmpfs
 /bin/cp -R /submission/* /workspace/;
+# run command (the cwd is set to /workspace already)
 ${task.formCommand(submission.command!!)} &> logs.txt;
+# remember the command's exit code
+exit_code=${'$'}?; 
+# write results and logs to submission volume
 /bin/cp /workspace/grade_results.json /submission/;
 /bin/cp /workspace/logs.txt /submission/;
+# check if the tmpfs is full and if so, return 201, otherwise return command status code
+USAGE=${'$'}(df -h | grep /workspace | awk '{print ${'$'}5}' | sed 's/%//')
+if [ "${'$'}USAGE" -eq 100 ]; then
+    exit 201
+else
+    exit ${'$'}exit_code; 
+fi
 """
                     )
                     val container = containerCmd
@@ -399,7 +411,6 @@ ${task.formCommand(submission.command!!)} &> logs.txt;
                                 .withBinds(Bind.parse("$submissionDir:/submission"))
                                 .withAutoRemove(true)
                         ).exec()
-                    dockerClient.startContainerCmd(container.id).exec()
 
                     val scheduler = Executors.newScheduledThreadPool(1)
                     var killedContainer = false
@@ -412,6 +423,7 @@ ${task.formCommand(submission.command!!)} &> logs.txt;
                             logger.debug { "Container ${container.id} probably stopped already"}
                         }
                     }, task.timeLimit.coerceAtMost(180).toLong(), TimeUnit.SECONDS)
+                    dockerClient.startContainerCmd(container.id).exec()
 
                     val statusCode = dockerClient.waitContainerCmd(container.id)
                         .exec(WaitContainerResultCallback())
@@ -422,21 +434,41 @@ ${task.formCommand(submission.command!!)} &> logs.txt;
                     submission.logs = readLogsFile(submissionDir)
                     logger.debug { "Submission $submissionDir finished with statusCode $statusCode"}
                     if (newSubmission.isGraded) {
-                        // 137 means "out of memory"
-                        val results = if (statusCode == 137) {
-                            logger.debug { "Submission $submissionDir exit code is 137"}
-                            if (killedContainer) {
-                                Results(0.0, listOf("Your solution ran out of time. Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters."))
+                        val results = when (statusCode) {
+                            // out of memory
+                            137 -> {
+                                logger.debug { "Submission $submissionDir exit code is 137" }
+                                if (killedContainer) {
+                                    logger.debug { "Submission $submissionDir killed due to timeout" }
+                                    Results(
+                                        0.0,
+                                        listOf("Your solution ran out of time. Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters.")
+                                    )
+                                } else {
+                                    logger.debug { "Submission $submissionDir out of memory" }
+                                    Results(
+                                        0.0,
+                                        listOf("Your solution ran out of memory. Make sure you aren't creating gigantic data structures.")
+                                    )
+                                }
                             }
-                            else {
-                                Results(0.0, listOf("Your solution ran out of memory. Make sure you aren't creating gigantic data structures."))
+                            // out of tmpfs disk space
+                            201 -> {
+                                Results(
+                                    0.0,
+                                    listOf("Your solution wrote too much data, either to files, or by printing to the command line. Are you printing in an infinite loop?")
+                                )
                             }
-                        }
-                        else {
-                            try {
-                                readResultsFile(submissionDir)
-                            } catch (e: NoSuchFileException) {
-                                Results(0.0, listOf("Your solution generated too much data written to files or printed to the command line (printing in an infinite loop?)"))
+                            // none of the above, hopefully there are grading results
+                            else -> {
+                                try {
+                                    readResultsFile(submissionDir)
+                                } catch (e: NoSuchFileException) {
+                                    logger.debug { "Submission $submissionDir no grade_results.json" }
+                                    Results(null,
+                                        listOf("No grading results. Please report this as a bug and provide as much detail as possible.")
+                                    )
+                                }
                             }
                         }
                         newSubmission.parseResults(results)
@@ -446,7 +478,7 @@ ${task.formCommand(submission.command!!)} &> logs.txt;
                 }
             }
         } catch (e: Exception) {
-            newSubmission.output = "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug (providing as much detail as possible)."
+            newSubmission.output = "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         }
         submissionRepository.save(newSubmission)
     }
