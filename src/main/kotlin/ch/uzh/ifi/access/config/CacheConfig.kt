@@ -16,6 +16,8 @@ class CacheConfig {
             "calculateAvgTaskPoints",
             "getUserByUsername",
             "getUserRoles",
-            "getStudent")
+            "getStudent",
+            "getStudentWithPoints"
+        )
     }
 }
