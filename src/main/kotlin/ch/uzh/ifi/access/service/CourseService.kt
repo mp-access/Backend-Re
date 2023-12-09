@@ -64,6 +64,21 @@ class CourseServiceForCaching(
         }
     }
 
+    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
+        val course = courseService.getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            val user = roleService.getUserByUsername(it)
+            if (user != null) {
+                val studentDTO = courseService.getStudentWithPoints(courseSlug, user)
+                studentDTO.username = user.username
+                studentDTO.registrationId = it
+                studentDTO
+            } else {
+                StudentDTO(registrationId = it)
+            }
+        }
+    }
+
 }
 
 // TODO: decide properly which parameters should be nullable
@@ -541,22 +556,6 @@ fi
         )
     }
 
-    fun getStudents(courseSlug: String): List<StudentDTO> {
-        val course = getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            val user = roleService.getUserByUsername(it)
-            if (user != null) {
-                val studentDTO = getStudent(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
-                studentDTO
-            }
-            else {
-                StudentDTO(registrationId = it)
-            }
-        }
-    }
-
     @Transactional
     @Caching(evict = [
         CacheEvict(value = ["getUserByUsername"], key = "#username"),
@@ -571,6 +570,11 @@ fi
 
     @Cacheable(value = ["getStudent"], key = "#courseSlug + '-' + #user.username")
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
+        return StudentDTO(user.firstName, user.lastName, user.email)
+    }
+
+    @Cacheable(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #user.username")
+    fun getStudentWithPoints(courseSlug: String, user: UserRepresentation): StudentDTO {
         val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
     }

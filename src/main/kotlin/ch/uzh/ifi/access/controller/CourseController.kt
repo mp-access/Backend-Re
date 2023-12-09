@@ -109,6 +109,12 @@ class CourseController (
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
+    @GetMapping("/{courseSlug}/studentPoints")
+    @PreAuthorize("hasRole(#courseSlug + '-assistant')")
+    fun getStudentsWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
+        return courseServiceForCaching.getStudentsWithPoints(courseSlug)
+    }
+
     @GetMapping("/{courseSlug}/students")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudents(@PathVariable courseSlug: String): List<StudentDTO> {
