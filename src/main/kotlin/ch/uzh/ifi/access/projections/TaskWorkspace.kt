@@ -19,4 +19,7 @@ interface TaskWorkspace : TaskOverview {
 
     @get:Value("#{@courseService.getNextAttemptAt(target.id, target.userId)}")
     val nextAttemptAt: LocalDateTime?
+
+    @get:Value("#{@courseService.getAssignmentDeadlineForTask(target.id)}")
+    val deadline: LocalDateTime?
 }

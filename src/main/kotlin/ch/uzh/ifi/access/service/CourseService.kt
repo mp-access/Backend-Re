@@ -210,6 +210,10 @@ class CourseService(
         return getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
     }
 
+    fun getAssignmentDeadlineForTask(taskId: Long?): LocalDateTime? {
+        return getTaskById(taskId!!).assignment?.end
+    }
+
     fun createEvent(ordinalNum: Int?, date: LocalDateTime?, type: String?): Event {
         val newEvent = Event()
         newEvent.date = date
