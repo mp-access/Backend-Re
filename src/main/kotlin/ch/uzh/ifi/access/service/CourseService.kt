@@ -328,6 +328,7 @@ class CourseService(
 
     @Caching(evict = [
         CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
+        CacheEvict(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
         CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
     fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
