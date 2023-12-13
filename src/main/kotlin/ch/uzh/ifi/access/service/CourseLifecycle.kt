@@ -123,6 +123,19 @@ class CourseLifecycle(
                 task.files.forEach { file ->
                     file.enabled = false
                 }
+                // TODO: maybe do this in a less convoluted fashion
+                // reset all file attributes to false
+                taskDTO.files?.let {
+                    (it.instruction + it.visible + it.grading + it.editable + it.solution).forEach { filePath ->
+                        val file = createOrUpdateTaskFile(task, taskPath, filePath)
+                        file.instruction = false
+                        file.visible = false
+                        file.grading = false
+                        file.editable = false
+                        file.solution = false
+                    }
+                }
+                // set desired file attributes
                 taskDTO.files?.instruction?.forEach { filePath ->
                     createOrUpdateTaskFile(task, taskPath, filePath).instruction = true
                 }

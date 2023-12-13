@@ -287,6 +287,12 @@ class CourseService(
             .toList()
     }
 
+    fun getVisibleNonEditableFiles(taskId: Long?): List<TaskFile> {
+        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
+            .filter { file: TaskFile -> file.visible && !file.editable }
+            .toList()
+    }
+
     private fun readLogsFile(path: Path): String {
         val logsFile = path.resolve("logs.txt").toFile()
 
@@ -362,6 +368,31 @@ class CourseService(
                 }
                 dockerClient.createContainerCmd(it).use { containerCmd ->
                     val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
+                    // add submission files (supplied by the frontend)
+                    submission.files.forEach { file ->
+                        file.taskFile?.path?.let { it1 -> // TODO: cleanup
+                            file.content?.let { it2 ->
+                                createLocalFile(
+                                    submissionDir,
+                                    it1,
+                                    it2
+                                )
+                            }
+                        }
+                    }
+                    // add visible but not editable files (because these are not part of the submission files)
+                    getVisibleNonEditableFiles(task.id)
+                        .forEach(Consumer { file: TaskFile ->
+                            file.path?.let { it1 -> // TODO: cleanup
+                                file.template?.let { it2 ->
+                                    createLocalFile(
+                                        submissionDir,
+                                        it1, it2
+                                    )
+                                }
+                            }
+                        })
+                    // add grading files if submission is graded
                     if (submission.isGraded) {
                         getGradingFiles(task.id)
                             .forEach(Consumer { file: TaskFile ->
@@ -383,18 +414,6 @@ class CourseService(
                             }
                         }
                     }
-                    submission.files.forEach { file ->
-                        file.taskFile?.path?.let { it1 -> // TODO: cleanup
-                            file.content?.let { it2 ->
-                                createLocalFile(
-                                    submissionDir,
-                                    it1,
-                                    it2
-                                )
-                            }
-                        }
-                    }
-
                     // The student code is run on the tmpfs.
                     // Main reason for this is that we have no other way of enforcing a disk quota.
                     // TODO: make this size configurable in task config.toml?
@@ -541,6 +560,12 @@ fi
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.updateFromRepository(existingCourse)
+    }
+
+    @Transactional
+    fun updateCourseFromDirectory(courseSlug: String, directory: Path): Course {
+        val existingCourse = getCourseBySlug(courseSlug)
+        return courseLifecycle.updateFromDirectory(existingCourse, directory )
     }
 
     @Transactional

@@ -51,6 +51,14 @@ class CourseLifecycleTests(
         courseService.getCourseBySlug("access-mock-course")
     }
 
+    @Test
+    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
+    @Order(0)
+    fun `Course update succeeds`() {
+        val absolutePath = Paths.get(File("Mock-Course-Re").absolutePath)
+        courseService.updateCourseFromDirectory("access-mock-course", absolutePath)
+    }
+
     fun getCourse(): CourseWorkspace {
         return courseService.getCourseWorkspaceBySlug("access-mock-course")
     }
