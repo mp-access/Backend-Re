@@ -49,7 +49,9 @@ class Evaluation {
 
     fun update(newScore: Double?) {
         remainingAttempts = remainingAttempts!! - 1
-        bestScore = (bestScore ?: 0.0).coerceAtLeast(newScore!!)
+        if (isActive) {
+            bestScore = (bestScore ?: 0.0).coerceAtLeast(newScore!!)
+        }
     }
 
     @PostLoad

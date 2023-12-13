@@ -343,10 +343,11 @@ class CourseService(
         evaluationRepository.saveAndFlush(evaluation)
         val newSubmission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
         if (submissionDTO.restricted && newSubmission.isGraded) {
-            if (!task.assignment?.isActive!!) throw ResponseStatusException( // TODO: safety
-                HttpStatus.FORBIDDEN,
-                "Submission rejected - assignment is not active!"
-            )
+            // TODO: this is just here as documentation, remove when obsolete:
+            //if (!task.assignment?.isActive!!) throw ResponseStatusException(
+            //    HttpStatus.FORBIDDEN,
+            //    "Submission rejected - assignment is not active!"
+            //)
             if (evaluation.remainingAttempts!! <= 0) throw ResponseStatusException( // TODO: safety
                 HttpStatus.FORBIDDEN,
                 "Submission rejected - no remaining attempts!"
