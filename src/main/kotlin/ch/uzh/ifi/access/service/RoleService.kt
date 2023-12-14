@@ -83,6 +83,7 @@ class RoleService(
             .getUserMembers(0, -1)
     }
 
+    // TODO: confusing username nomenclature. Is it the ACCESS/Keycloak username or the registration username (usually shibID)?
     @Cacheable(value = ["getUserByUsername"], key = "#username")
     fun getUserByUsername(username: String): UserRepresentation? {
         return accessRealm.users().list(0, -1).firstOrNull {

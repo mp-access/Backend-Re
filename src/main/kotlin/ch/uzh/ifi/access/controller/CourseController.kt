@@ -6,9 +6,11 @@ import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.CourseServiceForCaching
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.http.HttpStatus
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.server.ResponseStatusException
 
 
 @RestController
@@ -137,7 +139,9 @@ class CourseController (
 
     @GetMapping("/{course}/participants/{participant}")
     fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
-        return courseService.getCourseProgress(course, participant)
+        val user = roleService.getUserByUsername(participant)?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        return courseService.getCourseProgress(course, user.username)
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
@@ -146,7 +150,9 @@ class CourseController (
         @PathVariable assignment: String,
         @PathVariable participant: String
     ): AssignmentProgressDTO? {
-        return courseService.getAssignmentProgress(course, assignment, participant)
+        val user = roleService.getUserByUsername(participant)?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        return courseService.getAssignmentProgress(course, assignment, user.username)
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
@@ -154,7 +160,9 @@ class CourseController (
         @PathVariable course: String, @PathVariable assignment: String,
         @PathVariable task: String, @PathVariable participant: String
     ): TaskProgressDTO? {
-        return courseService.getTaskProgress(course, assignment, task, participant)
+        val user = roleService.getUserByUsername(participant)?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        return courseService.getTaskProgress(course, assignment, task, user.username)
     }
 
         @GetMapping("/{course}/summary")
