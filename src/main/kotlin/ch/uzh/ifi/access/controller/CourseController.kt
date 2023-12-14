@@ -135,27 +135,27 @@ class CourseController (
         roleService.updateStudentRoles(courseService.getCourseBySlug(course))
     }
 
-        @GetMapping("/{course}/participants/{participant}")
-        fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
-            return courseService.getCourseProgress(course, participant)
-        }
+    @GetMapping("/{course}/participants/{participant}")
+    fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
+        return courseService.getCourseProgress(course, participant)
+    }
 
-        @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
-        fun getAssignmentProgress(
-            @PathVariable course: String,
-            @PathVariable assignment: String,
-            @PathVariable participant: String
-        ): AssignmentProgressDTO? {
-            return courseService.getAssignmentProgress(course, assignment, participant)
-        }
+    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
+    fun getAssignmentProgress(
+        @PathVariable course: String,
+        @PathVariable assignment: String,
+        @PathVariable participant: String
+    ): AssignmentProgressDTO? {
+        return courseService.getAssignmentProgress(course, assignment, participant)
+    }
 
-        @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
-        fun getTaskProgress(
-            @PathVariable course: String, @PathVariable assignment: String,
-            @PathVariable task: String, @PathVariable participant: String
-        ): TaskProgressDTO? {
-            return courseService.getTaskProgress(course, assignment, task, participant)
-        }
+    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
+    fun getTaskProgress(
+        @PathVariable course: String, @PathVariable assignment: String,
+        @PathVariable task: String, @PathVariable participant: String
+    ): TaskProgressDTO? {
+        return courseService.getTaskProgress(course, assignment, task, participant)
+    }
 
         @GetMapping("/{course}/summary")
     fun getCourseSummary(@PathVariable course: String): CourseSummary? {
