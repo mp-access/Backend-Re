@@ -30,6 +30,7 @@ import org.springframework.lang.Nullable
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import java.math.RoundingMode
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
@@ -71,7 +72,7 @@ class CourseServiceForCaching(
             val user = roleService.getUserByUsername(it)
             if (user != null) {
                 val coursePoints = courseRepository.getTotalPoints(courseSlug, user.username) ?: 0.0
-                val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints, user.username, it)
+                val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(), user.username, it)
                 studentDTO
             } else {
                 StudentDTO(registrationId = it)
