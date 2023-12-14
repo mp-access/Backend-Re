@@ -47,6 +47,7 @@ import java.util.stream.Stream
 class CourseServiceForCaching(
     private val roleService: RoleService,
     private val courseService: CourseService,
+    private val courseRepository: CourseRepository,
 ) {
 
     fun getStudents(courseSlug: String): List<StudentDTO> {
@@ -69,9 +70,8 @@ class CourseServiceForCaching(
         return course.registeredStudents.map {
             val user = roleService.getUserByUsername(it)
             if (user != null) {
-                val studentDTO = courseService.getStudentWithPoints(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
+                val coursePoints = courseRepository.getTotalPoints(courseSlug, user.username) ?: 0.0
+                val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints, user.username, it)
                 studentDTO
             } else {
                 StudentDTO(registrationId = it)

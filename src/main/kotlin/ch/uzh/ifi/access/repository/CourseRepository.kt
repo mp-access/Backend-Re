@@ -29,4 +29,23 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getTeamMemberName(email: String?): MemberOverview?
     fun findCourseBySlug(courseSlug: String?): CourseSummary?
 
+    @Query(
+        nativeQuery = true, value = """
+            SELECT sum(e.best_score) AS total_points
+            FROM evaluation e
+            JOIN task t ON e.task_id = t.id
+            JOIN assignment a ON t.assignment_id = a.id
+            JOIN course c ON a.course_id = c.id
+            WHERE e.id IN (
+                SELECT MAX(id)
+                FROM evaluation
+                WHERE user_id = :userId
+                GROUP BY task_id
+            )
+            AND c.slug = :courseSlug
+            AND e.user_id = :userId
+        """
+    )
+    fun getTotalPoints(courseSlug: String, userId: String): Double?
+
 }
