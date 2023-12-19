@@ -16,6 +16,7 @@ import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
+import jakarta.xml.bind.DatatypeConverter
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
 import org.apache.logging.log4j.util.Strings
@@ -35,6 +36,7 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
@@ -43,6 +45,9 @@ import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
 import java.util.stream.Collectors
 import java.util.stream.Stream
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import kotlin.math.sign
 
 @Service
 class CourseServiceForCaching(
@@ -554,12 +559,30 @@ fi
     }
 
     @Transactional
-    fun webhookUpdateCourse(courseSlug: String, secret: String): Course? {
+    fun webhookUpdateWithSecret(courseSlug: String, secret: String?): Course? {
         val existingCourse = getCourseBySlug(courseSlug)
-        if (existingCourse.webhookSecret != null && existingCourse.webhookSecret == secret) {
-            return updateCourse(courseSlug)
+        if (existingCourse.webhookSecret != null && secret != null) {
+            if (existingCourse.webhookSecret == secret) {
+                return updateCourse(courseSlug)
+            }
         }
         logger.debug { "Provided webhook secret does not match secret of course $courseSlug"}
+        throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    }
+
+    fun webhookUpdateWithHmac(courseSlug: String, signature: String?, body: String): Course? {
+        val existingCourse = getCourseBySlug(courseSlug)
+        if (existingCourse.webhookSecret != null && signature != null) {
+            val key = SecretKeySpec(existingCourse.webhookSecret!!.toByteArray(Charsets.UTF_8), "HmacSHA256")
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(key)
+            val hmac = mac.doFinal(body.toByteArray(Charsets.UTF_8))
+            val expected = DatatypeConverter.printHexBinary(hmac)
+            if (expected.equals(signature, ignoreCase = true)) {
+                return updateCourse(courseSlug)
+            }
+        }
+        logger.debug { "Provided webhook signature does not match secret of course $courseSlug"}
         throw ResponseStatusException(HttpStatus.FORBIDDEN)
     }
 

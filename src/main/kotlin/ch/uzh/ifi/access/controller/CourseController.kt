@@ -45,10 +45,19 @@ class WebhooksController(
     private val logger = KotlinLogging.logger {}
 
     @PostMapping("/courses/{course}/update/gitlab")
-    fun updateCourse(@PathVariable("course") course: String,
+    fun hookGitlab(@PathVariable("course") course: String,
                      @RequestHeader("X-Gitlab-Token") secret: String) {
-        logger.debug { "webhook triggered for $course"}
-        courseService.webhookUpdateCourse(course, secret)
+        logger.debug { "webhook (secret) triggered for $course"}
+        courseService.webhookUpdateWithSecret(course, secret)
+    }
+    @PostMapping("/courses/{course}/update/github")
+    fun hookGithub(@PathVariable("course") course: String,
+                   @RequestHeader("X-Hub-Signature-256") signature: String,
+                   @RequestBody body: String
+    ) {
+        logger.debug { "webhook (hmac) triggered for $course"}
+        val sig = signature.substringAfter("sha256=")
+        courseService.webhookUpdateWithHmac(course, sig, body)
     }
 
 }
