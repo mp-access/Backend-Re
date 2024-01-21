@@ -15,5 +15,6 @@ interface SubmissionSummary {
     val output: String?
     val createdAt: LocalDateTime?
     val files: List<Any?>?
+    val persistentResultFiles: List<Any?>?
 }
 

@@ -3,21 +3,16 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.MemberDTO
-import ch.uzh.ifi.access.model.dto.StudentDTO
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.collections4.SetUtils
-import org.hibernate.Hibernate
 import org.keycloak.admin.client.resource.RealmResource
-import org.keycloak.admin.client.resource.UserResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
-import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.*
 

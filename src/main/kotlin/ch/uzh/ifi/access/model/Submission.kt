@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
-import ch.uzh.ifi.access.model.dao.Results
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import lombok.Getter
@@ -9,7 +8,6 @@ import lombok.Setter
 import org.apache.commons.lang3.StringUtils
 import org.hibernate.annotations.CreationTimestamp
 import java.time.LocalDateTime
-import java.util.*
 
 @Getter
 @Setter
@@ -45,6 +43,9 @@ class Submission {
     @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
     var files: MutableList<SubmissionFile> = ArrayList()
 
+    @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
+    var persistentResultFiles: MutableList<ResultFile> = ArrayList()
+
     @JsonIgnore
     @ManyToOne
     @JoinColumn(nullable = false, name = "evaluation_id")
@@ -56,13 +57,4 @@ class Submission {
     val isGraded: Boolean
         get() = command!!.isGraded
 
-    fun parseResults(results: Results) {
-        output = results.hints?.filterNotNull()?.firstOrNull()
-        if (results.points != null) {
-            valid = true
-            // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
-            points = minOf(results.points!!, maxPoints!!)
-            evaluation!!.update(points)
-        }
-    }
 }

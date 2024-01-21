@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.security.access.prepost.PostAuthorize
-import java.util.*
 
 interface TaskRepository : JpaRepository<Task?, Long?> {
     // TODO: visibility based on date

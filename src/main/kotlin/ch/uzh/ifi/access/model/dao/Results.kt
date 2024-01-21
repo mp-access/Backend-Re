@@ -5,5 +5,5 @@ import lombok.Data
 @Data
 class Results(
     var points: Double? = null,
-    var hints: List<String>? = null
+    var hints: MutableList<String> = mutableListOf()
 )

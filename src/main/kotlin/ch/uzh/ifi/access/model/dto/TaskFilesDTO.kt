@@ -8,7 +8,8 @@ class TaskFilesDTO(
     var visible: List<String> = ArrayList(),
     var editable: List<String> = ArrayList(),
     var grading: List<String> = ArrayList(),
-    var solution: List<String> = ArrayList()
+    var solution: List<String> = ArrayList(),
+    var persist: List<String> = ArrayList()
 )
 
 class CourseFilesDTO : TaskFilesDTO()

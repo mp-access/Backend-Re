@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.projections
 
-import ch.uzh.ifi.access.model.*
+import ch.uzh.ifi.access.model.Assignment
+import ch.uzh.ifi.access.model.AssignmentInformation
 import ch.uzh.ifi.access.model.dao.Timer
 import com.fasterxml.jackson.annotation.JsonFormat
 import org.springframework.beans.factory.annotation.Value

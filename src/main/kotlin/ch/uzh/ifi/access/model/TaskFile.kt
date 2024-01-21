@@ -26,7 +26,7 @@ class TaskFile {
     @Column(nullable=true, columnDefinition="text")
     var template: String? = null
 
-    @Column(nullable=true, name="template_binary", columnDefinition="bytea")
+    @Column(nullable=true, columnDefinition="bytea")
     var templateBinary: ByteArray? = null
 
     val binary: Boolean

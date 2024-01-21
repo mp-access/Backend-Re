@@ -6,7 +6,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
-import org.springframework.boot.web.servlet.ServletListenerRegistrationBean
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -24,7 +23,6 @@ import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
-import org.springframework.security.web.session.HttpSessionEventPublisher
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path

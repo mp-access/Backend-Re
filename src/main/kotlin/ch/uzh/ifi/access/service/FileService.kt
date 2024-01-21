@@ -1,17 +1,19 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.model.GlobalFile
+import ch.uzh.ifi.access.model.ResultFile
+import ch.uzh.ifi.access.model.TaskFile
 import ch.uzh.ifi.access.model.dto.TaskFileDTO
+import org.apache.commons.codec.binary.Base64
 import org.apache.commons.compress.utils.FileNameUtils
 import org.apache.tika.Tika
+import org.apache.tika.config.TikaConfig
 import org.apache.tika.metadata.Metadata
-import org.apache.tika.mime.MimeTypes
 import org.springframework.stereotype.Service
 import java.io.BufferedInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
-import org.apache.commons.codec.binary.Base64
-import org.apache.tika.config.TikaConfig
 
 class FileData(
     var path: String? = null,
@@ -69,13 +71,30 @@ class FileService(val tika: Tika) {
         return fileData.validated()
     }
 
-    fun storeFile(path: Path, dto: TaskFileDTO): TaskFileDTO {
+    fun storeFile(path: Path, taskFile: TaskFile): TaskFile {
         val fileData = storeFile(path)
-        dto.template = fileData.content
-        dto.templateBinary = fileData.contentBinary
-        dto.path = fileData.path
-        dto.mimeType = fileData.mimeType
-        return dto
+        taskFile.template = fileData.content
+        taskFile.templateBinary = fileData.contentBinary
+        taskFile.path = fileData.path
+        taskFile.mimeType = fileData.mimeType
+        return taskFile
+    }
+
+    fun storeFile(path: Path, globalFile: GlobalFile): GlobalFile {
+        val fileData = storeFile(path)
+        globalFile.template = fileData.content
+        globalFile.templateBinary = fileData.contentBinary
+        globalFile.path = fileData.path
+        globalFile.mimeType = fileData.mimeType
+        return globalFile
+    }
+
+    fun storeFile(path: Path, resultFile: ResultFile): ResultFile {
+        val fileData = storeFile(path)
+        resultFile.content = fileData.content
+        resultFile.contentBinary = fileData.contentBinary
+        resultFile.mimeType = fileData.mimeType
+        return resultFile
     }
 
     fun readToBase64(path: Path): String {

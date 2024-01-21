@@ -5,7 +5,6 @@ import ch.uzh.ifi.access.model.dao.Rank
 import ch.uzh.ifi.access.projections.EvaluationSummary
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
-import java.util.*
 
 
 interface EvaluationRepository : JpaRepository<Evaluation?, Long?> {

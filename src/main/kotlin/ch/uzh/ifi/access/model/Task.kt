@@ -2,6 +2,8 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
 import jakarta.persistence.*
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.Duration
 import java.util.*
 
@@ -54,6 +56,9 @@ class Task {
 
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
     var files: MutableList<TaskFile> = ArrayList()
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    var persistentResultFilePaths: MutableList<String> = ArrayList()
 
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
     var evaluations: MutableList<Evaluation> = ArrayList()

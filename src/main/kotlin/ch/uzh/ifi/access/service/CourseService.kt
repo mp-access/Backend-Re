@@ -19,10 +19,9 @@ import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
-import org.apache.logging.log4j.util.Strings
+import org.apache.tika.Tika
 import org.keycloak.representations.idm.UserRepresentation
 import org.modelmapper.ModelMapper
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
@@ -36,18 +35,14 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
-import java.util.stream.Collectors
 import java.util.stream.Stream
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlin.math.sign
 
 @Service
 class CourseServiceForCaching(
@@ -103,6 +98,8 @@ class CourseService(
     private val jsonMapper: JsonMapper,
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
+    private val fileService: FileService,
+    private val tika: Tika
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -317,9 +314,6 @@ class CourseService(
         }.joinToString(separator = "\n").replace("\u0000", "")
     }
 
-    private fun readResultsFile(path: Path): Results {
-        return jsonMapper.readValue(Files.readString(path.resolve("grade_results.json")), Results::class.java)
-    }
 
     private fun createEvaluation(taskId: Long, userId: String): Evaluation {
         val newEvaluation = getTaskById(taskId).createEvaluation(userId)
@@ -405,6 +399,23 @@ class CourseService(
                     val tmpfs: Map<String, String> = mapOf(
                         "/workspace" to "size=50M",
                     )
+
+                    // TODO: make this size configurable in task config.toml?
+                    val resultFileSizeLimit = convertSizeToBytes("100K")
+                    val persistentFileCopyCommands = task.persistentResultFilePaths.joinToString("\n") { path ->
+"""
+# Check if results file exceeds permissible size limit
+if [[ -f "$path" ]]; then
+    actual_size=${'$'}(stat -c%s "$path")
+    if [[ ! ${'$'}actual_size -lt $resultFileSizeLimit ]]; then
+        exit 202
+    fi
+fi
+file_dir=${'$'}(dirname "$path")
+mkdir -p "/submission/${'$'}file_dir"
+cp "$path" "/submission/${'$'}file_dir" 
+"""
+                    }
                     val command = (
 """
 # copy submitted files to tmpfs
@@ -416,13 +427,14 @@ exit_code=${'$'}?;
 # write results and logs to submission volume
 /bin/cp /workspace/grade_results.json /submission/;
 /bin/cp /workspace/logs.txt /submission/;
-# check if the tmpfs is full and if so, return 201, otherwise return command status code
+# check if the tmpfs is full and if so, return 201
 USAGE=${'$'}(df -h | grep /workspace | awk '{print ${'$'}5}' | sed 's/%//')
 if [ "${'$'}USAGE" -eq 100 ]; then
     exit 201
-else
-    exit ${'$'}exit_code; 
 fi
+# otherwise check and copy persistent results and return command status code
+$persistentFileCopyCommands
+exit ${'$'}exit_code; 
 """
                     )
                     val container = containerCmd
@@ -458,6 +470,17 @@ fi
 
                     submission.logs = readLogsFile(submissionDir)
                     logger.debug { "Submission $submissionDir finished with statusCode $statusCode"}
+                    val persistentResultFileErrors: MutableList<String> = mutableListOf()
+                    task.persistentResultFilePaths.forEach { path ->
+                        try {
+                            val resultFile = fileService.storeFile(submissionDir.resolve(path), ResultFile())
+                            resultFile.path = path
+                            resultFile.submission = newSubmission
+                            newSubmission.persistentResultFiles.add(resultFile)
+                        } catch (e: Exception) { // TODO: are there other specific exceptions to catch?
+                            persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
+                        }
+                    }
                     if (newSubmission.isGraded) {
                         val results = when (statusCode) {
                             // out of memory
@@ -467,13 +490,13 @@ fi
                                     logger.debug { "Submission $submissionDir killed due to timeout" }
                                     Results(
                                         0.0,
-                                        listOf("Your solution ran out of time. Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters.")
+                                        mutableListOf("Your solution ran out of time. Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters.")
                                     )
                                 } else {
                                     logger.debug { "Submission $submissionDir out of memory" }
                                     Results(
                                         0.0,
-                                        listOf("Your solution ran out of memory. Make sure you aren't creating gigantic data structures.")
+                                        mutableListOf("Your solution ran out of memory. Make sure you aren't creating gigantic data structures.")
                                     )
                                 }
                             }
@@ -481,22 +504,36 @@ fi
                             201 -> {
                                 Results(
                                     0.0,
-                                    listOf("Your solution wrote too much data, either to files, or by printing to the command line. Are you printing in an infinite loop?")
+                                    mutableListOf("Your solution wrote too much data, either to files, or by printing to the command line. Are you printing in an infinite loop?")
+                                )
+                            }
+                            // persistent result file too large
+                            202 -> {
+                                Results(
+                                    0.0,
+                                    mutableListOf("One or more files you're supposed to write exceeds the file size limit of ${bytesToHumanReadable(resultFileSizeLimit)}")
                                 )
                             }
                             // none of the above, hopefully there are grading results
                             else -> {
                                 try {
-                                    readResultsFile(submissionDir)
+                                    jsonMapper.readValue(Files.readString(submissionDir.resolve("grade_results.json")), Results::class.java)
                                 } catch (e: NoSuchFileException) {
                                     logger.debug { "Submission $submissionDir no grade_results.json" }
                                     Results(null,
-                                        listOf("No grading results. Please report this as a bug and provide as much detail as possible.")
+                                        mutableListOf("No grading results. Please report this as a bug and provide as much detail as possible.")
                                     )
                                 }
                             }
                         }
-                        newSubmission.parseResults(results)
+                        results.hints.addAll(persistentResultFileErrors)
+                        newSubmission.output = results.hints.filterNotNull().firstOrNull()
+                        if (results.points != null) {
+                            newSubmission.valid = true
+                            // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
+                            newSubmission.points = minOf(results.points!!, newSubmission.maxPoints!!)
+                            evaluation.update(newSubmission.points)
+                        }
                     }
                     // TODO: move to finally? For the moment, we keep failed submission dirs around for debugging.
                     FileUtils.deleteQuietly(submissionDir.toFile())
@@ -709,4 +746,33 @@ fi
         println()
     }
 
+    fun convertSizeToBytes(sizeStr: String): Long {
+        val regex = Regex("""^(\d+)([KMG]?)$""")
+        val matchResult = regex.matchEntire(sizeStr)
+
+        return matchResult?.let {
+            val (number, suffix) = it.destructured
+            val sizeInBytes = when (suffix) {
+                "K" -> number.toLong() * 1024
+                "M" -> number.toLong() * 1024 * 1024
+                "G" -> number.toLong() * 1024 * 1024 * 1024
+                "" -> number.toLong()
+                else -> 0
+            }
+            sizeInBytes
+        } ?: 0
+    }
+
+    fun bytesToHumanReadable(sizeInBytes: Long): String {
+        val kilobyte = 1024.0
+        val megabyte = kilobyte * 1024
+        val gigabyte = megabyte * 1024
+
+        return when {
+            sizeInBytes < kilobyte -> "$sizeInBytes B"
+            sizeInBytes < megabyte -> String.format("%.2f KB", sizeInBytes / kilobyte)
+            sizeInBytes < gigabyte -> String.format("%.2f MB", sizeInBytes / megabyte)
+            else -> String.format("%.2f GB", sizeInBytes / gigabyte)
+        }
+    }
 }

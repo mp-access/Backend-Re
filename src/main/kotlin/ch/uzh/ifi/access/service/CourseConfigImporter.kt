@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.dto.*
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.dataformat.toml.TomlMapper
-import org.apache.commons.compress.utils.FileNameUtils
 import org.springframework.stereotype.Service
 import java.nio.file.Files
 import java.nio.file.Path
@@ -129,6 +128,7 @@ class CourseConfigImporter(
                 "editable" -> files.editable = filenames
                 "grading" -> files.grading = filenames
                 "solution" -> files.solution = filenames
+                "persist" -> files.persist = filenames
             }
         }
         task.files = files

@@ -5,7 +5,6 @@ import ch.uzh.ifi.access.projections.AssignmentWorkspace
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.security.access.prepost.PostAuthorize
 import org.springframework.security.access.prepost.PostFilter
-import java.util.*
 
 interface AssignmentRepository : JpaRepository<Assignment?, Long?> {
     @PostFilter("filterObject.enabled and (hasRole(#courseSlug + '-assistant') or (hasRole(#courseSlug) and filterObject.isPublished) or hasRole(#courseSlug + '-supervisor'))")

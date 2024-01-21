@@ -27,6 +27,7 @@ class CourseLifecycle(
     private val workingDir: Path,
     private val roleService: RoleService,
     private val courseRepository: CourseRepository,
+//    private val persistentResultFilePathRepository: PersistentResultFilePathRepository,
     private val modelMapper: ModelMapper,
     private val dockerClient: DockerClient,
     private val cci: CourseConfigImporter,
@@ -153,6 +154,11 @@ class CourseLifecycle(
                 taskDTO.files?.solution?.forEach { filePath ->
                     createOrUpdateTaskFile( task, taskPath, filePath ).solution = true
                 }
+                // update persistent file paths
+                task.persistentResultFilePaths.clear()
+                taskDTO.files?.persist?.forEach { path ->
+                    task.persistentResultFilePaths.add(path)
+                }
             }
             //assignment.setMaxPoints(assignment.getTasks().stream().filter(Task::enabled).mapToDouble(Task::getMaxPoints).sum());
             //assignment.maxPoints = assignment.tasks.map { it.maxPoints!! }.sum() // TODO: safety
@@ -169,12 +175,11 @@ class CourseLifecycle(
             .filter { existing: TaskFile -> existing.path == rootedFilePath }.findFirst()
             .orElseGet { task.createFile() }
         val taskFilePath = parentPath.resolve(unrootedFilePath)
-        val taskFileDTO = fileService.storeFile(taskFilePath, TaskFileDTO())
-        modelMapper.map(taskFileDTO, taskFile)
-        taskFile.name = taskFilePath.fileName.toString()
-        taskFile.path = rootedFilePath
-        taskFile.enabled = true
-        return taskFile
+        val taskFileUpdated = fileService.storeFile(taskFilePath, taskFile)
+        taskFileUpdated.name = taskFilePath.fileName.toString()
+        taskFileUpdated.path = rootedFilePath
+        taskFileUpdated.enabled = true
+        return taskFileUpdated
     }
 
     private fun createOrUpdateGlobalFile(course: Course, parentPath: Path, path: String): GlobalFile {
@@ -184,11 +189,10 @@ class CourseLifecycle(
             .filter { existing -> existing.path == rootedFilePath }.findFirst()
             .orElseGet { course.createFile() }
         val globalFilePath = parentPath.resolve(unrootedFilePath)
-        val globalFileDTO = fileService.storeFile(globalFilePath, TaskFileDTO())
-        modelMapper.map(globalFileDTO, globalFile)
-        globalFile.name = globalFilePath.fileName.toString()
-        globalFile.path = rootedFilePath
-        globalFile.enabled = true
+        val globalFileUpdated = fileService.storeFile(globalFilePath, globalFile)
+        globalFileUpdated.name = globalFilePath.fileName.toString()
+        globalFileUpdated.path = rootedFilePath
+        globalFileUpdated.enabled = true
         return globalFile
     }
 

@@ -8,7 +8,6 @@ import ch.uzh.ifi.access.projections.MemberOverview
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.security.access.prepost.PostFilter
-import java.util.*
 
 interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getBySlug(courseSlug: String?): Course?

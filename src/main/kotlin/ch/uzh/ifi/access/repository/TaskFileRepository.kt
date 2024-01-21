@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.TaskFile
 import jakarta.transaction.Transactional
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.security.access.prepost.PostFilter
-import java.util.*
 
 interface TaskFileRepository : JpaRepository<TaskFile?, Long?> {
     @Transactional
