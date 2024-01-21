@@ -52,9 +52,9 @@ class PublicAPITests(
 
     @Test
     @Order(2)
-    fun `Can register 2 participants`() {
-        // curl -X POST 'http://localhost:8081/api/courses/access-mock-course/participants' -H 'Content-Type: application/json' -H 'X-API-Key: 1234' --data '["alice@example.org", "student@uzh.ch"]'
-        val payload = """["alice@example.org", "student@uzh.ch"]"""
+    fun `Can register participant`() {
+        // curl -X POST 'http://localhost:8081/api/courses/access-mock-course/participants' -H 'Content-Type: application/json' -H 'X-API-Key: 1234' --data '["student@uzh.ch"]'
+        val payload = """["student@uzh.ch"]"""
         mvc.perform(
             post("/courses/access-mock-course/participants")
                 .contentType("application/json")
@@ -76,14 +76,13 @@ class PublicAPITests(
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
             .andExpect(content().json("""
-                [  { "firstName" : null, "lastName" : null, "email" : "alice@example.org", "points" : 0.0
-                }, { "firstName" : "Student", "lastName" : "Test", "email" : "student@uzh.ch",   "points" : 0.0 } ]
+                [ { "firstName" : "Student", "lastName" : "Test", "email" : "student@uzh.ch", "username" : "student@uzh.ch", "registrationId" : "student@uzh.ch" } ]
                 """))
     }
 
     @Test
     @Order(4)
-    fun `Course Summary with 2 participants served correctly`() {
+    fun `Course Summary with 1 participant served correctly`() {
         // curl -X GET 'http://localhost:8081/api/courses/access-mock-course/summary' -H 'Content-Type: application/json' -H 'X-API-Key: 1234'
         mvc.perform(
             get("/courses/access-mock-course/summary")
@@ -92,15 +91,15 @@ class PublicAPITests(
                 .with(csrf()))
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
-            .andExpect(content().json(JsonReference.get("courseSummary_2participants")))
+            .andExpect(content().json(JsonReference.get("courseSummary_1participant")))
     }
 
     @Test
     @Order(5)
     fun `Can get results for individual participant`() {
-        // curl -X GET 'http://localhost:8081/api/courses/access-mock-course/participants/alice@example.org' -H 'Content-Type: application/json' -H 'X-API-Key: 1234'
+        // curl -X GET 'http://localhost:8081/api/courses/access-mock-course/participants/student@uzh.ch' -H 'Content-Type: application/json' -H 'X-API-Key: 1234'
         mvc.perform(
-            get("/courses/access-mock-course/participants/alice@example.org")
+            get("/courses/access-mock-course/participants/student@uzh.ch")
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
                 .with(csrf()))

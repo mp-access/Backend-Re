@@ -148,7 +148,14 @@
     "ordinalNum" : 3
   } ],
   "slug" : "access-mock-course",
-  "students" : [ ],
+  "students" : [ {
+    "firstName" : "Student",
+    "lastName" : "Test",
+    "email" : "student@uzh.ch",
+    "points" : 0.0,
+    "username" : "student@uzh.ch",
+    "registrationId" : "student@uzh.ch"
+  } ],
   "information" : {
     "de" : {
       "title" : "ACCESS Demo-Kurs",
@@ -170,5 +177,5 @@
   "overrideStart" : "2023-01-01T13:00:00",
   "overrideEnd" : "2028-01-01T13:00:00",
   "assistants" : [ ],
-  "studentsCount" : 0
+  "studentsCount" : 1
 }

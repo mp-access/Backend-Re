@@ -382,48 +382,21 @@ class CourseService(
                     val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
                     // add submission files (supplied by the frontend)
                     submission.files.forEach { file ->
-                        file.taskFile?.path?.let { it1 -> // TODO: cleanup
-                            file.content?.let { it2 ->
-                                createLocalFile(
-                                    submissionDir,
-                                    it1,
-                                    it2
-                                )
-                            }
-                        }
+                        createContainerFile(submissionDir, file)
                     }
                     // add visible but not editable files (because these are not part of the submission files)
                     getVisibleNonEditableFiles(task.id)
                         .forEach(Consumer { file: TaskFile ->
-                            file.path?.let { it1 -> // TODO: cleanup
-                                file.template?.let { it2 ->
-                                    createLocalFile(
-                                        submissionDir,
-                                        it1, it2
-                                    )
-                                }
-                            }
+                            createContainerFile(submissionDir, file)
                         })
                     // add grading files if submission is graded
                     if (submission.isGraded) {
                         getGradingFiles(task.id)
                             .forEach(Consumer { file: TaskFile ->
-                                file.path?.let { it1 -> // TODO: cleanup
-                                    file.template?.let { it2 ->
-                                        createLocalFile(
-                                            submissionDir,
-                                            it1, it2
-                                        )
-                                    }
-                                }
+                                createContainerFile(submissionDir, file)
                             })
                         globalFiles.forEach { file ->
-                            file.path?.let { it1 ->
-                                file.template?.let { it2 ->
-                                    createLocalFile(submissionDir, it1, it2
-                                    )
-                                }
-                            }
+                            createContainerFile(submissionDir, file)
                         }
                     }
                     // The student code is run on the tmpfs.
@@ -535,6 +508,34 @@ fi
         submissionRepository.save(newSubmission)
     }
 
+    private fun createContainerFile(submissionDir: Path, relativePath: String): Path {
+        val unrootedFilePath = relativePath.substring(1)
+        val filePath = submissionDir.resolve(unrootedFilePath)
+        Files.createDirectories(filePath.parent)
+        if (!filePath.toFile().exists()) Files.createFile(filePath)
+        return filePath
+    }
+
+    private fun createContainerFile(submissionDir: Path, submissionFile: SubmissionFile) {
+        val filePath = createContainerFile(submissionDir, submissionFile.taskFile!!.path!!)
+        Files.writeString(filePath, submissionFile.content)
+    }
+
+    private fun writeContainerFile(filePath: Path, data: String?, binaryData: ByteArray?) {
+        if (binaryData != null) { Files.write(filePath, binaryData) }
+        else { Files.writeString(filePath, data) }
+    }
+
+    private fun createContainerFile(submissionDir: Path, taskFile: TaskFile) {
+        val filePath = createContainerFile(submissionDir, taskFile.path!!)
+        writeContainerFile(filePath, taskFile.template, taskFile.templateBinary)
+    }
+
+    private fun createContainerFile(submissionDir: Path, globalFile: GlobalFile) {
+        val filePath = createContainerFile(submissionDir, globalFile.path!!)
+        writeContainerFile(filePath, globalFile.template, globalFile.templateBinary)
+    }
+
     private fun createLocalFile(submissionDir: Path, relativeFilePath: String, content: String) {
         val unrootedFilePath = relativeFilePath.substring(1)
         val filePath = submissionDir.resolve(unrootedFilePath)
@@ -605,10 +606,10 @@ fi
     }
 
     fun sendMessage(contactDTO: ContactDTO) {
-        createLocalFile(
-            workingDir.resolve("contact"),
-            LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), contactDTO.formatContent()
-        )
+        val filePath = workingDir.resolve("contact").resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+        Files.createDirectories(filePath.parent)
+        if (!filePath.toFile().exists()) Files.createFile(filePath)
+        Files.writeString(filePath, contactDTO.formatContent())
     }
 
     @Transactional

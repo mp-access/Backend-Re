@@ -4,9 +4,7 @@ import ch.uzh.ifi.access.model.dto.*
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.dataformat.toml.TomlMapper
-import org.apache.commons.codec.binary.Base64
 import org.apache.commons.compress.utils.FileNameUtils
-import org.apache.tika.Tika
 import org.springframework.stereotype.Service
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,7 +13,8 @@ import java.time.LocalDateTime
 @Service
 class CourseConfigImporter(
     private val tomlMapper: TomlMapper,
-   private val tika: Tika) {
+    private val fileService: FileService
+) {
 
     fun JsonNode?.asTextOrNull(): String? {
         return if (this is NullNode || this == null) null else this.asText()
@@ -26,7 +25,7 @@ class CourseConfigImporter(
         val course = CourseDTO()
 
         course.slug = config["slug"].asText()
-        course.logo = readToBase64(path.resolve(config["logo"].asText()))
+        course.logo = fileService.readToBase64(path.resolve(config["logo"].asText()))
         config["assignments"].forEach { directory ->
             course.assignments.add(directory.asText())
         }
@@ -137,30 +136,6 @@ class CourseConfigImporter(
         return task
 
     }
-
-    fun readToBase64(path: Path): String {
-        val fileType = tika.detect(path)
-        return "data:${fileType};base64," + Base64.encodeBase64String(Files.readAllBytes(path))
-    }
-
-    fun readFile(path: Path): TaskFileDTO {
-        val file = TaskFileDTO()
-        val fileType = tika.detect(path)
-        if (fileType.startsWith("text") || fileType.startsWith("application")) {
-            file.template = Files.readString(path)
-        } else {
-            file.binary = true
-            file.template = readToBase64(path)
-        }
-        file.language = readLanguage(path)
-        return file
-    }
-
-    private fun readLanguage(path: Path): String {
-        val extension = FileNameUtils.getExtension(path.toString())
-        return if (extension == "py") "python" else extension
-    }
-
 
 }
 

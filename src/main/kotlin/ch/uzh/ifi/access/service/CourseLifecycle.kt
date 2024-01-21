@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
+import ch.uzh.ifi.access.model.dto.TaskFileDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -28,7 +29,8 @@ class CourseLifecycle(
     private val courseRepository: CourseRepository,
     private val modelMapper: ModelMapper,
     private val dockerClient: DockerClient,
-    private val cci: CourseConfigImporter
+    private val cci: CourseConfigImporter,
+    private val fileService: FileService
     ) {
 
     private val logger = KotlinLogging.logger {}
@@ -167,7 +169,7 @@ class CourseLifecycle(
             .filter { existing: TaskFile -> existing.path == rootedFilePath }.findFirst()
             .orElseGet { task.createFile() }
         val taskFilePath = parentPath.resolve(unrootedFilePath)
-        val taskFileDTO = cci.readFile(taskFilePath)
+        val taskFileDTO = fileService.storeFile(taskFilePath, TaskFileDTO())
         modelMapper.map(taskFileDTO, taskFile)
         taskFile.name = taskFilePath.fileName.toString()
         taskFile.path = rootedFilePath
@@ -182,7 +184,7 @@ class CourseLifecycle(
             .filter { existing -> existing.path == rootedFilePath }.findFirst()
             .orElseGet { course.createFile() }
         val globalFilePath = parentPath.resolve(unrootedFilePath)
-        val globalFileDTO = cci.readFile(globalFilePath)
+        val globalFileDTO = fileService.storeFile(globalFilePath, TaskFileDTO())
         modelMapper.map(globalFileDTO, globalFile)
         globalFile.name = globalFilePath.fileName.toString()
         globalFile.path = rootedFilePath

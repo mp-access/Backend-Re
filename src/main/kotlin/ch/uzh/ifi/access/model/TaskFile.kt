@@ -16,21 +16,24 @@ class TaskFile {
     var name: String? = null
 
     @Column(nullable = false)
-    var language: String? = null
+    var mimeType: String? = null
 
     @JsonIgnore
     @ManyToOne
     @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(nullable=true, columnDefinition="text")
     var template: String? = null
+
+    @Column(nullable=true, name="template_binary", columnDefinition="bytea")
+    var templateBinary: ByteArray? = null
+
+    val binary: Boolean
+        get() = templateBinary != null
 
     @Column(nullable = false)
     var enabled = false
-
-    @Column(nullable = false, name = "is_binary")
-    var binary = false
 
     @Column(nullable = false)
     var visible = false
