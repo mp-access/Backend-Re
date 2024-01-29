@@ -38,13 +38,13 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
             WHERE e.id IN (
                 SELECT MAX(id)
                 FROM evaluation
-                WHERE user_id = :userId
+                WHERE user_id = ANY(:userIds)
                 GROUP BY task_id
             )
             AND c.slug = :courseSlug
-            AND e.user_id = :userId
+            AND e.user_id = ANY(:userIds)
         """
     )
-    fun getTotalPoints(courseSlug: String, userId: String): Double?
+    fun getTotalPoints(courseSlug: String, userIds: Array<String>): Double?
 
 }

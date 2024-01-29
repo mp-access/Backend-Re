@@ -171,4 +171,16 @@ class RoleService(
         }
         return sessions.size
     }
+
+    fun getAllUserIdsFor(userId: String): List<String> {
+        val userOptional = accessRealm.users().search(userId).stream().findFirst()
+        if (!userOptional.isPresent) { return emptyList() }
+        val user = userOptional.get()
+        val results = mutableListOf<String>()
+        user.username?.let { results.add(it) }
+        user.email?.let { results.add(it) }
+        user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.firstOrNull()?.let { results.add(it) }
+        user.attributes?.get("swissEduPersonUniqueID")?.firstOrNull()?.let { results.add(it) }
+        return results
+    }
 }

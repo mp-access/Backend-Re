@@ -71,7 +71,10 @@ class CourseServiceForCaching(
         return course.registeredStudents.map {
             val user = roleService.getUserByUsername(it)
             if (user != null) {
-                val coursePoints = courseRepository.getTotalPoints(courseSlug, user.username) ?: 0.0
+                // TODO!: make sure evaluations are saved under only a single user ID in the future!
+                // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
+                val userIds = roleService.getAllUserIdsFor(user.username)
+                val coursePoints = courseRepository.getTotalPoints(courseSlug, userIds.toTypedArray()) ?: 0.0
                 val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(), user.username, it)
                 studentDTO
             } else {
@@ -242,7 +245,12 @@ class CourseService(
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
-        return getEvaluation(taskId, verifyUserId(userId))?.bestScore ?: 0.0
+        // TODO!: make sure evaluations are saved under only a single user ID in the future!
+        // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        return userIds.maxOfOrNull {
+            getEvaluation(taskId, verifyUserId(it))?.bestScore ?: 0.0
+        } ?: 0.0
     }
 
     fun calculateAssignmentPoints(tasks: List<Task>, userId: String?): Double {
