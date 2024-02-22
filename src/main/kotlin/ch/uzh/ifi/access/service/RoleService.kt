@@ -30,7 +30,14 @@ class RoleService(
     }
 
     fun getUserRepresentationForUsername(username: String): UserRepresentation? {
-        return accessRealm.users().search(username, true).firstOrNull()
+        val resByUsername = accessRealm.users().search(username, true).firstOrNull()
+        val resByEmail = accessRealm.users().searchByEmail(username, true).firstOrNull()
+        if (resByUsername == null && resByEmail == null) {
+            logger.debug { "RoleService: Could not find user $username" }
+        }
+        if (resByUsername != null)
+            return resByUsername
+        return resByEmail
     }
 
     fun createCourseRoles(courseSlug: String?): String? {
@@ -96,8 +103,6 @@ class RoleService(
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } == true
         val matchByEmail = user.email == student
-        if (matchByUsername) { logger.debug { "X: matchByUsername: ${student} -> username: ${user.username}, email: ${user.email}"} }
-        if (matchByEmail) { logger.debug { "X: matchByEmail: ${student} ->  username: ${user.username}, email: ${user.email}"} }
         return (matchByUsername || matchByAffiliationID || matchByPersonID || matchByEmail)
     }
 

@@ -28,7 +28,9 @@ import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 
 
 @AllArgsConstructor
@@ -149,6 +151,7 @@ class AuthenticationSuccessListener(
 
     override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
         val username = event.authentication.name
+        logger.debug { "USER [$username] LOGGED IN" }
         roleService.getUserRepresentationForUsername(username)?.let { user ->
             // TODO: clean up this horrible mess
             val currentAttributes = user.attributes ?: mutableMapOf()
@@ -159,12 +162,15 @@ class AuthenticationSuccessListener(
             else {
                 try {
                     val lastSync  = currentAttributes["roles_synced_at"]!!.first()
-                    val timeStamp = lastSync.substring(0, Math.min(lastSync.length, lastSync.indexOf('.') + 4)) + "Z"
-                    val dateTime = Instant.parse(timeStamp)
-                    val now = Instant.now()
-                    if (Duration.between(dateTime, now).toMinutes() > 10) {
+                    val lastSyncInstant = LocalDateTime.parse(lastSync)
+                    val now = LocalDateTime.now()
+                    val diff = Duration.between(lastSyncInstant, now).toMinutes()
+                    if (diff > 10) {
                         logger.debug { "syncing $username to courses after more than 10min" }
                         courseService.updateStudentRoles(username)
+                    }
+                    else {
+                        logger.debug { "only $diff minutes elapsed since last sync of $username at ${lastSync} (now: $now)" }
                     }
                 } catch (e: Exception) {
                     logger.debug { "problem ($e, ${e.stackTrace}) with sync calculation; syncing $username to courses anyway" }
