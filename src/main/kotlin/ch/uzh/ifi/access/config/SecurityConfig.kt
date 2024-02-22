@@ -26,6 +26,9 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
 
 
 @AllArgsConstructor
@@ -147,9 +150,26 @@ class AuthenticationSuccessListener(
     override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
         val username = event.authentication.name
         roleService.getUserRepresentationForUsername(username)?.let { user ->
+            // TODO: clean up this horrible mess
+            val currentAttributes = user.attributes ?: mutableMapOf()
             if (user.attributes?.containsKey("roles_synced_at") != true) {
-                logger.debug { "syncing $username to courses" }
+                logger.debug { "syncing $username to courses for the first time" }
                 courseService.updateStudentRoles(username)
+            }
+            else {
+                try {
+                    val lastSync  = currentAttributes["roles_synced_at"]!!.first()
+                    val timeStamp = lastSync.substring(0, Math.min(lastSync.length, lastSync.indexOf('.') + 4)) + "Z"
+                    val dateTime = Instant.parse(timeStamp)
+                    val now = Instant.now()
+                    if (Duration.between(dateTime, now).toMinutes() > 10) {
+                        logger.debug { "syncing $username to courses after more than 10min" }
+                        courseService.updateStudentRoles(username)
+                    }
+                } catch (e: Exception) {
+                    logger.debug { "problem ($e, ${e.stackTrace}) with sync calculation; syncing $username to courses anyway" }
+                    courseService.updateStudentRoles(username)
+                }
             }
         }
     }

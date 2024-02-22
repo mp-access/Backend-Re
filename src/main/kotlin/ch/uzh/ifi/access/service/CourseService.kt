@@ -663,6 +663,7 @@ exit ${'$'}exit_code;
         CacheEvict(value = ["getUserRoles"], key = "#username")
     ])
     fun updateStudentRoles(username: String) {
+        logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
         getCourses().forEach { course ->
             logger.debug { "syncing to ${course.slug}"}
             roleService.updateStudentRoles(course, course.registeredStudents, username)

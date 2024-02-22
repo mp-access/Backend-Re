@@ -96,6 +96,8 @@ class RoleService(
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } == true
         val matchByEmail = user.email == student
+        if (matchByUsername) { logger.debug { "X: matchByUsername: ${student} -> username: ${user.username}, email: ${user.email}"} }
+        if (matchByEmail) { logger.debug { "X: matchByEmail: ${student} ->  username: ${user.username}, email: ${user.email}"} }
         return (matchByUsername || matchByAffiliationID || matchByPersonID || matchByEmail)
     }
 
@@ -143,6 +145,7 @@ class RoleService(
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
         logger.debug { "B: updating roles for ${username} (roles to add: ${rolesToAdd})"}
+        logger.debug { "Searching if ${username} is in ${role.getUserMembers(0, -1).size} members of ${role} in keycloak" }
         role.getUserMembers(0, -1)
             .filter {
                 studentMatchesUser(username, it)
@@ -151,11 +154,15 @@ class RoleService(
                 logger.debug { "B: removing ${rolesToAdd} from ${username}"}
                 accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
             }
+        logger.debug { "Comparing $username to ${accessRealm.users().list(0, -1).size} users in keycloak" }
         accessRealm.users().list(0, -1).forEach {
             if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registrationIDs)) {
                 logger.debug { "B: adding roles ${rolesToAdd} to ${it.username}" }
                 accessRealm.users()[it.id].roles().realmLevel().add(rolesToAdd)
                 accessRealm.users()[it.id].update(updateRoleTimestamp(it))
+            }
+            else if  (studentMatchesUser(username, it)) {
+                logger.debug { "Y: matching user ${username} to ${it.username} did not register for course ${course.slug}" }
             }
         }
     }
