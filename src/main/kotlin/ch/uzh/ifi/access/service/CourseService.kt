@@ -708,7 +708,7 @@ exit ${'$'}exit_code;
                 evaluation.remainingAttempts,
                 task.maxAttempts,
                 task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
-                listOf()
+                evaluation.submissions
             )
         }
     }

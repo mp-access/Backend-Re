@@ -98,6 +98,7 @@ class PublicAPITests(
     @Test
     @Order(5)
     fun `Can get results for individual participant`() {
+        // TODO change this test to work with any number of submissions
         // curl -X GET 'http://localhost:8081/api/courses/access-mock-course/participants/student@uzh.ch' -H 'Content-Type: application/json' -H 'X-API-Key: 1234'
         mvc.perform(
             get("/courses/access-mock-course/participants/student@uzh.ch")
