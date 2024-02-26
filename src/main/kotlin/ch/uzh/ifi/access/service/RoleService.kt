@@ -35,6 +35,9 @@ class RoleService(
         if (resByUsername == null && resByEmail == null) {
             logger.debug { "RoleService: Could not find user $username" }
         }
+        if (resByUsername == null && resByEmail != null) {
+            logger.debug { "RoleService: Found $username by email only" }
+        }
         if (resByUsername != null)
             return resByUsername
         return resByEmail
@@ -150,7 +153,6 @@ class RoleService(
         val role = accessRealm.roles()[Role.STUDENT.withCourse(course.slug)]
         val rolesToAdd = listOf(role.toRepresentation())
         logger.debug { "B: updating roles for ${username} (roles to add: ${rolesToAdd})"}
-        logger.debug { "Searching if ${username} is in ${role.getUserMembers(0, -1).size} members of ${role} in keycloak" }
         role.getUserMembers(0, -1)
             .filter {
                 studentMatchesUser(username, it)
@@ -159,7 +161,6 @@ class RoleService(
                 logger.debug { "B: removing ${rolesToAdd} from ${username}"}
                 accessRealm.users()[it.id].roles().realmLevel().remove(rolesToAdd)
             }
-        logger.debug { "Comparing $username to ${accessRealm.users().list(0, -1).size} users in keycloak" }
         accessRealm.users().list(0, -1).forEach {
             if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registrationIDs)) {
                 logger.debug { "B: adding roles ${rolesToAdd} to ${it.username}" }
@@ -187,9 +188,7 @@ class RoleService(
     }
 
     fun getAllUserIdsFor(userId: String): List<String> {
-        val userOptional = accessRealm.users().search(userId).stream().findFirst()
-        if (!userOptional.isPresent) { return emptyList() }
-        val user = userOptional.get()
+        val user = getUserRepresentationForUsername(userId) ?: return emptyList()
         val results = mutableListOf<String>()
         user.username?.let { results.add(it) }
         user.email?.let { results.add(it) }
