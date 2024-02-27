@@ -708,7 +708,7 @@ exit ${'$'}exit_code;
                 evaluation.remainingAttempts,
                 task.maxAttempts,
                 task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
-                evaluation.submissions
+                evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points == task.maxPoints }?.let { listOf(it) } ?: listOf()
             )
         }
     }
