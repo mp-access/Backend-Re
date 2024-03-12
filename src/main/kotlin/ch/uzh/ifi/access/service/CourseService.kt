@@ -258,7 +258,7 @@ class CourseService(
     }
 
     fun calculateAssignmentMaxPoints(tasks: List<Task>, userId: String?): Double {
-        return tasks.stream().mapToDouble { it.maxPoints!! }.sum()
+        return tasks.stream().filter{ it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
     fun calculateCoursePoints(assignments: List<Assignment>, userId: String?): Double {
