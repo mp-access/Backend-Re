@@ -687,7 +687,18 @@ exit ${'$'}exit_code;
 
     fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        val evaluation = getEvaluation(task, userId)
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        logger.debug { "Searching for evaluations for $userId ($userIds)..." }
+        // TODO: refactor once single user ID is implemented
+        // this preserves existing behavior for now
+        var evaluation = getEvaluation(task, userId)
+        // if existing behavior didn't work, try other user IDs
+        if (evaluation == null) {
+            evaluation = userIds.map {
+                getEvaluation(task, it)
+            }.filterNotNull().firstOrNull()
+        }
+        logger.debug { "Evaluation: $evaluation (${evaluation?.userId}" }
         if (evaluation == null) {
             return TaskProgressDTO(
                 userId,
