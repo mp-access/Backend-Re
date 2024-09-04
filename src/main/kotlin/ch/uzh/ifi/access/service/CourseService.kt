@@ -390,6 +390,8 @@ class CourseService(
             val prune = submissions.filter { !keepOrdinalNums.contains(it.ordinalNum!!) }
             evaluation.submissions.removeAll(prune)
             submissionRepository.deleteAll(prune)
+            submissionRepository.flush()
+            evaluationRepository.flush()
             logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map{it.ordinalNum}}" }
         }
     }
