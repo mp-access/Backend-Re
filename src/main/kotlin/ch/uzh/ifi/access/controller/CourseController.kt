@@ -29,6 +29,12 @@ class CourseRootController(
         return courseService.editCourse(courseDTO).slug
     }
 
+    @GetMapping("/pruneSubmissions")
+    fun pruneSubmissions(): String? {
+        courseService.globalPruneSubmissions()
+        return "done"
+    }
+
     @PostMapping("/contact")
     fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
         courseService.sendMessage(contactDTO!!)

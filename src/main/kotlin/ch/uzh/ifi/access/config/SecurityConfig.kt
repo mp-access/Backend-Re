@@ -83,7 +83,8 @@ class SecurityConfig(private val env: Environment) {
                 ).permitAll()
                 .requestMatchers(
                     "/courses/{course}/participants/**",
-                    "/courses/{course}/summary"
+                    "/courses/{course}/summary",
+                    "/pruneSubmissions"
                 ).access { _, context ->
                     AuthorityAuthorizationDecision(isAuthorizedAPIKey(context), parseAuthorities(listOf("supervisor")))
                 }

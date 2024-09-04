@@ -338,6 +338,44 @@ class CourseService(
         submissionRepository.saveAndFlush(submission)
     }
 
+    // only necessary once to prune existing data in already-deployed ACCESS
+    fun globalPruneSubmissions() {
+        evaluationRepository.findAll().forEach { if (it != null) {pruneSubmissions(it) } }
+    }
+
+    fun pruneSubmissions(evaluation: Evaluation) {
+        // keep all GRADE submissions, but prune RUN and TEST submissions
+        listOf(Command.RUN, Command.TEST, Command.GRADE).map { command ->
+            Pair(command, evaluation.submissions.filter { it.command == command }.sortedByDescending { it.ordinalNum })
+        }.filter { it.second.isNotEmpty() }.forEach { (command, submissions) ->
+            val latest = submissions.first().ordinalNum!!
+            // always keep the latest 5
+            val keepOrdinalNums = submissions.take(5).map { it.ordinalNum!! }.toMutableSet()
+            // always keep the (latest) best GRADE submission
+            if (command == Command.GRADE) {
+                val best = submissions.maxWith(compareBy<Submission> { it.points }.thenBy { it.ordinalNum })
+                keepOrdinalNums.add(best.ordinalNum!!)
+            }
+            // keep increasingly fewer submissions the older they are (none older than 100 submissions ago)
+            var low = 5
+            listOf(10, 15, 25, 50, 75, 100).forEach { high ->
+                // find oldest in current low < distance_to_latest <= high bracket
+                val highestOrdinalNum = submissions.lastOrNull {
+                    val distance = latest - it.ordinalNum!!
+                    distance in low..<high
+                }?.ordinalNum
+                if (highestOrdinalNum != null) {
+                    keepOrdinalNums.add(highestOrdinalNum)
+                }
+                low = high
+            }
+            val prune = submissions.filter { !keepOrdinalNums.contains(it.ordinalNum!!) }
+            evaluation.submissions.removeAll(prune)
+            submissionRepository.deleteAll(prune)
+            logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map{it.ordinalNum}}" }
+        }
+    }
+
     @Caching(evict = [
         CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
         CacheEvict(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
@@ -366,6 +404,7 @@ class CourseService(
             )
         }
         val submission = submissionRepository.saveAndFlush(newSubmission)
+        pruneSubmissions(evaluation)
         submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
         submission.valid = !submission.isGraded

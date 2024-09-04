@@ -43,7 +43,8 @@ class Evaluation {
     fun addSubmission(newSubmission: Submission): Submission {
         submissions.add(newSubmission)
         newSubmission.evaluation = this
-        newSubmission.ordinalNum = countSubmissionsByType(newSubmission.command!!)
+        val latestOfType = submissions.filter { it.command == newSubmission.command }.maxByOrNull { it.ordinalNum ?: 0 }
+        newSubmission.ordinalNum = (latestOfType?.ordinalNum ?: 0) + 1
         return newSubmission
     }
 
