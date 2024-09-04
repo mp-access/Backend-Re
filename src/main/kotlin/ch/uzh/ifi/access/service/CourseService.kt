@@ -25,6 +25,7 @@ import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.lang.Nullable
 import org.springframework.security.core.context.SecurityContextHolder
@@ -340,7 +341,24 @@ class CourseService(
 
     // only necessary once to prune existing data in already-deployed ACCESS
     fun globalPruneSubmissions() {
-        evaluationRepository.findAll().forEach { if (it != null) {pruneSubmissions(it) } }
+        val pageSize = 100
+        var page = 0
+        var hasMore = true
+
+        while (hasMore) {
+            val pageRequest = PageRequest.of(page, pageSize)
+            val evaluations = evaluationRepository.findAll(pageRequest)
+            if (evaluations.isEmpty) {
+                hasMore = false
+            } else {
+                evaluations.forEach {
+                    if (it != null) {
+                        pruneSubmissions(it)
+                    }
+                }
+                page++
+            }
+        }
     }
 
     fun pruneSubmissions(evaluation: Evaluation) {
@@ -404,7 +422,7 @@ class CourseService(
             )
         }
         val submission = submissionRepository.saveAndFlush(newSubmission)
-        pruneSubmissions(evaluation)
+        //pruneSubmissions(evaluation)
         submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
         submission.valid = !submission.isGraded
