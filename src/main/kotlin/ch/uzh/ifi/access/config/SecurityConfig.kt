@@ -71,6 +71,7 @@ class SecurityConfig(private val env: Environment) {
             "/courses/contact/**",
             "/courses/{course}/summary",
             "/courses/{course}/participants/**",
+            "/courses/{course}/assistants/**",
             "/webhooks/**")
         }
         .authorizeHttpRequests { authorize ->
@@ -83,6 +84,7 @@ class SecurityConfig(private val env: Environment) {
                 ).permitAll()
                 .requestMatchers(
                     "/courses/{course}/participants/**",
+                    "/courses/{course}/assistants/**",
                     "/courses/{course}/summary",
                     "/pruneSubmissions"
                 ).access { _, context ->

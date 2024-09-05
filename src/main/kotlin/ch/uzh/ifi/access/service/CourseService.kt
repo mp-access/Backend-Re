@@ -726,7 +726,7 @@ exit ${'$'}exit_code;
         logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
         getCourses().forEach { course ->
             logger.debug { "syncing to ${course.slug}"}
-            roleService.updateStudentRoles(course, course.registeredStudents, username)
+            roleService.updateStudentRoles(course, username)
         }
     }
 
@@ -817,13 +817,18 @@ exit ${'$'}exit_code;
             }.toList())
     }
 
-    fun registerStudents(courseSlug: String, students: List<String>) {
+    fun setStudents(courseSlug: String, students: List<String>) {
         val course: Course = getCourseBySlug(courseSlug)
-        println(students)
         course.registeredStudents = students.toMutableSet()
         courseRepository.save(course)
-        logger.debug { "Registered ${course.registeredStudents.size} in course $courseSlug"}
-        println()
+        logger.debug { "Set ${course.registeredStudents.size} students in course $courseSlug"}
+    }
+
+    fun setAssistants(courseSlug: String, assistants: List<String>) {
+        val course: Course = getCourseBySlug(courseSlug)
+        course.assistants = assistants.toMutableSet()
+        courseRepository.save(course)
+        logger.debug { "Set ${course.assistants.size} assistants in course $courseSlug"}
     }
 
     fun convertSizeToBytes(sizeStr: String): Long {

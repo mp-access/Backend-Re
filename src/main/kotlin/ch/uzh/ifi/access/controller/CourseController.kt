@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
@@ -150,9 +151,19 @@ class CourseController (
     @PostMapping("/{course}/participants")
     fun registerParticipants(@PathVariable course: String, @RequestBody students: List<String>) {
         // set list of course students
-        courseService.registerStudents(course, students)
+        courseService.setStudents(course, students)
         // update keycloak roles
         roleService.updateStudentRoles(courseService.getCourseBySlug(course))
+    }
+
+    @PostMapping("/{course}/assistants")
+    //@PreAuthorize("hasRole('supervisor')")
+    fun registerAssistants(@PathVariable course: String, @RequestBody assistants: List<String>) {
+        // set list of course students
+        courseService.setAssistants(course, assistants)
+        // update keycloak roles
+        roleService.updateStudentRoles(courseService.getCourseBySlug(course),
+                                       arrayOf(Role.ASSISTANT.withCourse(course)))
     }
 
     @GetMapping("/{course}/participants/{participant}")
