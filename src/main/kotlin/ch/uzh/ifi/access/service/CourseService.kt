@@ -339,7 +339,7 @@ class CourseService(
         submissionRepository.saveAndFlush(submission)
     }
 
-    // only necessary once to prune existing data in already-deployed ACCESS
+    // only necessary to prune existing data in already-deployed ACCESS
     fun globalPruneSubmissions() {
         val pageSize = 100
         var page = 0
@@ -361,6 +361,7 @@ class CourseService(
         }
     }
 
+    // This will delete older submissions of an evaluation, currently NOT in use (call to this is commented below)
     fun pruneSubmissions(evaluation: Evaluation) {
         // keep all GRADE submissions, but prune RUN and TEST submissions
         listOf(Command.RUN, Command.TEST, Command.GRADE).map { command ->

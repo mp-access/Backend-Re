@@ -29,11 +29,14 @@ class CourseRootController(
         return courseService.editCourse(courseDTO).slug
     }
 
+    /*
     @GetMapping("/pruneSubmissions")
-    fun pruneSubmissions(): String? {
+    @PreAuthorize("hasRole('supervisor')")
+    fun pruneSubmissions(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
         courseService.globalPruneSubmissions()
         return "done"
     }
+    */
 
     @PostMapping("/contact")
     fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
