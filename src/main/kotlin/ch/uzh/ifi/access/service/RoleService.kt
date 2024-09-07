@@ -104,17 +104,19 @@ class RoleService(
     fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
         val matchByUsername = user.username == student
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
+        val matchByAffiliationEmail = user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it == student } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } == true
         val matchByEmail = user.email == student
-        return (matchByUsername || matchByAffiliationID || matchByPersonID || matchByEmail)
+        return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
     }
 
     fun userRegisteredForCourse(user: UserRepresentation, registrationIDs: Set<String>): Boolean {
         val matchByUsername = user.username in registrationIDs
         val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in registrationIDs } == true
+        val matchByAffiliationEmail = user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it in registrationIDs } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it in registrationIDs } == true
         val matchByEmail = user.email in registrationIDs
-        return (matchByUsername || matchByAffiliationID || matchByPersonID || matchByEmail)
+        return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
     }
 
     fun updateRoleTimestamp(user: UserRepresentation): UserRepresentation {
