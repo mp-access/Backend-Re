@@ -127,27 +127,24 @@ class RoleService(
     }
 
     // TODO merge the next two methods
-    fun updateStudentRoles(course: Course, roleNames: Array<String> = arrayOf(Role.STUDENT.withCourse(course.slug))) {
-        val students = course.registeredStudents + course.assistants
-        val roles = roleNames.map { accessRealm.roles()[it] }
-        val rolesToAdd = roles.map {
-            it.toRepresentation()
-        }
-        logger.debug { "A: updating roles ${rolesToAdd}"}
-        roles.map { it.getUserMembers(0, -1) }.flatten().toSet()
+    fun updateStudentRoles(slug: String, registrationIDs: Set<String>, roleName: String) {
+        val role = accessRealm.roles()[roleName]
+        val roleRepresentation = role.toRepresentation()
+        logger.debug { "A: updating role ${roleRepresentation}"}
+        role.getUserMembers(0, -1).toSet()
             .filter { member: UserRepresentation ->
-                students.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
+                registrationIDs.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
             }
             .forEach { member: UserRepresentation ->
-                logger.debug { "A: removing roles ${rolesToAdd} from ${member.username}"}
-                accessRealm.users()[member.id].roles().realmLevel().remove(rolesToAdd)
+                logger.debug { "A: removing role ${roleRepresentation} from ${member.username}"}
+                accessRealm.users()[member.id].roles().realmLevel().remove(listOf(roleRepresentation))
             }
         accessRealm.users().list(0, -1).forEach { user ->
-            students
+            registrationIDs
                 .filter { studentMatchesUser(it, user) }
                 .map {
-                    logger.debug { "A: adding roles ${rolesToAdd} to ${user.username}"}
-                    accessRealm.users()[user.id].roles().realmLevel().add(rolesToAdd)
+                    logger.debug { "A: adding role ${roleRepresentation} to ${user.username}"}
+                    accessRealm.users()[user.id].roles().realmLevel().add(listOf(roleRepresentation))
                     accessRealm.users()[user.id].update(updateRoleTimestamp(user))
                 }
         }

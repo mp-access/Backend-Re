@@ -153,7 +153,8 @@ class CourseController (
         // set list of course students
         courseService.setStudents(course, students)
         // update keycloak roles
-        roleService.updateStudentRoles(courseService.getCourseBySlug(course))
+        roleService.updateStudentRoles(course, students.toSet(),
+            Role.STUDENT.withCourse(course))
     }
 
     @PostMapping("/{course}/assistants")
@@ -162,8 +163,8 @@ class CourseController (
         // set list of course students
         courseService.setAssistants(course, assistants)
         // update keycloak roles
-        roleService.updateStudentRoles(courseService.getCourseBySlug(course),
-                                       arrayOf(Role.ASSISTANT.withCourse(course)))
+        roleService.updateStudentRoles(course, assistants.toSet(),
+                                       Role.ASSISTANT.withCourse(course))
     }
 
     @GetMapping("/{course}/participants/{participant}")
