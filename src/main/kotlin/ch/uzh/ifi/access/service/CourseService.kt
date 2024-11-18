@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dao.Rank
 import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.model.dto.*
@@ -54,8 +55,8 @@ class CourseServiceForCaching(
 
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = courseService.getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            val user = roleService.getUserByUsername(it)
+            return course.registeredStudents.map {
+            val user = roleService.getUserRepresentationForUsername(it)
             if (user != null) {
                 val studentDTO = courseService.getStudent(courseSlug, user)
                 studentDTO.username = user.username
@@ -70,7 +71,7 @@ class CourseServiceForCaching(
     fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
         val course = courseService.getCourseBySlug(courseSlug)
         return course.registeredStudents.map {
-            val user = roleService.getUserByUsername(it)
+            val user = roleService.getUserRepresentationForUsername(it)
             if (user != null) {
                 // TODO!: make sure evaluations are saved under only a single user ID in the future!
                 // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
@@ -238,6 +239,20 @@ class CourseService(
         }.toList()
     }
 
+    @Transactional
+    fun getUserRoles(usernames: List<String>): List<String> {
+        return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
+            val slug = course.slug
+            usernames.flatMap { username ->
+                listOfNotNull(
+                    if (course.supervisors.contains(username)) "$slug-supervisor" else null,
+                    if (course.assistants.contains(username)) "$slug-assistant" else null,
+                    if (course.registeredStudents.contains(username)) "$slug-student" else null,
+                )
+            }
+        }
+    }
+
     @Cacheable(value = ["calculateAvgTaskPoints"], key = "#taskSlug")
     fun calculateAvgTaskPoints(taskSlug: String?): Double {
         return 0.0
@@ -246,16 +261,24 @@ class CourseService(
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
-        // TODO!: make sure evaluations are saved under only a single user ID in the future!
-        // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
         val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        return calculateTaskPoints(taskId, userIds)
+    }
+
+    fun calculateTaskPoints(taskId: Long?, userIds: List<String>): Double {
+        // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
         return userIds.maxOfOrNull {
             getEvaluation(taskId, verifyUserId(it))?.bestScore ?: 0.0
         } ?: 0.0
     }
 
-    fun calculateAssignmentPoints(tasks: List<Task>, userId: String?): Double {
-        return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userId) }.sum()
+    fun calculateAssignmentPoints(tasks: List<Task>): Double {
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(null))
+        return calculateAssignmentPoints(tasks, userIds)
+
+    }
+    fun calculateAssignmentPoints(tasks: List<Task>, userIds: List<String>): Double {
+        return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userIds) }.sum()
     }
 
     fun calculateAssignmentMaxPoints(tasks: List<Task>, userId: String?): Double {
@@ -263,8 +286,9 @@ class CourseService(
     }
 
     fun calculateCoursePoints(assignments: List<Assignment>, userId: String?): Double {
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
         return assignments.stream()
-            .mapToDouble { assignment: Assignment -> calculateAssignmentPoints(assignment.tasks, userId) }
+            .mapToDouble { assignment: Assignment -> calculateAssignmentPoints(assignment.tasks, userIds) }
             .sum()
     }
 
@@ -719,8 +743,10 @@ exit ${'$'}exit_code;
 
     @Transactional
     @Caching(evict = [
-        CacheEvict(value = ["getUserByUsername"], key = "#username"),
-        CacheEvict(value = ["getUserRoles"], key = "#username")
+        CacheEvict(value = ["usernameForLogin"], key = "#username"),
+        CacheEvict(value = ["userRoles"], key = "#username"),
+        CacheEvict(value = ["usernameForLogin"], key = "#username"),
+        CacheEvict(value = ["getAllUserIdsFor"], key = "#username"),
     ])
     fun updateStudentRoles(username: String) {
         logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
@@ -729,6 +755,35 @@ exit ${'$'}exit_code;
             roleService.updateStudentRoles(course, username)
         }
     }
+
+    @Transactional
+    @Caching(evict = [
+        CacheEvict(value = ["userRoles"], allEntries = true),
+    ])
+    fun setRoleUsers(course: Course, usernames: List<String>, role: Role): Pair<List<String>, List<String>> {
+        val existingUsers = when (role) {
+            Role.SUPERVISOR -> course.supervisors
+            Role.ASSISTANT -> course.assistants
+            Role.STUDENT -> course.registeredStudents
+        }
+
+        val newUsersSet = usernames.toSet()
+        val existingUsersSet = existingUsers.toSet()
+
+        val removedUsers = existingUsersSet.minus(newUsersSet).toList()
+        val addedUsers = newUsersSet.minus(existingUsersSet).toList()
+
+        when (role) {
+            Role.SUPERVISOR -> course.supervisors = newUsersSet.toMutableSet()
+            Role.ASSISTANT -> course.assistants = newUsersSet.toMutableSet()
+            Role.STUDENT -> course.registeredStudents = newUsersSet.toMutableSet()
+        }
+
+        courseRepository.save(course)
+
+        return Pair(removedUsers, addedUsers)
+    }
+
 
     @Cacheable(value = ["getStudent"], key = "#courseSlug + '-' + #user.username")
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {

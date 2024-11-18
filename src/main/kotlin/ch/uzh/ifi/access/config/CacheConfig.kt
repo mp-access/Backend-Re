@@ -14,10 +14,11 @@ class CacheConfig {
     fun cacheManager(): CacheManager {
         return ConcurrentMapCacheManager(
             "calculateAvgTaskPoints",
-            "getUserByUsername",
-            "getUserRoles",
             "getStudent",
-            "getStudentWithPoints"
+            "getStudentWithPoints",
+            "userRoles",
+            "usernameForLogin",
+            "getAllUserIdsFor"
         )
     }
 }

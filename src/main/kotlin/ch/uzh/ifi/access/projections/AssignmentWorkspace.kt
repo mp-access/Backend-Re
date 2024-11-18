@@ -42,7 +42,7 @@ interface AssignmentWorkspace {
     @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
     val maxPoints: Double?
 
-    @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
+    @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks)}")
     val points: Double?
 
     @get:Value("#{@courseService.enabledTasksOnly(target.tasks)}")

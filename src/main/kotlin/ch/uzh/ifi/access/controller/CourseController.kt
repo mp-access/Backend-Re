@@ -8,10 +8,13 @@ import ch.uzh.ifi.access.service.CourseServiceForCaching
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
+import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
+import java.util.concurrent.Semaphore
 
 
 @RestController
@@ -75,6 +78,7 @@ class WebhooksController(
 
 @RestController
 @RequestMapping("/courses")
+@EnableAsync
 class CourseController (
     private val courseService: CourseService,
     private val courseServiceForCaching: CourseServiceForCaching,
@@ -82,14 +86,48 @@ class CourseController (
 )
     {
 
+    private val logger = KotlinLogging.logger {}
+
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
     fun updateCourse(@PathVariable course: String?): String? {
         return courseService.updateCourse(course!!).slug
     }
 
+    private val semaphore = Semaphore(1)
+    private fun updateRoles(authentication: Authentication) {
+        val username = authentication.name
+        try {
+            semaphore.acquire()
+            roleService.getUserRepresentationForUsername(username)?.let { user ->
+                val attributes = user.attributes ?: mutableMapOf()
+                if (attributes["roles_synced_at"] == null) {
+                    user.attributes = attributes
+                    roleService.getUserResourceById(user.id).update(user)
+                    val searchNames = buildList {
+                        add(user.username)
+                        user.email?.let { add(it) }
+                        attributes["swissEduIDLinkedAffiliationMail"]?.let { addAll(it) }
+                        attributes["swissEduIDAssociatedMail"]?.let { addAll(it) }
+                    }
+                    val roles = courseService.getUserRoles(searchNames)
+                    roleService.setFirstLoginRoles(user, roles)
+                    logger.debug { "Enrolled first-time user $username in their courses" }
+                    attributes["roles_synced_at"] = listOf(LocalDateTime.now().toString())
+                }
+            }
+        } catch (e: Exception) {
+            logger.error { "Error looking up user $username: ${e.message}" }
+            throw e
+        } finally {
+            semaphore.release()
+            logger.debug { "Released semaphore (${semaphore.queueLength} waiting, ${semaphore.availablePermits()} available) for user lookup: $username" }
+        }
+    }
+
     @GetMapping("")
-    fun getCourses(): List<CourseOverview> {
+    fun getCourses(authentication: Authentication): List<CourseOverview> {
+        updateRoles(authentication)
         return courseService.getCoursesOverview()
     }
 
@@ -148,28 +186,32 @@ class CourseController (
             .filter { it.email != null && it.firstName != null && it.lastName != null }
     }
 
-    @PostMapping("/{course}/participants")
-    fun registerParticipants(@PathVariable course: String, @RequestBody students: List<String>) {
-        // set list of course students
-        courseService.setStudents(course, students)
-        // update keycloak roles
-        roleService.updateStudentRoles(course, students.toSet(),
-            Role.STUDENT.withCourse(course))
+
+    //@Transactional
+    private fun assignRoles(slug: String, loginNames: List<String>, role: Role) {
+        val assessment = courseService.getCourseBySlug(slug)
+        // Saves the list of usernames in the database
+        val (remove, add) = courseService.setRoleUsers(assessment, loginNames, role)
+        // Grants the correct role to any existing users in usernames
+        // This is one of two ways a keycloak user can receive/lose a role, the other way is on first login.
+        roleService.setRoleUsers(assessment, remove, add, role)
+        //return courseService.getAssessmentDetailsBySlug(slug)
     }
 
     @PostMapping("/{course}/assistants")
-    //@PreAuthorize("hasRole('supervisor')")
-    fun registerAssistants(@PathVariable course: String, @RequestBody assistants: List<String>) {
-        // set list of course students
-        courseService.setAssistants(course, assistants)
-        // update keycloak roles
-        roleService.updateStudentRoles(course, assistants.toSet(),
-                                       Role.ASSISTANT.withCourse(course))
+    //@PreAuthorize("hasAuthority('API_KEY') or hasRole('owner')")
+    fun registerAssistants(@PathVariable course: String, @RequestBody usernames: List<String>) {
+        return assignRoles(course, usernames, Role.ASSISTANT)
+    }
+
+    @PostMapping("/{course}/participants")
+    fun registerParticipants(@PathVariable course: String, @RequestBody participants: List<String>) {
+        return assignRoles(course, participants, Role.STUDENT)
     }
 
     @GetMapping("/{course}/participants/{participant}")
     fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
-        val user = roleService.getUserByUsername(participant)?:
+        val user = roleService.getUserRepresentationForUsername(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getCourseProgress(course, user.username)
     }
@@ -180,7 +222,7 @@ class CourseController (
         @PathVariable assignment: String,
         @PathVariable participant: String
     ): AssignmentProgressDTO? {
-        val user = roleService.getUserByUsername(participant)?:
+        val user = roleService.getUserRepresentationForUsername(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getAssignmentProgress(course, assignment, user.username)
     }
@@ -190,7 +232,7 @@ class CourseController (
         @PathVariable course: String, @PathVariable assignment: String,
         @PathVariable task: String, @PathVariable participant: String
     ): TaskProgressDTO? {
-        val user = roleService.getUserByUsername(participant)?:
+        val user = roleService.getUserRepresentationForUsername(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getTaskProgress(course, assignment, task, user.username)
     }

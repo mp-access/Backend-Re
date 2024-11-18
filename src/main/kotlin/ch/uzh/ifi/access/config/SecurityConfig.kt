@@ -1,16 +1,12 @@
 package ch.uzh.ifi.access.config
 
-import ch.uzh.ifi.access.service.CourseService
-import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
-import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
-import org.springframework.security.authentication.event.AuthenticationSuccessEvent
 import org.springframework.security.authorization.AuthorityAuthorizationDecision
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -23,14 +19,8 @@ import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
-import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneId
 
 
 @AllArgsConstructor
@@ -141,45 +131,5 @@ class SecurityConfig(private val env: Environment) {
             "admin-cli"
         )
         return keycloakClient.realm("access")
-    }
-}
-
-@Component
-class AuthenticationSuccessListener(
-    val courseService: CourseService,
-    val roleService: RoleService
-) : ApplicationListener<AuthenticationSuccessEvent> {
-
-    private val logger = KotlinLogging.logger {}
-
-    override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
-        val username = event.authentication.name
-        logger.debug { "USER [$username] LOGGED IN" }
-        roleService.getUserRepresentationForUsername(username)?.let { user ->
-            // TODO: clean up this horrible mess
-            val currentAttributes = user.attributes ?: mutableMapOf()
-            if (user.attributes?.containsKey("roles_synced_at") != true) {
-                logger.debug { "syncing $username to courses for the first time" }
-                courseService.updateStudentRoles(username)
-            }
-            else {
-                try {
-                    val lastSync  = currentAttributes["roles_synced_at"]!!.first()
-                    val lastSyncInstant = LocalDateTime.parse(lastSync)
-                    val now = LocalDateTime.now()
-                    val diff = Duration.between(lastSyncInstant, now).toMinutes()
-                    if (diff > 10) {
-                        logger.debug { "syncing $username to courses after more than 10min" }
-                        courseService.updateStudentRoles(username)
-                    }
-                    else {
-                        logger.debug { "only $diff minutes elapsed since last sync of $username at ${lastSync} (now: $now)" }
-                    }
-                } catch (e: Exception) {
-                    logger.debug { "problem ($e, ${e.stackTrace}) with sync calculation; syncing $username to courses anyway" }
-                    courseService.updateStudentRoles(username)
-                }
-            }
-        }
     }
 }

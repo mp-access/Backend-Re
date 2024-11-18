@@ -6,9 +6,12 @@ import ch.uzh.ifi.access.model.dto.MemberDTO
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.collections4.SetUtils
 import org.keycloak.admin.client.resource.RealmResource
+import org.keycloak.admin.client.resource.UserResource
+import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
@@ -23,6 +26,16 @@ class RoleService(
     ) {
 
     private val logger = KotlinLogging.logger {}
+
+    companion object {
+        private const val SEARCH_LIMIT = 10
+        private val ATTRIBUTE_KEYS = listOf(
+            "swissEduIDLinkedAffiliationUniqueID",
+            "swissEduIDLinkedAffiliationMail",
+            "swissEduPersonUniqueID"
+        )
+    }
+
 
     fun getCurrentUser(): String {
         val authentication: Authentication = SecurityContextHolder.getContext().authentication
@@ -42,6 +55,138 @@ class RoleService(
             return resByUsername
         return resByEmail
     }
+
+    @CacheEvict("userRoles", allEntries = true)
+    fun setFirstLoginRoles(user: UserRepresentation, roles: List<String>) {
+        // this method does never *removes* any roles, so it can only work correctly for the first login
+        accessRealm.users()[user.id].roles().realmLevel().add(roles.map {
+            accessRealm.roles()[it].toRepresentation()
+        })
+
+    }
+
+    fun getUserResourceById(userId: String): UserResource {
+        return accessRealm.users().get(userId)
+    }
+
+    @Cacheable("usernameForLogin", key = "#username") // TODO: evict this somehwere?
+    fun usernameForLogin(username: String): String {
+        if (username.isBlank()) return username
+
+        return findUserByAllCriteria(username)?.username ?: username
+    }
+
+    private fun findUserByAllCriteria(login: String): UserRepresentation? {
+        val usersResource = accessRealm.users()
+        findUserByUsername(usersResource, login)?.let { return it }
+        findUserByEmail(usersResource, login)?.let { return it }
+        findUserByAttributes(usersResource, login)?.let { return it }
+        return null
+    }
+
+    private fun findUserByUsername(users: UsersResource, login: String): UserRepresentation? {
+        return try {
+            users.search(login, 0, 1) // exact match, limit 1
+                .firstOrNull()
+        } catch (e: Exception) {
+            logger.warn { "Error searching by username: ${e.message}" }
+            null
+        }
+    }
+
+    private fun findUserByEmail(users: UsersResource, login: String): UserRepresentation? {
+        return try {
+            users.search(null, null, null, login, 0, 1)
+                .firstOrNull()
+        } catch (e: Exception) {
+            logger.warn { "Error searching by email: ${e.message}" }
+            null
+        }
+    }
+
+    private fun findUserByAttributes(users: UsersResource, login: String): UserRepresentation? {
+        return try {
+            val attributeQueries = ATTRIBUTE_KEYS.joinToString(" OR ") { key ->
+                "\"$key\":\"$login\""
+            }
+            val matchingUsers = users.searchByAttributes(0, SEARCH_LIMIT, attributeQueries)
+            // Verify the match (since searchByAttributes might return partial matches)
+            matchingUsers.firstOrNull { user ->
+                ATTRIBUTE_KEYS.any { key ->
+                    user.attributes?.get(key)?.any { it == login } == true
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn { "Error searching by attributes: ${e.message}" }
+            null
+        }
+    }
+
+    private fun UsersResource.searchByAttributes(
+        firstResult: Int,
+        maxResults: Int,
+        attributeQuery: String
+    ): List<UserRepresentation> {
+        return try {
+            // Use Keycloak's search API with attribute query
+            search(attributeQuery, firstResult, maxResults)
+        } catch (e: Exception) {
+            logger.error { "Failed to search by attributes: ${e.message}" }
+            emptyList()
+        }
+    }
+
+
+    @CacheEvict("userRoles", allEntries = true)
+    fun setRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
+        val roleName = role.withCourse(course.slug)
+        val realmRole = accessRealm.roles()[roleName]
+        val realmRoleRepresentation = realmRole.toRepresentation()
+        // remove role from users which are not in usernames list
+        logger.debug { "removing users to $course: $toRemove"}
+        toRemove.forEach { login ->
+            val username = usernameForLogin(login)
+            try {
+                // Search for exact username match using search query
+                val users = accessRealm.users()
+                    .searchByUsername(username, true)
+
+                val user = users.firstOrNull()
+                if (user != null) {
+                    logger.debug { "Removing role $roleName from ${user.username}"}
+                    accessRealm.users()[user.id].roles().realmLevel().remove(listOf(realmRoleRepresentation))
+                } else {
+                    logger.warn { "User with username $username not found" }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to remove role $roleName to user $username" }
+            }
+        }
+        // add role to all users in usernames list
+        logger.debug { "adding users to $course: ${toAdd}"}
+        toAdd.forEach { login ->
+            val username = usernameForLogin(login)
+            try {
+                // Search for exact username match using search query
+                val users = accessRealm.users()
+                    .searchByUsername(username, true)
+
+                val user = users.firstOrNull()
+                if (user != null) {
+                    logger.debug { "Adding role $roleName to ${user.username}" }
+                    accessRealm.users()[user.id].roles()
+                        .realmLevel()
+                        .add(listOf(realmRoleRepresentation))
+                } else {
+                    logger.warn { "User with username $username not found" }
+                }
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to add role $roleName to user $username" }
+            }
+        }
+    }
+
+
 
     fun createCourseRoles(courseSlug: String?): String? {
         val studentRole = Role.STUDENT.withCourse(courseSlug)
@@ -88,15 +233,7 @@ class RoleService(
             .getUserMembers(0, -1)
     }
 
-    // TODO: confusing username nomenclature. Is it the ACCESS/Keycloak username or the registration username (usually shibID)?
-    @Cacheable(value = ["getUserByUsername"], key = "#username")
-    fun getUserByUsername(username: String): UserRepresentation? {
-        return accessRealm.users().list(0, -1).firstOrNull {
-            studentMatchesUser(username, it)
-        }
-    }
-
-    @Cacheable(value = ["getUserRoles"], key = "#username")
+    @Cacheable(value = ["userRoles"], key = "#username")
     fun getUserRoles(username: String, userId: String): MutableList<RoleRepresentation> {
         return accessRealm.users()[userId].roles().realmLevel().listEffective()
     }
@@ -201,6 +338,7 @@ class RoleService(
         return sessions.size
     }
 
+    @Cacheable("getAllUserIdsFor", key = "#userId")
     fun getAllUserIdsFor(userId: String): List<String> {
         val user = getUserRepresentationForUsername(userId) ?: return emptyList()
         val results = mutableListOf<String>()
