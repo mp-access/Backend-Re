@@ -285,13 +285,12 @@ class CourseService(
         return tasks.stream().filter{ it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
-    fun calculateCoursePoints(assignments: List<Assignment>, userId: String?): Double {
+    fun calculateCoursePoints(slug: String, userId: String?): Double {
         val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
-        return assignments.stream()
-            .mapToDouble { assignment: Assignment -> calculateAssignmentPoints(assignment.tasks, userIds) }
-            .sum()
+        return courseRepository.getTotalPoints(slug, userIds.toTypedArray()) ?: 0.0
     }
 
+    @Cacheable("getMaxPoints", key = "#courseSlug")
     fun getMaxPoints(courseSlug: String?): Double {
         return getAssignments(courseSlug).sumOf { it.maxPoints!! }
     }
@@ -717,6 +716,9 @@ exit ${'$'}exit_code;
     }
 
     @Transactional
+    @Caching(evict = [
+        CacheEvict(value = ["getMaxPoints"], key = "#courseSlug"),
+    ])
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.updateFromRepository(existingCourse)
@@ -792,7 +794,7 @@ exit ${'$'}exit_code;
 
     @Cacheable(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #user.username")
     fun getStudentWithPoints(courseSlug: String, user: UserRepresentation): StudentDTO {
-        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
+        val coursePoints = calculateCoursePoints(courseSlug, user.username)
         return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
     }
 

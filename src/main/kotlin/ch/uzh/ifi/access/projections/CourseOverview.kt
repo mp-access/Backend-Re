@@ -15,7 +15,7 @@ interface CourseOverview {
     val overrideStart: LocalDateTime?
     val overrideEnd: LocalDateTime?
 
-    @get:Value("#{@courseService.calculateCoursePoints(target.assignments, null)}")
+    @get:Value("#{@courseService.calculateCoursePoints(target.slug, null)}")
     val points: Double?
 
     @get:Value("#{@courseService.getMaxPoints(target.slug)}")
