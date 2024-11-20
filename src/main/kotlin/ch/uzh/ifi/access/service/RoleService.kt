@@ -92,13 +92,16 @@ class RoleService(
 
     private fun findUserByAttributes(users: UsersResource, login: String): UserRepresentation? {
         return try {
+            val queries = mutableListOf<String>()
             for (key in ATTRIBUTE_KEYS) {
                 val attributeQuery = "$key:$login"
+                queries.add(attributeQuery)
                 val results = users.searchByAttributes(attributeQuery)
                 results.firstOrNull { user ->
                     user.attributes?.get(key)?.any { it == login } == true
                 }?.let { return it }
             }
+            logger.debug { "Could not find user for login '$login' using queries '${queries.joinToString(",")}'" }
             null
         } catch (e: Exception) {
             logger.warn { "Error searching by attributes: ${e.message}" }
