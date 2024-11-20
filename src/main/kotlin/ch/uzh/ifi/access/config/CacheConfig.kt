@@ -19,7 +19,8 @@ class CacheConfig {
             "userRoles",
             "usernameForLogin",
             "getAllUserIdsFor",
-            "getMaxPoints"
+            "getMaxPoints",
+            "assignmentMaxPoints",
         )
     }
 }

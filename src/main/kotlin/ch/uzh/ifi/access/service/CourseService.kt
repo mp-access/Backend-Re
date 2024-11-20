@@ -215,7 +215,8 @@ class CourseService(
     }
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        return getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
+        val res = getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
+        return res
     }
 
     fun getAssignmentDeadlineForTask(taskId: Long?): LocalDateTime? {
@@ -281,7 +282,8 @@ class CourseService(
         return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userIds) }.sum()
     }
 
-    fun calculateAssignmentMaxPoints(tasks: List<Task>, userId: String?): Double {
+    @Cacheable("assignmentMaxPoints")
+    fun calculateAssignmentMaxPoints(tasks: List<Task>): Double {
         return tasks.stream().filter{ it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
@@ -718,6 +720,7 @@ exit ${'$'}exit_code;
     @Transactional
     @Caching(evict = [
         CacheEvict(value = ["getMaxPoints"], key = "#courseSlug"),
+        CacheEvict(value = ["assignmentMaxPoints"], allEntries = true),
     ])
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)

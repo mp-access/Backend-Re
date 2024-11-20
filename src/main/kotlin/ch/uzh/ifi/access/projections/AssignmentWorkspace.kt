@@ -39,7 +39,7 @@ interface AssignmentWorkspace {
     val isActive: Boolean
     val countDown: List<Timer?>?
 
-    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
+    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks)}")
     val maxPoints: Double?
 
     @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks)}")
