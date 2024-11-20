@@ -49,24 +49,9 @@ import javax.crypto.spec.SecretKeySpec
 @Service
 class CourseServiceForCaching(
     private val roleService: RoleService,
-    private val courseService: CourseService,
     private val courseRepository: CourseRepository,
 ) {
 
-    fun getStudents(courseSlug: String): List<StudentDTO> {
-        val course = courseService.getCourseBySlug(courseSlug)
-            return course.registeredStudents.map {
-            val user = roleService.findUserByAllCriteria(it)
-            if (user != null) {
-                val studentDTO = courseService.getStudent(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
-                studentDTO
-            } else {
-                StudentDTO(registrationId = it)
-            }
-        }
-    }
     @Cacheable("studentWithPoints", key = "{#courseSlug, #login}")
     fun getStudentWithPoints(courseSlug: String, login: String): StudentDTO {
         val user = roleService.findUserByAllCriteria(login)
@@ -82,13 +67,6 @@ class CourseServiceForCaching(
         }
     }
 
-    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
-        val course = courseService.getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            getStudentWithPoints(courseSlug, it)
-        }
-    }
-
 }
 
 // TODO: decide properly which parameters should be nullable
@@ -100,7 +78,7 @@ class CourseService(
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
-    private val submissionFileRepository: SubmissionFileRepository,
+    private val courseServiceForCaching: CourseServiceForCaching,
     private val evaluationRepository: EvaluationRepository,
     private val dockerClient: DockerClient,
     private val modelMapper: ModelMapper,
@@ -112,6 +90,28 @@ class CourseService(
 ) {
 
     private val logger = KotlinLogging.logger {}
+
+    fun getStudents(courseSlug: String): List<StudentDTO> {
+        val course = getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            val user = roleService.findUserByAllCriteria(it)
+            if (user != null) {
+                val studentDTO = getStudent(courseSlug, user)
+                studentDTO.username = user.username
+                studentDTO.registrationId = it
+                studentDTO
+            } else {
+                StudentDTO(registrationId = it)
+            }
+        }
+    }
+
+    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
+        val course = getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            courseServiceForCaching.getStudentWithPoints(courseSlug, it)
+        }
+    }
 
     private fun verifyUserId(@Nullable userId: String?): String {
         return userId ?: SecurityContextHolder.getContext().authentication.name

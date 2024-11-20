@@ -171,18 +171,18 @@ class CourseController (
     @GetMapping("/{courseSlug}/studentPoints")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudentsWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
-        return courseServiceForCaching.getStudentsWithPoints(courseSlug)
+        return courseService.getStudentsWithPoints(courseSlug)
     }
 
     @GetMapping("/{courseSlug}/students")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudents(@PathVariable courseSlug: String): List<StudentDTO> {
-        return courseServiceForCaching.getStudents(courseSlug)
+        return courseService.getStudents(courseSlug)
     }
 
     @GetMapping("/{courseSlug}/participants")
     fun getParticipants(@PathVariable courseSlug: String): List<StudentDTO> {
-        return courseServiceForCaching.getStudents(courseSlug)
+        return courseService.getStudents(courseSlug)
             .filter { it.email != null && it.firstName != null && it.lastName != null }
     }
 
