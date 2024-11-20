@@ -92,36 +92,19 @@ class RoleService(
 
     private fun findUserByAttributes(users: UsersResource, login: String): UserRepresentation? {
         return try {
-            val attributeQueries = ATTRIBUTE_KEYS.joinToString(" OR ") { key ->
-                "\"$key\":\"$login\""
-            }
-            val matchingUsers = users.searchByAttributes(0, SEARCH_LIMIT, attributeQueries)
-            // Verify the match (since searchByAttributes might return partial matches)
-            matchingUsers.firstOrNull { user ->
-                ATTRIBUTE_KEYS.any { key ->
+            for (key in ATTRIBUTE_KEYS) {
+                val attributeQuery = "$key:$login"
+                val results = users.searchByAttributes(attributeQuery)
+                results.firstOrNull { user ->
                     user.attributes?.get(key)?.any { it == login } == true
-                }
+                }?.let { return it }
             }
+            null
         } catch (e: Exception) {
             logger.warn { "Error searching by attributes: ${e.message}" }
             null
         }
     }
-
-    private fun UsersResource.searchByAttributes(
-        firstResult: Int,
-        maxResults: Int,
-        attributeQuery: String
-    ): List<UserRepresentation> {
-        return try {
-            // Use Keycloak's search API with attribute query
-            search(attributeQuery, firstResult, maxResults)
-        } catch (e: Exception) {
-            logger.error { "Failed to search by attributes: ${e.message}" }
-            emptyList()
-        }
-    }
-
 
     @CacheEvict("userRoles", allEntries = true)
     fun setRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
