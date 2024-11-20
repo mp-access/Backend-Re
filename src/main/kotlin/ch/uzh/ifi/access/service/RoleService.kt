@@ -42,20 +42,6 @@ class RoleService(
         return authentication.name
     }
 
-    fun getUserRepresentationForUsername(username: String): UserRepresentation? {
-        val resByUsername = accessRealm.users().search(username, true).firstOrNull()
-        val resByEmail = accessRealm.users().searchByEmail(username, true).firstOrNull()
-        if (resByUsername == null && resByEmail == null) {
-            logger.debug { "RoleService: Could not find user $username" }
-        }
-        if (resByUsername == null && resByEmail != null) {
-            logger.debug { "RoleService: Found $username by email only" }
-        }
-        if (resByUsername != null)
-            return resByUsername
-        return resByEmail
-    }
-
     @CacheEvict("userRoles", allEntries = true)
     fun setFirstLoginRoles(user: UserRepresentation, roles: List<String>) {
         // this method does never *removes* any roles, so it can only work correctly for the first login
@@ -76,7 +62,7 @@ class RoleService(
         return findUserByAllCriteria(username)?.username ?: username
     }
 
-    private fun findUserByAllCriteria(login: String): UserRepresentation? {
+    fun findUserByAllCriteria(login: String): UserRepresentation? {
         val usersResource = accessRealm.users()
         findUserByUsername(usersResource, login)?.let { return it }
         findUserByEmail(usersResource, login)?.let { return it }
@@ -340,7 +326,7 @@ class RoleService(
 
     @Cacheable("getAllUserIdsFor", key = "#userId")
     fun getAllUserIdsFor(userId: String): List<String> {
-        val user = getUserRepresentationForUsername(userId) ?: return emptyList()
+        val user = findUserByAllCriteria(userId) ?: return emptyList()
         val results = mutableListOf<String>()
         user.username?.let { results.add(it) }
         user.email?.let { results.add(it) }

@@ -56,7 +56,7 @@ class CourseServiceForCaching(
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = courseService.getCourseBySlug(courseSlug)
             return course.registeredStudents.map {
-            val user = roleService.getUserRepresentationForUsername(it)
+            val user = roleService.findUserByAllCriteria(it)
             if (user != null) {
                 val studentDTO = courseService.getStudent(courseSlug, user)
                 studentDTO.username = user.username
@@ -71,7 +71,7 @@ class CourseServiceForCaching(
     fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
         val course = courseService.getCourseBySlug(courseSlug)
         return course.registeredStudents.map {
-            val user = roleService.getUserRepresentationForUsername(it)
+            val user = roleService.findUserByAllCriteria(it)
             if (user != null) {
                 // TODO!: make sure evaluations are saved under only a single user ID in the future!
                 // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations

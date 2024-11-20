@@ -99,7 +99,7 @@ class CourseController (
         val username = authentication.name
         try {
             semaphore.acquire()
-            roleService.getUserRepresentationForUsername(username)?.let { user ->
+            roleService.findUserByAllCriteria(username)?.let { user ->
                 val attributes = user.attributes ?: mutableMapOf()
                 if (attributes["roles_synced_at"] == null) {
                     user.attributes = attributes
@@ -211,7 +211,7 @@ class CourseController (
 
     @GetMapping("/{course}/participants/{participant}")
     fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
-        val user = roleService.getUserRepresentationForUsername(participant)?:
+        val user = roleService.findUserByAllCriteria(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getCourseProgress(course, user.username)
     }
@@ -222,7 +222,7 @@ class CourseController (
         @PathVariable assignment: String,
         @PathVariable participant: String
     ): AssignmentProgressDTO? {
-        val user = roleService.getUserRepresentationForUsername(participant)?:
+        val user = roleService.findUserByAllCriteria(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getAssignmentProgress(course, assignment, user.username)
     }
@@ -232,7 +232,7 @@ class CourseController (
         @PathVariable course: String, @PathVariable assignment: String,
         @PathVariable task: String, @PathVariable participant: String
     ): TaskProgressDTO? {
-        val user = roleService.getUserRepresentationForUsername(participant)?:
+        val user = roleService.findUserByAllCriteria(participant)?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
         return courseService.getTaskProgress(course, assignment, task, user.username)
     }
