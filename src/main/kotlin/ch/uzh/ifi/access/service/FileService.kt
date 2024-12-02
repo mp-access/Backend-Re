@@ -57,7 +57,7 @@ class FileService(val tika: Tika) {
         fileData.mimeType = mimeType.toString()
         // first, we trust the file extension, if we can recognize it
         val extension = FileNameUtils.getExtension(path.toString())
-        if (listOf("py", "r").contains(extension.lowercase(Locale.getDefault()))) {
+        if (listOf("py", "r", "sh", "bash").contains(extension.lowercase(Locale.getDefault()))) {
             fileData.content = Files.readString(path)
             return fileData.validated()
         }
