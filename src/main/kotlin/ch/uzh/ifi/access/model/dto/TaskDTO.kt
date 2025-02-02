@@ -11,5 +11,6 @@ class TaskDTO(
     var maxAttempts: Int? = null,
     var refill: Int? = null,
     var evaluator: TaskEvaluatorDTO? = null,
-    var files: TaskFilesDTO? = null
+    var files: TaskFilesDTO? = null,
+    var llm: LLMConfigDTO? = null,
 )

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 
 
+
 @RestController
 class CourseRootController(
     private val courseService: CourseService,

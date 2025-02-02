@@ -71,6 +71,42 @@ class Task {
     val attemptRefill: Int?
         get() = if (Objects.nonNull(attemptWindow)) Math.toIntExact(attemptWindow!!.toSeconds()) else null
 
+    @Column(nullable = false)
+    var llmSubmission: String? = null
+
+    @Column
+    var llmSolution: String? = null
+
+    @Column
+    var llmRubrics: String? = null
+
+    @Column(nullable = false)
+    var llmCot: Boolean = false
+
+    @Column(nullable = false)
+    var llmVoting: Int = 1
+
+    @Column
+    var llmExamples: String? = null
+
+    @Column
+    var llmPrompt: String? = null
+
+    @Column
+    var llmPre: String? = null
+
+    @Column
+    var llmPost: String? = null
+
+    @Column
+    var llmTemperature: Double? = 0.2
+
+    @Column
+    var llmModel: String? = null
+
+    @Column
+    var llmMaxPoints: Double? = null
+
     fun createFile(): TaskFile {
         val newTaskFile = TaskFile()
         files.add(newTaskFile)

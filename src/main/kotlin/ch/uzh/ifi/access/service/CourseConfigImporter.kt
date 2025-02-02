@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.*
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.NullNode
 import com.fasterxml.jackson.dataformat.toml.TomlMapper
 import org.springframework.stereotype.Service
@@ -12,7 +13,8 @@ import java.time.LocalDateTime
 @Service
 class CourseConfigImporter(
     private val tomlMapper: TomlMapper,
-    private val fileService: FileService
+    private val fileService: FileService,
+    private val objectMapper: ObjectMapper // Needed for JSON serialization
 ) {
 
     fun JsonNode?.asTextOrNull(): String? {
@@ -62,7 +64,6 @@ class CourseConfigImporter(
         course.globalFiles = files
 
         return course
-
     }
 
     fun readAssignmentConfig(path: Path): AssignmentDTO {
@@ -86,7 +87,37 @@ class CourseConfigImporter(
         }
 
         return assignment
+    }
 
+    private fun readRubricsFromToml(path: Path, rubricsFile: String): String? {
+        val rubricsPath = path.resolve(rubricsFile)
+        if (!Files.exists(rubricsPath)) return null
+
+        val rubricsConfig: JsonNode = tomlMapper.readTree(Files.readString(rubricsPath))
+        val rubricsList = rubricsConfig["rubrics"]?.map { rubric ->
+            RubricDTO(
+                id = rubric["id"].asText(),
+                title = rubric["title"].asText(),
+                points = rubric["points"].asDouble()
+            )
+        } ?: emptyList()
+
+        return objectMapper.writeValueAsString(rubricsList) // Convert to JSON string
+    }
+
+    private fun readExamplesFromToml(path: Path, examplesFile: String): String? {
+        val examplesPath = path.resolve(examplesFile)
+        if (!Files.exists(examplesPath)) return null
+
+        val examplesConfig: JsonNode = tomlMapper.readTree(Files.readString(examplesPath))
+        val examplesList = examplesConfig["examples"]?.map { example ->
+            FewShotExampleDTO(
+                answer = example["answer"].asText(),
+                points = example["points"].asText()
+            )
+        } ?: emptyList()
+
+        return objectMapper.writeValueAsString(examplesList) // Convert to JSON string
     }
 
     fun readTaskConfig(path: Path): TaskDTO {
@@ -130,15 +161,44 @@ class CourseConfigImporter(
                 "solution" -> files.solution = filenames
                 "persist" -> files.persist = filenames
             }
+
+        val llmConfig = config["llm"]
+        if (llmConfig != null && !llmConfig.isNull) {
+                val submissionContent = llmConfig["submission"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
+                    ?: throw InvalidCourseException()
+
+                val solutionContent = llmConfig["solution"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
+                val rubricsJson = llmConfig["rubrics"]?.asTextOrNull()?.let { readRubricsFromToml(path, it) }
+                val examplesJson = llmConfig["examples"]?.asTextOrNull()?.let { readExamplesFromToml(path, it) }
+                val promptContent = llmConfig["prompt"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
+                val preContent = llmConfig["pre"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
+                val postContent = llmConfig["post"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
+                val temperature = llmConfig["temperature"]?.asDouble()
+                val model = llmConfig["model"]?.asTextOrNull()
+
+                task.llm = LLMConfigDTO(
+                    submission = submissionContent,
+                    solution = solutionContent,
+                    rubrics = rubricsJson,
+                    cot = llmConfig["cot"]?.asBoolean() ?: false,
+                    voting = llmConfig["voting"]?.asInt() ?: 1,
+                    examples = examplesJson,
+                    prompt = promptContent,
+                    pre = preContent,
+                    post = postContent,
+                    temperature = temperature,
+                    model = model,
+                    maxPoints = llmConfig["max_points"].asDouble()
+                )
+            }
         }
         task.files = files
 
         return task
-
     }
-
 }
 
 class InvalidCourseException : Throwable() {
+
 
 }
