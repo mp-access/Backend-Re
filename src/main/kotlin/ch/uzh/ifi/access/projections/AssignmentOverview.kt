@@ -20,10 +20,10 @@ interface AssignmentOverview {
     val countDown: List<Timer?>?
     val isPastDue: Boolean
     val isActive: Boolean
-    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
+    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks}")
     val maxPoints: Double?
 
-    @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks, null)}")
+    @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks)}")
     val points: Double?
 
     @get:Value("#{target.tasks.size()}")

@@ -69,8 +69,8 @@ class Course {
     @ElementCollection
     var registeredStudents: MutableSet<String> = mutableSetOf()
 
-    @Formula(value = "(SELECT COUNT(*) FROM user_role_mapping u WHERE u.role_id=student_role)")
-    var studentsCount = 0L
+    val studentsCount: Long
+        get() = registeredStudents.size.toLong()
 
     @Transient
     var points: Double? = null

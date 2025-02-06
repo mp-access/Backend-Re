@@ -11,7 +11,7 @@ interface AssignmentSummary {
     val information: Map<String?, AssignmentInformationPublic?>?
     val start: LocalDateTime?
     val end: LocalDateTime?
-    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks, null)}")
+    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks)}")
     val maxPoints: Double?
     @get:Value("#{@courseService.enabledTasksOnly(target.tasks)}")
     val tasks: List<TaskSummary?>?

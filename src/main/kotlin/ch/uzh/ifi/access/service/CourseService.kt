@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dao.Rank
 import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.model.dto.*
@@ -56,39 +57,21 @@ import javax.crypto.spec.SecretKeySpec
 @Service
 class CourseServiceForCaching(
     private val roleService: RoleService,
-    private val courseService: CourseService,
     private val courseRepository: CourseRepository,
 ) {
 
-    fun getStudents(courseSlug: String): List<StudentDTO> {
-        val course = courseService.getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            val user = roleService.getUserByUsername(it)
-            if (user != null) {
-                val studentDTO = courseService.getStudent(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
-                studentDTO
-            } else {
-                StudentDTO(registrationId = it)
-            }
-        }
-    }
-
-    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
-        val course = courseService.getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            val user = roleService.getUserByUsername(it)
-            if (user != null) {
-                // TODO!: make sure evaluations are saved under only a single user ID in the future!
-                // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
-                val userIds = roleService.getAllUserIdsFor(user.username)
-                val coursePoints = courseRepository.getTotalPoints(courseSlug, userIds.toTypedArray()) ?: 0.0
-                val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(), user.username, it)
-                studentDTO
-            } else {
-                StudentDTO(registrationId = it)
-            }
+    @Cacheable("studentWithPoints", key = "{#courseSlug, #login}")
+    fun getStudentWithPoints(courseSlug: String, login: String): StudentDTO {
+        val user = roleService.findUserByAllCriteria(login)
+        return if (user != null) {
+            // TODO!: make sure evaluations are saved under only a single user ID in the future!
+            // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
+            val userIds = roleService.getAllUserIdsFor(user.username)
+            val coursePoints = courseRepository.getTotalPoints(courseSlug, userIds.toTypedArray()) ?: 0.0
+            val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(), user.username, login)
+            studentDTO
+        } else {
+            StudentDTO(registrationId = login)
         }
     }
 
@@ -103,7 +86,7 @@ class CourseService(
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
-    private val submissionFileRepository: SubmissionFileRepository,
+    private val courseServiceForCaching: CourseServiceForCaching,
     private val evaluationRepository: EvaluationRepository,
     private val dockerClient: DockerClient,
     private val modelMapper: ModelMapper,
@@ -117,6 +100,28 @@ class CourseService(
 ) {
 
     private val logger = KotlinLogging.logger {}
+
+    fun getStudents(courseSlug: String): List<StudentDTO> {
+        val course = getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            val user = roleService.findUserByAllCriteria(it)
+            if (user != null) {
+                val studentDTO = getStudent(courseSlug, user)
+                studentDTO.username = user.username
+                studentDTO.registrationId = it
+                studentDTO
+            } else {
+                StudentDTO(registrationId = it)
+            }
+        }
+    }
+
+    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
+        val course = getCourseBySlug(courseSlug)
+        return course.registeredStudents.map {
+            courseServiceForCaching.getStudentWithPoints(courseSlug, it)
+        }
+    }
 
     private val client = OkHttpClient()
 
@@ -226,7 +231,8 @@ class CourseService(
     }
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        return getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
+        val res = getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
+        return res
     }
 
     fun getAssignmentDeadlineForTask(taskId: Long?): LocalDateTime? {
@@ -250,6 +256,20 @@ class CourseService(
         }.toList()
     }
 
+    @Transactional
+    fun getUserRoles(usernames: List<String>): List<String> {
+        return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
+            val slug = course.slug
+            usernames.flatMap { username ->
+                listOfNotNull(
+                    if (course.supervisors.contains(username)) "$slug-supervisor" else null,
+                    if (course.assistants.contains(username)) "$slug-assistant" else null,
+                    if (course.registeredStudents.contains(username)) "$slug-student" else null,
+                )
+            }
+        }
+    }
+
     @Cacheable(value = ["calculateAvgTaskPoints"], key = "#taskSlug")
     fun calculateAvgTaskPoints(taskSlug: String?): Double {
         return 0.0
@@ -258,28 +278,37 @@ class CourseService(
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
-        // TODO!: make sure evaluations are saved under only a single user ID in the future!
-        // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
         val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        return calculateTaskPoints(taskId, userIds)
+    }
+
+    fun calculateTaskPoints(taskId: Long?, userIds: List<String>): Double {
+        // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
         return userIds.maxOfOrNull {
             getEvaluation(taskId, verifyUserId(it))?.bestScore ?: 0.0
         } ?: 0.0
     }
 
-    fun calculateAssignmentPoints(tasks: List<Task>, userId: String?): Double {
-        return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userId) }.sum()
+    fun calculateAssignmentPoints(tasks: List<Task>): Double {
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(null))
+        return calculateAssignmentPoints(tasks, userIds)
+
+    }
+    fun calculateAssignmentPoints(tasks: List<Task>, userIds: List<String>): Double {
+        return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userIds) }.sum()
     }
 
-    fun calculateAssignmentMaxPoints(tasks: List<Task>, userId: String?): Double {
+    @Cacheable("assignmentMaxPoints")
+    fun calculateAssignmentMaxPoints(tasks: List<Task>): Double {
         return tasks.stream().filter{ it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
-    fun calculateCoursePoints(assignments: List<Assignment>, userId: String?): Double {
-        return assignments.stream()
-            .mapToDouble { assignment: Assignment -> calculateAssignmentPoints(assignment.tasks, userId) }
-            .sum()
+    fun calculateCoursePoints(slug: String, userId: String?): Double {
+        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        return courseRepository.getTotalPoints(slug, userIds.toTypedArray()) ?: 0.0
     }
 
+    @Cacheable("getMaxPoints", key = "#courseSlug")
     fun getMaxPoints(courseSlug: String?): Double {
         return getAssignments(courseSlug).sumOf { it.maxPoints!! }
     }
@@ -482,7 +511,7 @@ class CourseService(
 
     @Caching(evict = [
         CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
-        CacheEvict(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
+        CacheEvict(value = ["studentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
         CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
     fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
@@ -831,6 +860,10 @@ exit ${'$'}exit_code;
     }
 
     @Transactional
+    @Caching(evict = [
+        CacheEvict(value = ["getMaxPoints"], key = "#courseSlug"),
+        CacheEvict(value = ["assignmentMaxPoints"], allEntries = true),
+    ])
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.updateFromRepository(existingCourse)
@@ -857,8 +890,10 @@ exit ${'$'}exit_code;
 
     @Transactional
     @Caching(evict = [
-        CacheEvict(value = ["getUserByUsername"], key = "#username"),
-        CacheEvict(value = ["getUserRoles"], key = "#username")
+        CacheEvict(value = ["usernameForLogin"], key = "#username"),
+        CacheEvict(value = ["userRoles"], key = "#username"),
+        CacheEvict(value = ["usernameForLogin"], key = "#username"),
+        CacheEvict(value = ["getAllUserIdsFor"], key = "#username"),
     ])
     fun updateStudentRoles(username: String) {
         logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
@@ -868,15 +903,38 @@ exit ${'$'}exit_code;
         }
     }
 
+    @Transactional
+    @Caching(evict = [
+        CacheEvict(value = ["userRoles"], allEntries = true),
+    ])
+    fun setRoleUsers(course: Course, usernames: List<String>, role: Role): Pair<List<String>, List<String>> {
+        val existingUsers = when (role) {
+            Role.SUPERVISOR -> course.supervisors
+            Role.ASSISTANT -> course.assistants
+            Role.STUDENT -> course.registeredStudents
+        }
+
+        val newUsersSet = usernames.toSet()
+        val existingUsersSet = existingUsers.toSet()
+
+        val removedUsers = existingUsersSet.minus(newUsersSet).toList()
+        val addedUsers = newUsersSet.minus(existingUsersSet).toList()
+
+        when (role) {
+            Role.SUPERVISOR -> course.supervisors = newUsersSet.toMutableSet()
+            Role.ASSISTANT -> course.assistants = newUsersSet.toMutableSet()
+            Role.STUDENT -> course.registeredStudents = newUsersSet.toMutableSet()
+        }
+
+        courseRepository.save(course)
+
+        return Pair(removedUsers, addedUsers)
+    }
+
+
     @Cacheable(value = ["getStudent"], key = "#courseSlug + '-' + #user.username")
     fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
         return StudentDTO(user.firstName, user.lastName, user.email)
-    }
-
-    @Cacheable(value = ["getStudentWithPoints"], key = "#courseSlug + '-' + #user.username")
-    fun getStudentWithPoints(courseSlug: String, user: UserRepresentation): StudentDTO {
-        val coursePoints = calculateCoursePoints(getCourseBySlug(courseSlug).assignments, user.username)
-        return StudentDTO(user.firstName, user.lastName, user.email, coursePoints)
     }
 
     private fun getEvaluation(task: Task, userId: String): EvaluationSummary? {

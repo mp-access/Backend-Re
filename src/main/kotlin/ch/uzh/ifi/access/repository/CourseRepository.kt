@@ -47,4 +47,8 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     )
     fun getTotalPoints(courseSlug: String, userIds: Array<String>): Double?
 
+    // Bypasses role restrictions, use only if preventing leaks by other means.
+    // Necessary for retrieving user roles upon first login.
+    fun findAllUnrestrictedByDeletedFalse(): List<Course>
+
 }
