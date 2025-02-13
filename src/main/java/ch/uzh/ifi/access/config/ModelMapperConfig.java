@@ -63,6 +63,7 @@ public class ModelMapperConfig {
                 destination.setLlmPre(llm.getPre());
                 destination.setLlmPost(llm.getPost());
                 destination.setLlmModel(llm.getModel());
+                destination.setLlmModelFamily(llm.getModelFamily());
                 destination.setLlmTemperature(llm.getTemperature());
                 destination.setLlmMaxPoints(llm.getMaxPoints());
             }

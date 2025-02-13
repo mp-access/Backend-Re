@@ -105,6 +105,9 @@ class Task {
     var llmModel: String? = null
 
     @Column
+    var llmModelFamily: String? = null
+
+    @Column
     var llmMaxPoints: Double? = null
 
     fun createFile(): TaskFile {

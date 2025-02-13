@@ -175,6 +175,7 @@ class CourseConfigImporter(
                 val postContent = llmConfig["post"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
                 val temperature = llmConfig["temperature"]?.asDouble()
                 val model = llmConfig["model"]?.asTextOrNull()
+                val modelFamily = llmConfig["model_family"]?.asTextOrNull()
 
                 task.llm = LLMConfigDTO(
                     submission = submissionContent,
@@ -188,6 +189,7 @@ class CourseConfigImporter(
                     post = postContent,
                     temperature = temperature,
                     model = model,
+                    modelFamily = modelFamily,
                     maxPoints = llmConfig["max_points"].asDouble()
                 )
             }

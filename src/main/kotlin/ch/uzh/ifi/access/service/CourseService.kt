@@ -730,7 +730,7 @@ exit ${'$'}exit_code;
                 }
 
                 // TODO: This could be handled nicer in the future
-                val llmType = when (task.llmModel?.lowercase()) {
+                val llmType = when (task.llmModelFamily?.lowercase()) {
                     "claude" -> LLMType.claude
                     else -> LLMType.gpt  // default to gpt if not specified
                 }
@@ -750,6 +750,7 @@ exit ${'$'}exit_code;
                         fewShotExamples = parseJsonOrEmpty(task.llmExamples, objectMapper, Array<FewShotExampleDTO>::class.java),
                         maxPoints = task.llmMaxPoints,
                         modelSolution = task.llmSolution,
+                        llmModel = task.llmModel,
                     )
                 )
 

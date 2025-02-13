@@ -12,5 +12,6 @@ data class LLMConfigDTO(
     var post: String? = null,
     var temperature: Double? = null,
     var model: String? = null,
+    var modelFamily: String? = null,
     var maxPoints: Double? = null
 ) 

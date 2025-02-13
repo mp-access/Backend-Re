@@ -75,6 +75,8 @@ class AssistantDTO (
     var postPrompt: String? = null,
 
     @JsonProperty("llmType")
-    var llmType: LLMType? = null
+    var llmType: LLMType? = null,
 
+    @JsonProperty("llmModel")
+    var llmModel: String? = null
 )
