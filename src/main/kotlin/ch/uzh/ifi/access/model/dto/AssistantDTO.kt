@@ -27,7 +27,7 @@ class FewShotExampleDTO (
     var answer: String,
 
     @JsonProperty("points")
-    var points: String // Stringified JSON for flexibility
+    var points: Map<String, Double>
 )
 
 @Data

@@ -482,6 +482,10 @@ class CourseService(
                     when (statusResponseDTO.status) {
                         "completed" -> return statusResponseDTO.result  // Return completed result
                         "not_found" -> throw RuntimeException("Task not found in assistant backend")
+                        "delayed" -> {
+                            // Keep polling
+                            logger.debug { "Task $taskId delayed, retrying..." }
+                        }
                         "active" -> {
                             // Keep polling
                             logger.debug { "Task $taskId still active, retrying..." }
@@ -724,10 +728,8 @@ exit ${'$'}exit_code;
             // Evaluate with Assistant API
             try {
                 // Collect the student's submitted code
-                val studentCode = submission.files.joinToString("\n\n") { file ->
-                    val filename = file.taskFile?.name ?: "Unnamed File"
-                    "// File: $filename\n${file.content ?: ""}"
-                }
+                val llmSubmissionFile = submission.files
+                    .firstOrNull { file -> file.taskFile?.path == task.llmSubmission } // Find the specific file
 
                 // TODO: This could be handled nicer in the future
                 val llmType = when (task.llmModelFamily?.lowercase()) {
@@ -735,24 +737,34 @@ exit ${'$'}exit_code;
                     else -> LLMType.gpt  // default to gpt if not specified
                 }
 
-                val assistantResponse = evaluateSubmissionWithAssistant(
-                    AssistantDTO(
-                        question = task.llmPrompt ?: task.instructions ?: "No instructions provided",
-                        answer = studentCode,
-                        llmType = llmType,
-                        chainOfThought = task.llmCot,
-                        votingCount = task.llmVoting,
-                        rubrics = parseJsonOrEmpty(task.llmRubrics, objectMapper, Array<RubricDTO>::class.java),
-                        prePrompt = task.llmPre,
-                        postPrompt = task.llmPost,
-                        prompt = task.llmPrompt,
-                        temperature = task.llmTemperature,
-                        fewShotExamples = parseJsonOrEmpty(task.llmExamples, objectMapper, Array<FewShotExampleDTO>::class.java),
-                        maxPoints = task.llmMaxPoints,
-                        modelSolution = task.llmSolution,
-                        llmModel = task.llmModel,
+
+
+                var assistantResponse: AssistantResponseDTO? = null
+
+                if (llmSubmissionFile?.content != null) {
+                    assistantResponse = evaluateSubmissionWithAssistant(
+                        AssistantDTO(
+                            question = task.llmPrompt ?: task.instructions ?: "No instructions provided",
+                            answer = llmSubmissionFile.content!!,
+                            llmType = llmType,
+                            chainOfThought = task.llmCot,
+                            votingCount = task.llmVoting,
+                            rubrics = parseJsonOrEmpty(task.llmRubrics, objectMapper, Array<RubricDTO>::class.java),
+                            prePrompt = task.llmPre,
+                            postPrompt = task.llmPost,
+                            prompt = task.llmPrompt,
+                            temperature = task.llmTemperature,
+                            fewShotExamples = parseJsonOrEmpty(
+                                task.llmExamples,
+                                objectMapper,
+                                Array<FewShotExampleDTO>::class.java
+                            ),
+                            maxPoints = task.llmMaxPoints,
+                            modelSolution = task.llmSolution,
+                            llmModel = task.llmModel,
+                        )
                     )
-                )
+                }
 
 
 

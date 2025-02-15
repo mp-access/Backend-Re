@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.*
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.NullNode
@@ -113,7 +114,7 @@ class CourseConfigImporter(
         val examplesList = examplesConfig["examples"]?.map { example ->
             FewShotExampleDTO(
                 answer = example["answer"].asText(),
-                points = example["points"].asText()
+                points = objectMapper.convertValue(example["points"], object : TypeReference<Map<String, Double>>() {})
             )
         } ?: emptyList()
 
@@ -164,9 +165,7 @@ class CourseConfigImporter(
 
         val llmConfig = config["llm"]
         if (llmConfig != null && !llmConfig.isNull) {
-                val submissionContent = llmConfig["submission"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
-                    ?: throw InvalidCourseException()
-
+                val submissionFileName = llmConfig["submission"]?.asTextOrNull()
                 val solutionContent = llmConfig["solution"]?.asTextOrNull()?.let { Files.readString(path.resolve(it)) }
                 val rubricsJson = llmConfig["rubrics"]?.asTextOrNull()?.let { readRubricsFromToml(path, it) }
                 val examplesJson = llmConfig["examples"]?.asTextOrNull()?.let { readExamplesFromToml(path, it) }
@@ -178,7 +177,7 @@ class CourseConfigImporter(
                 val modelFamily = llmConfig["model_family"]?.asTextOrNull()
 
                 task.llm = LLMConfigDTO(
-                    submission = submissionContent,
+                    submission = submissionFileName,
                     solution = solutionContent,
                     rubrics = rubricsJson,
                     cot = llmConfig["cot"]?.asBoolean() ?: false,
