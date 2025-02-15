@@ -99,7 +99,7 @@ class Task {
     var llmPost: String? = null
 
     @Column
-    var llmTemperature: Double? = 0.2
+    var llmTemperature: Double? = null
 
     @Column
     var llmModel: String? = null

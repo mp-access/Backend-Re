@@ -3,12 +3,6 @@ package ch.uzh.ifi.access.model.dto
 import com.fasterxml.jackson.annotation.JsonProperty
 import lombok.Data
 
-
-enum class LLMType {
-    gpt,
-    claude
-}
-
 @Data
 class RubricDTO (
     @JsonProperty("id")
@@ -31,7 +25,7 @@ class FewShotExampleDTO (
 )
 
 @Data
-class AssistantDTO (
+class AssistantDTO(
     @JsonProperty("question")
     var question: String,
 
@@ -75,7 +69,7 @@ class AssistantDTO (
     var postPrompt: String? = null,
 
     @JsonProperty("llmType")
-    var llmType: LLMType? = null,
+    var llmType: String? = null,
 
     @JsonProperty("llmModel")
     var llmModel: String? = null

@@ -725,65 +725,61 @@ exit ${'$'}exit_code;
                 }
             }
 
-            // Evaluate with Assistant API
-            try {
-                // Collect the student's submitted code
-                val llmSubmissionFile = submission.files
-                    .firstOrNull { file -> file.taskFile?.path == task.llmSubmission } // Find the specific file
+            // Only evaluate with assistant if the submission file was defined in the config
+            if(task.llmSubmission != null) {
+                // Evaluate with Assistant API
+                try {
+                    // Collect the student's submitted code
+                    val llmSubmissionFile = submission.files
+                        .firstOrNull { file -> file.taskFile?.path == task.llmSubmission } // Find the specific file
 
-                // TODO: This could be handled nicer in the future
-                val llmType = when (task.llmModelFamily?.lowercase()) {
-                    "claude" -> LLMType.claude
-                    else -> LLMType.gpt  // default to gpt if not specified
-                }
+                    var assistantResponse: AssistantResponseDTO? = null
 
-
-
-                var assistantResponse: AssistantResponseDTO? = null
-
-                if (llmSubmissionFile?.content != null) {
-                    assistantResponse = evaluateSubmissionWithAssistant(
-                        AssistantDTO(
-                            question = task.llmPrompt ?: task.instructions ?: "No instructions provided",
-                            answer = llmSubmissionFile.content!!,
-                            llmType = llmType,
-                            chainOfThought = task.llmCot,
-                            votingCount = task.llmVoting,
-                            rubrics = parseJsonOrEmpty(task.llmRubrics, objectMapper, Array<RubricDTO>::class.java),
-                            prePrompt = task.llmPre,
-                            postPrompt = task.llmPost,
-                            prompt = task.llmPrompt,
-                            temperature = task.llmTemperature,
-                            fewShotExamples = parseJsonOrEmpty(
-                                task.llmExamples,
-                                objectMapper,
-                                Array<FewShotExampleDTO>::class.java
-                            ),
-                            maxPoints = task.llmMaxPoints,
-                            modelSolution = task.llmSolution,
-                            llmModel = task.llmModel,
+                    if (llmSubmissionFile?.content != null) {
+                        assistantResponse = evaluateSubmissionWithAssistant(
+                            AssistantDTO(
+                                question = task.llmPrompt ?: task.instructions ?: "No instructions provided",
+                                answer = llmSubmissionFile.content!!,
+                                llmType = task.llmModelFamily,
+                                chainOfThought = task.llmCot,
+                                votingCount = task.llmVoting,
+                                rubrics = parseJsonOrEmpty(task.llmRubrics, objectMapper, Array<RubricDTO>::class.java),
+                                prePrompt = task.llmPre,
+                                postPrompt = task.llmPost,
+                                prompt = task.llmPrompt,
+                                temperature = task.llmTemperature,
+                                fewShotExamples = parseJsonOrEmpty(
+                                    task.llmExamples,
+                                    objectMapper,
+                                    Array<FewShotExampleDTO>::class.java
+                                ),
+                                maxPoints = task.llmMaxPoints,
+                                modelSolution = task.llmSolution,
+                                llmModel = task.llmModel,
+                            )
                         )
-                    )
-                }
-
-
-
-                if (assistantResponse != null) {
-                    logger.debug { "Assistant internal feedback: ${assistantResponse.feedback}" }
-                    logger.debug { "Assistant scoring: ${assistantResponse.points}" }
-                }
-
-                // Incorporate the assistant feedback into the submission
-                assistantResponse?.let {
-                    if (it.hint != null && it.hint != "" && it.status !== Status.correct) {
-                        newSubmission.logs += "\nHint: ${it.hint}"
                     }
-                    val newPoints = newSubmission.points?.plus(it.points)
-                    newSubmission.points = minOf(newPoints!!, newSubmission.maxPoints!!)
+
+
+
+                    if (assistantResponse != null) {
+                        logger.debug { "Assistant internal feedback: ${assistantResponse.feedback}" }
+                        logger.debug { "Assistant scoring: ${assistantResponse.points}" }
+                    }
+
+                    // Incorporate the assistant feedback into the submission
+                    assistantResponse?.let {
+                        if (it.hint != null && it.hint != "" && it.status !== Status.correct) {
+                            newSubmission.logs += "\nHint: ${it.hint}"
+                        }
+                        val newPoints = newSubmission.points?.plus(it.points)
+                        newSubmission.points = minOf(newPoints!!, newSubmission.maxPoints!!)
+                        evaluation.update(newSubmission.points)
+                    }
+                } catch (e: Exception) {
+                    // print error
+                    logger.error { "Failed to evaluate submission with assistant: ${e.message}" }
                 }
-            } catch (e: Exception) {
-                // print error
-                logger.error { "Failed to evaluate submission with assistant: ${e.message}" }
             }
 
         } catch (e: Exception) {
