@@ -53,6 +53,7 @@ import java.util.function.Consumer
 import java.util.stream.Stream
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.log
 
 @Service
 class CourseServiceForCaching(
@@ -725,21 +726,26 @@ exit ${'$'}exit_code;
                 }
             }
 
+
             // Only evaluate with assistant if the submission file was defined in the config
             if(task.llmSubmission != null) {
                 // Evaluate with Assistant API
                 try {
                     // Collect the student's submitted code
                     val llmSubmissionFile = submission.files
-                        .firstOrNull { file -> file.taskFile?.path == task.llmSubmission } // Find the specific file
+                        .firstOrNull { file -> file.taskFile?.path == "/${task.llmSubmission}" } // Find the specific file
+
+                    submission.files.map {
+                        logger.debug { "Submission file: ${it.taskFile?.path}" }
+                    }
 
                     var assistantResponse: AssistantResponseDTO? = null
 
                     if (llmSubmissionFile?.content != null) {
                         assistantResponse = evaluateSubmissionWithAssistant(
                             AssistantDTO(
-                                question = task.llmPrompt ?: task.instructions ?: "No instructions provided",
-                                answer = llmSubmissionFile.content!!,
+                                question = task.instructions ?: "No instructions provided",
+                                answer = llmSubmissionFile.content ?: "No answer provided",
                                 llmType = task.llmModelFamily,
                                 chainOfThought = task.llmCot,
                                 votingCount = task.llmVoting,

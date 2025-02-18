@@ -21,7 +21,7 @@ class FewShotExampleDTO (
     var answer: String,
 
     @JsonProperty("points")
-    var points: Map<String, Double>
+    var points: String
 )
 
 @Data

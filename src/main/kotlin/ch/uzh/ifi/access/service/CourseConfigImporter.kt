@@ -114,7 +114,7 @@ class CourseConfigImporter(
         val examplesList = examplesConfig["examples"]?.map { example ->
             FewShotExampleDTO(
                 answer = example["answer"].asText(),
-                points = objectMapper.convertValue(example["points"], object : TypeReference<Map<String, Double>>() {})
+                points = objectMapper.convertValue(example["points"], object : TypeReference<Map<String, Double>>() {}).toString()
             )
         } ?: emptyList()
 
