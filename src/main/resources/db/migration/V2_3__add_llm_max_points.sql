@@ -1,2 +1,0 @@
-ALTER TABLE task
-ADD COLUMN IF NOT EXISTS llm_max_points INTEGER;

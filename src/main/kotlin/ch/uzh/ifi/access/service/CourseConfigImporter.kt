@@ -176,22 +176,21 @@ class CourseConfigImporter(
                 val model = llmConfig["model"]?.asTextOrNull()
                 val modelFamily = llmConfig["model_family"]?.asTextOrNull()
 
-                task.llm = LLMConfigDTO(
-                    submission = submissionFileName,
-                    solution = solutionContent,
-                    rubrics = rubricsJson,
-                    cot = llmConfig["cot"]?.asBoolean() ?: false,
-                    voting = llmConfig["voting"]?.asInt() ?: 1,
-                    examples = examplesJson,
-                    prompt = promptContent,
-                    pre = preContent,
-                    post = postContent,
-                    temperature = temperature,
-                    model = model,
-                    modelFamily = modelFamily,
-                    maxPoints = llmConfig["max_points"].asDouble()
-                )
+                task.llmSubmission = submissionFileName
+                task.llmSolution = solutionContent
+                task.llmRubrics = rubricsJson
+                task.llmCot = llmConfig["cot"]?.asBoolean() ?: false
+                task.llmVoting = llmConfig["voting"]?.asInt() ?: 1
+                task.llmExamples = examplesJson
+                task.llmPrompt = promptContent
+                task.llmPre = preContent
+                task.llmPost = postContent
+                task.llmTemperature = temperature
+                task.llmModel = model
+                task.llmModelFamily = modelFamily
+                task.llmMaxPoints = llmConfig["max_points"].asDouble()
             }
+
         }
         task.files = files
 

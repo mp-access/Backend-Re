@@ -29,47 +29,11 @@ public class ModelMapperConfig {
         modelMapper.typeMap(AssignmentDTO.class, Assignment.class)
                 .addMappings(mapping -> mapping.skip(AssignmentDTO::getTasks, Assignment::setTasks));
         modelMapper.typeMap(TaskDTO.class, Task.class)
-                .addMappings(mapper -> {
-                    mapper.skip(Task::setLlmSubmission);
-                    mapper.skip(Task::setLlmSolution);
-                    mapper.skip(Task::setLlmRubrics);
-                    mapper.skip(Task::setLlmCot);
-                    mapper.skip(Task::setLlmVoting);
-                    mapper.skip(Task::setLlmExamples);
-                    mapper.skip(Task::setLlmPrompt);
-                    mapper.skip(Task::setLlmPre);
-                    mapper.skip(Task::setLlmPost);
-                    mapper.skip(Task::setLlmModel);
-                    mapper.skip(Task::setLlmTemperature);
-                    mapper.skip(Task::setLlmMaxPoints);
-                });
+                .addMappings(mapping -> mapping.skip(TaskDTO::getFiles, Task::setFiles));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
                 .addMappings(mapping -> mapping.skip(Submission::setFiles));
         modelMapper.createTypeMap(String.class, Visibility.class)
                 .setConverter(context -> Visibility.valueOf(context.getSource().toUpperCase()));
-        modelMapper.addConverter((context) -> {
-            TaskDTO source = (TaskDTO) context.getSource();
-            Task destination = (Task) context.getDestination();
-            
-            if (source.getLlm() != null) {
-                LLMConfigDTO llm = source.getLlm();
-                destination.setLlmSubmission(llm.getSubmission());
-                destination.setLlmSolution(llm.getSolution());
-                destination.setLlmRubrics(llm.getRubrics());
-                destination.setLlmCot(llm.getCot());
-                destination.setLlmVoting(llm.getVoting());
-                destination.setLlmExamples(llm.getExamples());
-                destination.setLlmPrompt(llm.getPrompt());
-                destination.setLlmPre(llm.getPre());
-                destination.setLlmPost(llm.getPost());
-                destination.setLlmModel(llm.getModel());
-                destination.setLlmModelFamily(llm.getModelFamily());
-                destination.setLlmTemperature(llm.getTemperature());
-                destination.setLlmMaxPoints(llm.getMaxPoints());
-            }
-            
-            return destination;
-        }, TaskDTO.class, Task.class);
         return modelMapper;
     }
 }
