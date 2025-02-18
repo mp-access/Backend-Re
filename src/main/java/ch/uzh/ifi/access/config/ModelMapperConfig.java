@@ -5,15 +5,14 @@ import ch.uzh.ifi.access.model.Course;
 import ch.uzh.ifi.access.model.Submission;
 import ch.uzh.ifi.access.model.Task;
 import ch.uzh.ifi.access.model.constants.Visibility;
-import ch.uzh.ifi.access.model.dto.AssignmentDTO;
-import ch.uzh.ifi.access.model.dto.CourseDTO;
-import ch.uzh.ifi.access.model.dto.SubmissionDTO;
-import ch.uzh.ifi.access.model.dto.TaskDTO;
+import ch.uzh.ifi.access.model.dto.*;
 import org.apache.commons.lang3.ObjectUtils;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Objects;
 
 @Configuration
 public class ModelMapperConfig {

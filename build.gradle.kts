@@ -66,6 +66,8 @@ dependencies {
     implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
     implementation("org.apache.tika:tika-core:2.8.0")
     implementation("org.flywaydb:flyway-core")
+    implementation("com.squareup.okhttp3:okhttp:4.9.2")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.+")
     implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
