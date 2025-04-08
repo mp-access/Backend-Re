@@ -5,14 +5,19 @@ import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.CourseServiceForCaching
+import ch.uzh.ifi.access.service.EmitterService
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.LocalDateTime
 import java.util.concurrent.Semaphore
 
@@ -79,13 +84,12 @@ class WebhooksController(
 @RestController
 @RequestMapping("/courses")
 @EnableAsync
-class CourseController (
+class CourseController(
     private val courseService: CourseService,
     private val courseServiceForCaching: CourseServiceForCaching,
-    private val roleService: RoleService
-)
-    {
-
+    private val roleService: RoleService,
+    private val emitterService: EmitterService,
+) {
     private val logger = KotlinLogging.logger {}
 
     @PostMapping("/{course}/pull")
@@ -168,6 +172,49 @@ class CourseController (
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
+    @GetMapping("/{courseSlug}/examples")
+    @PreAuthorize("hasRole(#courseSlug)")
+    fun getExamples(
+        @PathVariable courseSlug: String
+    ): Array<ExampleDTO> {
+        return courseService.getExamples(courseSlug)
+    }
+
+    @GetMapping("/{courseSlug}/examples/{exampleSlug}")
+    @PreAuthorize("hasRole(#courseSlug)")
+    fun getExample(
+        @PathVariable courseSlug: String,
+        @PathVariable exampleSlug: String,
+        authentication: Authentication
+    ): ExampleDTO {
+        return courseService.getExample(courseSlug, exampleSlug)
+    }
+
+    // Invoked by the teacher when publishing an example to inform the students
+    @PostMapping("/{courseSlug}/examples/{exampleSlug}/publish")
+    @PreAuthorize("hasRole(#courseSlug+'-assistant')")
+    fun notifyStudents(
+        @PathVariable courseSlug: String,
+        @PathVariable exampleSlug: String,
+    ) {
+        emitterService.sendMessage(courseSlug, "redirect", "/courses/$courseSlug/examples/$exampleSlug")
+    }
+
+    // A text event endpoint to publish events to clients
+    @GetMapping("/{courseSlug}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun subscribe(@PathVariable courseSlug: String, authentication: Authentication): ResponseEntity<SseEmitter> {
+        val headers = HttpHeaders()
+        val emitter = emitterService.registerEmitter(courseSlug, authentication.name)
+        headers.add("Cache-Control", "no-transform") // needed to work with webpack-dev-server
+        return ResponseEntity<SseEmitter>(emitter, headers, HttpStatus.OK)
+    }
+
+    // Sent by the client to keep the emitter alive
+    @GetMapping("/{courseSlug}/heartbeat/{emitterId}")
+    fun heartbeat(@PathVariable courseSlug: String, @PathVariable emitterId: String) {
+        emitterService.keepAliveEmitter(courseSlug, emitterId)
+    }
+
     @GetMapping("/{courseSlug}/studentPoints")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudentsWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
@@ -241,6 +288,4 @@ class CourseController (
     fun getCourseSummary(@PathVariable course: String): CourseSummary? {
         return courseService.getCourseSummary(course)
     }
-
-
-    }
+}
