@@ -22,5 +22,6 @@ class CourseDTO (
     var supervisors: MutableSet<MemberDTO> = mutableSetOf(),
     var assistants: MutableSet<MemberDTO> = mutableSetOf(),
     var assignments: MutableList<String> = ArrayList(),
+    var examples: MutableList<String> = ArrayList(), // TODO ska: Check - Is String the correct type here?
     var globalFiles: CourseFilesDTO? = null
 )

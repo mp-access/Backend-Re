@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 
 @Entity
-class TaskFile {
+class ProblemFile {
     @Id
     @GeneratedValue
     var id: Long? = null
@@ -20,8 +20,8 @@ class TaskFile {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(nullable = false, name = "task_id")
-    var task: Task? = null
+    @JoinColumn(nullable = false, name = "problem_id")
+    var problem: Problem? = null
 
     @Column(nullable=true, columnDefinition="text")
     var template: String? = null
@@ -50,6 +50,12 @@ class TaskFile {
     @Column(nullable = false)
     var instruction = false
 
+    // TODO ska: How to deal with this function? Creating a separate subtype only for this seems too much.
+    // TODO ska: Instead create a version with explicit typing?
     val isPublished: Boolean
-        get() = !grading && instruction || visible || (solution && task?.assignment?.isPastDue?: false)
+        get() = when (val p = problem) {
+            is Task -> !grading && instruction || visible || (solution && p.assignment?.isPastDue ?: false)
+            /* is Example -> */ // TODO ska: Add equivalent for Example later.
+            else -> false
+        }
 }

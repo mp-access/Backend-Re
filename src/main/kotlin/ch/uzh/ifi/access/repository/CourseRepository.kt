@@ -32,14 +32,14 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
         nativeQuery = true, value = """
             SELECT sum(e.best_score) AS total_points
             FROM evaluation e
-            JOIN task t ON e.task_id = t.id
-            JOIN assignment a ON t.assignment_id = a.id
+            JOIN problem p ON e.problem_id = p.id
+            JOIN assignment a ON p.assignment_id = a.id
             JOIN course c ON a.course_id = c.id
             WHERE e.id IN (
                 SELECT MAX(id)
                 FROM evaluation
                 WHERE user_id = ANY(:userIds)
-                GROUP BY task_id
+                GROUP BY problem_id
             )
             AND c.slug = :courseSlug
             AND e.user_id = ANY(:userIds)

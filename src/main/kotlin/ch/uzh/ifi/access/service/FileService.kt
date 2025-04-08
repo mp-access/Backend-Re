@@ -2,8 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.GlobalFile
 import ch.uzh.ifi.access.model.ResultFile
-import ch.uzh.ifi.access.model.TaskFile
-import ch.uzh.ifi.access.model.dto.TaskFileDTO
+import ch.uzh.ifi.access.model.ProblemFile
 import org.apache.commons.codec.binary.Base64
 import org.apache.commons.compress.utils.FileNameUtils
 import org.apache.tika.Tika
@@ -71,13 +70,13 @@ class FileService(val tika: Tika) {
         return fileData.validated()
     }
 
-    fun storeFile(path: Path, taskFile: TaskFile): TaskFile {
+    fun storeFile(path: Path, problemFile: ProblemFile): ProblemFile {
         val fileData = storeFile(path)
-        taskFile.template = fileData.content
-        taskFile.templateBinary = fileData.contentBinary
-        taskFile.path = fileData.path
-        taskFile.mimeType = fileData.mimeType
-        return taskFile
+        problemFile.template = fileData.content
+        problemFile.templateBinary = fileData.contentBinary
+        problemFile.path = fileData.path
+        problemFile.mimeType = fileData.mimeType
+        return problemFile
     }
 
     fun storeFile(path: Path, globalFile: GlobalFile): GlobalFile {

@@ -49,7 +49,7 @@ dependencies {
     implementation("org.springframework.security:spring-security-oauth2-jose:6.1.3")
     implementation("org.springdoc:springdoc-openapi-ui:1.7.0")
     implementation("org.springdoc:springdoc-openapi-security:1.7.0")
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("org.postgresql:postgresql")
     implementation("org.modelmapper:modelmapper:3.1.1")
     implementation("org.apache.commons:commons-text:1.10.0")
     implementation("org.apache.commons:commons-math3:3.6.1")

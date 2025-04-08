@@ -51,7 +51,11 @@ class Submission {
     @JoinColumn(nullable = false, name = "evaluation_id")
     var evaluation: Evaluation? = null
     val maxPoints: Double?
-        get() = evaluation!!.task!!.maxPoints
+        get() = when (val p = evaluation!!.problem) {
+            is Task -> p.maxPoints
+            is Example -> 1.0; // TODO ska: Is this ok?
+            else -> null
+        }
     val name: String
         get() = "%s %s".formatted(StringUtils.capitalize(command!!.displayName), ordinalNum)
     val isGraded: Boolean

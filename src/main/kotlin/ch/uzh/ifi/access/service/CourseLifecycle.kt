@@ -3,7 +3,6 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
-import ch.uzh.ifi.access.model.dto.TaskFileDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -109,7 +108,7 @@ class CourseLifecycle(
                 logger.debug { "Updating task ${task.slug}"}
                 pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
                 modelMapper.map(taskDTO, task)
-                task.information.forEach { it.value.task = task }
+                task.information.forEach { it.value.problem = task }
                 val instructionFiles = task.information.values.map { it.instructionsFile }
 
                 task.ordinalNum = index + 1
@@ -168,11 +167,11 @@ class CourseLifecycle(
 
 
 
-    private fun createOrUpdateTaskFile(task: Task, parentPath: Path, path: String): TaskFile {
+    private fun createOrUpdateTaskFile(task: Task, parentPath: Path, path: String): ProblemFile {
         val rootedFilePath = if (path.startsWith("/")) path else "/$path"
         val unrootedFilePath = if (!path.startsWith("/")) path else path.substring(1)
         val taskFile = task.files.stream()
-            .filter { existing: TaskFile -> existing.path == rootedFilePath }.findFirst()
+            .filter { existing: ProblemFile -> existing.path == rootedFilePath }.findFirst()
             .orElseGet { task.createFile() }
         val taskFilePath = parentPath.resolve(unrootedFilePath)
         val taskFileUpdated = fileService.storeFile(taskFilePath, taskFile)

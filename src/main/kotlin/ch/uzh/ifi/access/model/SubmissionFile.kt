@@ -16,13 +16,13 @@ class SubmissionFile {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(nullable = false, name = "task_file_id")
-    var taskFile: TaskFile? = null
+    @JoinColumn(nullable = false, name = "problem_file_id")
+    var problemFile: ProblemFile? = null
 
     @JsonIgnore
     @ManyToOne
     @JoinColumn(nullable = false, name = "submission_id")
     var submission: Submission? = null
-    val taskFileId: Long?
-        get() = taskFile!!.id
+    val problemFileId: Long?
+        get() = problemFile!!.id
 }

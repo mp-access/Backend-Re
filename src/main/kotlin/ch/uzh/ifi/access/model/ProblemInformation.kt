@@ -4,15 +4,15 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 
 @Entity
-class TaskInformation {
+class ProblemInformation {
     @Id
     @GeneratedValue
     var id: Long? = null
 
     @JsonIgnore
     @ManyToOne(cascade = [CascadeType.ALL])
-    @JoinColumn(nullable = false, name = "task_id")
-    var task: Task? = null
+    @JoinColumn(nullable = false, name = "problem_id")
+    var problem: Problem? = null
 
     @Column(nullable = false)
     var language: String? = null

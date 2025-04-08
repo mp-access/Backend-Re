@@ -3,6 +3,8 @@ import ch.uzh.ifi.access.model.Evaluation
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 
+// TODO ska: This Evaluation class is still very strongly tied to Tasks.
+// TODO ska: Consider renaming it to TaskEvaluationSummary to make this clear.
 @Projection(types = [Evaluation::class])
 interface EvaluationSummary {
     val userId: String?

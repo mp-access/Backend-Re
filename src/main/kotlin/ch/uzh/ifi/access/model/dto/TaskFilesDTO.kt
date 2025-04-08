@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.model.dto
 
 import lombok.Data
 
+// TODO ska: Unsure - required to change this to Problem?
 @Data
 class TaskFilesDTO(
     var instruction: List<String> = ArrayList(),

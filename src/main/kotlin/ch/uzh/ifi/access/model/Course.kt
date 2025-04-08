@@ -60,6 +60,9 @@ class Course {
     @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
     var events: MutableList<Event> = ArrayList()
 
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    var examples: MutableList<Example> = ArrayList()
+
     @ElementCollection
     var supervisors: MutableSet<String> = mutableSetOf()
 

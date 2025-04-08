@@ -1,7 +1,7 @@
 package ch.uzh.ifi.access.projections
 
 import ch.uzh.ifi.access.model.Task
-import ch.uzh.ifi.access.model.TaskInformation
+import ch.uzh.ifi.access.model.ProblemInformation
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 
@@ -13,7 +13,7 @@ interface TaskOverview {
 
     @get:Value("#{'Task ' + target.ordinalNum.toString()}")
     val name: String?
-    val information: Map<String?, TaskInformation?>?
+    val information: Map<String?, ProblemInformation?>?
     val maxPoints: Double?
     val maxAttempts: Int?
     fun setUserId(userId: String?)

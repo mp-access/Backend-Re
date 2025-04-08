@@ -5,7 +5,7 @@ import lombok.NoArgsConstructor
 
 @Data
 @NoArgsConstructor
-class TaskFileDTO {
+class ProblemFileDTO {
     var path: String? = null
     var template: String? = null
     var templateBinary: ByteArray? = null

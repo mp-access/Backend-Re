@@ -1,16 +1,16 @@
 package ch.uzh.ifi.access.repository
 
-import ch.uzh.ifi.access.model.TaskFile
+import ch.uzh.ifi.access.model.ProblemFile
 import jakarta.transaction.Transactional
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.security.access.prepost.PostFilter
 
-interface TaskFileRepository : JpaRepository<TaskFile?, Long?> {
+interface TaskFileRepository : JpaRepository<ProblemFile?, Long?> {
     @Transactional
-    @PostFilter("hasRole(filterObject.task.assignment.course.slug + '-assistant') or filterObject.isPublished")
-    fun findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId: Long?): List<TaskFile>
+    @PostFilter("hasRole(filterObject.problem.assignment.course.slug + '-assistant') or filterObject.isPublished")
+    fun findByProblem_IdAndEnabledTrueOrderByIdAscPathAsc(problemId: Long?): List<ProblemFile>
 
     @Transactional
-    fun findByTask_IdAndEnabledTrue(taskId: Long?): List<TaskFile>
-    fun findByTask_IdAndPath(taskId: Long?, filePath: String?): TaskFile?
+    fun findByProblem_IdAndEnabledTrue(problemId: Long?): List<ProblemFile>
+    fun findByProblem_IdAndPath(taskId: Long?, filePath: String?): ProblemFile?
 }

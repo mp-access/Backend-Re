@@ -8,7 +8,6 @@ import lombok.Setter
 import org.hibernate.annotations.OrderBy
 import java.time.Duration
 import java.time.LocalDateTime
-
 @Getter
 @Setter
 @Entity
@@ -24,8 +23,8 @@ class Evaluation {
 
     @JsonIgnore
     @ManyToOne
-    @JoinColumn(nullable = false, name = "task_id")
-    var task: Task? = null
+    @JoinColumn(nullable = false, name = "problem_id")
+    var problem: Problem? = null
 
     @OneToMany(mappedBy = "evaluation", cascade = [CascadeType.ALL])
     @OrderBy(clause = "CREATED_AT DESC")
@@ -34,7 +33,12 @@ class Evaluation {
     @Transient
     var nextAttemptAt: LocalDateTime? = null
     val isActive: Boolean
-        get() = task!!.assignment!!.isActive
+
+        get() = when (val p = problem) {
+            is Task -> p.assignment!!.isActive
+            /* is Example -> ... */ // TODO ska: Add appropriate function call for Example.
+            else -> false
+        }
 
     fun countSubmissionsByType(command: Command): Long {
         return submissions.stream().filter { submission: Submission -> submission.command == command }.count()
@@ -57,34 +61,40 @@ class Evaluation {
 
     @PostLoad
     fun updateRemainingAttempts() {
-        task?.attemptWindow.let {
-            submissions
-                .filter { it.isGraded && it.valid }
-                .map {
-                    it.createdAt
-                }.firstOrNull {
-                    it?.isBefore(
-                        LocalDateTime.now()
-                    ) ?: false
-                }?.let { createdAt ->
-                    task?.let {
-                        val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
-                            it.attemptWindow
-                        )
-                        it.maxAttempts?.let { maxAttempts ->
-                            remainingAttempts?.let { remainingAttempts ->
-                                if (maxAttempts - remainingAttempts <= refills) this.remainingAttempts =
-                                    maxAttempts else {
-                                    this.remainingAttempts = remainingAttempts + refills.toInt()
-                                    it.attemptWindow?.let { attemptWindow ->
-                                        nextAttemptAt = createdAt.plus(attemptWindow.multipliedBy(refills + 1))
+        when (val p = problem) {
+            is Task -> {
+                p.attemptWindow.let {
+                    submissions
+                        .filter { it.isGraded && it.valid }
+                        .map {
+                            it.createdAt
+                    }.firstOrNull {
+                        it?.isBefore(
+                            LocalDateTime.now()
+                        ) ?: false
+                    }?.let { createdAt ->
+                        p.let {
+                            val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
+                                it.attemptWindow
+                            )
+                            it.maxAttempts?.let { maxAttempts ->
+                                remainingAttempts?.let { remainingAttempts ->
+                                    if (maxAttempts - remainingAttempts <= refills) this.remainingAttempts =
+                                        maxAttempts else {
+                                        this.remainingAttempts = remainingAttempts + refills.toInt()
+                                        it.attemptWindow?.let { attemptWindow ->
+                                            nextAttemptAt = createdAt.plus(attemptWindow.multipliedBy(refills + 1))
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
+                    }
                 }
+            }
+            is Example -> {} // TODO ska: Add meaningful implementation for examples
         }
     }
 }
+

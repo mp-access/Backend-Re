@@ -99,7 +99,7 @@ class CourseConfigImporter(
         task.maxPoints = config["max_points"].asDouble()
 
         val instructionFiles = config["information"].fields().asSequence().map { field ->
-            val information = TaskInformationDTO()
+            val information = ProblemInformationDTO()
             val data = field.value
             information.language = field.key
             information.title = data.get("title").asText()
@@ -108,7 +108,7 @@ class CourseConfigImporter(
             information.instructionsFile!!
         }.toList()
 
-        val evaluator = TaskEvaluatorDTO()
+        val evaluator = ProblemEvaluatorDTO()
         evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
         evaluator.runCommand = config["evaluator"].get("run_command").asText()
         evaluator.gradeCommand = config["evaluator"].get("grade_command").asText()
@@ -135,6 +135,13 @@ class CourseConfigImporter(
 
         return task
 
+    }
+
+    fun readExampleConfig(path: Path) {
+        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
+        val example = ExampleDTO()
+
+        example.slug = config["slug"].asText()
     }
 
 }

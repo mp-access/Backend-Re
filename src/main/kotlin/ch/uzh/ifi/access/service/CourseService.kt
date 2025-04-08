@@ -126,12 +126,12 @@ class CourseService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
-    fun getTaskById(taskId: Long): Task {
-        return taskRepository.findById(taskId).get() ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId")
+    fun getTaskById(problemId: Long): Task {
+        return taskRepository.findById(problemId).get() ?:
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $problemId")
     }
 
-    fun getTaskFileById(fileId: Long): TaskFile {
+    fun getTaskFileById(fileId: Long): ProblemFile {
         return taskFileRepository.findById(fileId).get() ?:
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
     }
@@ -182,18 +182,18 @@ class CourseService(
         return workspace
     }
 
-    fun getTaskFiles(taskId: Long?, userId: String?): List<TaskFile> {
-        val permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
+    fun getTaskFiles(problemId: Long?, userId: String?): List<ProblemFile> {
+        val permittedFiles = taskFileRepository.findByProblem_IdAndEnabledTrueOrderByIdAscPathAsc(problemId)
         return permittedFiles
     }
 
-    fun getTaskFilesByType(taskId: Long?, isGrading: Boolean): List<TaskFile> {
-        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
-            .stream().filter { file: TaskFile -> file.grading && isGrading }.toList()
+    fun getTaskFilesByType(problemId: Long?, isGrading: Boolean): List<ProblemFile> {
+        return taskFileRepository.findByProblem_IdAndEnabledTrue(problemId)
+            .stream().filter { file: ProblemFile -> file.grading && isGrading }.toList()
     }
 
-    fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
-        val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
+    fun getSubmissions(problemId: Long?, userId: String?): List<Submission> {
+        val unrestricted = submissionRepository.findByEvaluation_Problem_IdAndUserId(problemId, userId)
         unrestricted.forEach { submission ->
             submission.logs?.let { output ->
                 if (submission.command == Command.GRADE) {
@@ -204,14 +204,14 @@ class CourseService(
             }
         }
         val restricted =
-            submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
+            submissionRepository.findByEvaluation_Problem_IdAndUserIdAndCommand(problemId, userId, Command.GRADE)
         return Stream.concat(unrestricted.stream(), restricted.stream())
             .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
                 .reversed()).toList()
     }
 
-    fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
-        return evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
+    fun getEvaluation(problemId: Long?, userId: String?): Evaluation? {
+        return evaluationRepository.getTopByProblem_IdAndUserIdOrderById(problemId, userId)
     }
 
     fun getRemainingAttempts(taskId: Long?, userId: String?, maxAttempts: Int): Int {
@@ -326,15 +326,15 @@ class CourseService(
             )
     }
 
-    fun getGradingFiles(taskId: Long?): List<TaskFile> {
-        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
-            .filter { file: TaskFile -> file.grading }
+    fun getGradingFiles(taskId: Long?): List<ProblemFile> {
+        return taskFileRepository.findByProblem_IdAndEnabledTrue(taskId)
+            .filter { file: ProblemFile -> file.grading }
             .toList()
     }
 
-    fun getVisibleNonEditableFiles(taskId: Long?): List<TaskFile> {
-        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
-            .filter { file: TaskFile -> file.visible && !file.editable }
+    fun getVisibleNonEditableFiles(taskId: Long?): List<ProblemFile> {
+        return taskFileRepository.findByProblem_IdAndEnabledTrue(taskId)
+            .filter { file: ProblemFile -> file.visible && !file.editable }
             .toList()
     }
 
@@ -363,7 +363,7 @@ class CourseService(
         val newSubmissionFile = SubmissionFile()
         newSubmissionFile.submission = submission
         newSubmissionFile.content = fileDTO.content
-        newSubmissionFile.taskFile = getTaskFileById(fileDTO.taskFileId!!)
+        newSubmissionFile.problemFile = getTaskFileById(fileDTO.problemFileId!!)
         submission.files.add(newSubmissionFile)
         submissionRepository.saveAndFlush(submission)
     }
@@ -422,7 +422,7 @@ class CourseService(
             submissionRepository.deleteAll(prune)
             submissionRepository.flush()
             evaluationRepository.flush()
-            logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map{it.ordinalNum}}" }
+            /*logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map{it.ordinalNum}}" }*/ // TODO ska: Since this function is currently not used, I just commented out the problematic line (the one that doesn't conform with our data model anymore).
         }
     }
 
@@ -477,13 +477,13 @@ class CourseService(
                     }
                     // add visible but not editable files (because these are not part of the submission files)
                     getVisibleNonEditableFiles(task.id)
-                        .forEach(Consumer { file: TaskFile ->
+                        .forEach(Consumer { file: ProblemFile ->
                             createContainerFile(submissionDir, file)
                         })
                     // add grading files if submission is graded
                     if (submission.isGraded) {
                         getGradingFiles(task.id)
-                            .forEach(Consumer { file: TaskFile ->
+                            .forEach(Consumer { file: ProblemFile ->
                                 createContainerFile(submissionDir, file)
                             })
                         globalFiles.forEach { file ->
@@ -651,7 +651,7 @@ exit ${'$'}exit_code;
     }
 
     private fun createContainerFile(submissionDir: Path, submissionFile: SubmissionFile) {
-        val filePath = createContainerFile(submissionDir, submissionFile.taskFile!!.path!!)
+        val filePath = createContainerFile(submissionDir, submissionFile.problemFile!!.path!!)
         Files.writeString(filePath, submissionFile.content)
     }
 
@@ -660,9 +660,9 @@ exit ${'$'}exit_code;
         else { Files.writeString(filePath, data) }
     }
 
-    private fun createContainerFile(submissionDir: Path, taskFile: TaskFile) {
-        val filePath = createContainerFile(submissionDir, taskFile.path!!)
-        writeContainerFile(filePath, taskFile.template, taskFile.templateBinary)
+    private fun createContainerFile(submissionDir: Path, problemFile: ProblemFile) {
+        val filePath = createContainerFile(submissionDir, problemFile.path!!)
+        writeContainerFile(filePath, problemFile.template, problemFile.templateBinary)
     }
 
     private fun createContainerFile(submissionDir: Path, globalFile: GlobalFile) {
@@ -800,7 +800,7 @@ exit ${'$'}exit_code;
     }
 
     private fun getEvaluation(task: Task, userId: String): EvaluationSummary? {
-        return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
+        return evaluationRepository.findTopByProblem_IdAndUserIdOrderById(task.id, userId)
     }
 
     fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
@@ -825,7 +825,7 @@ exit ${'$'}exit_code;
                 task.maxPoints,
                 task.maxAttempts,
                 task.maxAttempts,
-                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
+                task.information.map { (language, info) -> language to ProblemInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
                 listOf()
             )
         } else {
@@ -836,7 +836,7 @@ exit ${'$'}exit_code;
                 task.maxPoints,
                 evaluation.remainingAttempts,
                 task.maxAttempts,
-                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
+                task.information.map { (language, info) -> language to ProblemInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
                 evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points != null }?.let { listOf(it) } ?: listOf()
             )
         }

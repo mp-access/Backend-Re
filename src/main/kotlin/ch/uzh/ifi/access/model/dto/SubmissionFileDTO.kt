@@ -6,6 +6,6 @@ import lombok.NoArgsConstructor
 @Data
 @NoArgsConstructor
 class SubmissionFileDTO(
-    var taskFileId: Long? = null,
+    var problemFileId: Long? = null,
     var content: String? = null
 )

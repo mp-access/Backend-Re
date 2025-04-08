@@ -1,14 +1,8 @@
 package ch.uzh.ifi.access.config;
 
-import ch.uzh.ifi.access.model.Assignment;
-import ch.uzh.ifi.access.model.Course;
-import ch.uzh.ifi.access.model.Submission;
-import ch.uzh.ifi.access.model.Task;
+import ch.uzh.ifi.access.model.*;
 import ch.uzh.ifi.access.model.constants.Visibility;
-import ch.uzh.ifi.access.model.dto.AssignmentDTO;
-import ch.uzh.ifi.access.model.dto.CourseDTO;
-import ch.uzh.ifi.access.model.dto.SubmissionDTO;
-import ch.uzh.ifi.access.model.dto.TaskDTO;
+import ch.uzh.ifi.access.model.dto.*;
 import org.apache.commons.lang3.ObjectUtils;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.convention.MatchingStrategies;
@@ -31,6 +25,8 @@ public class ModelMapperConfig {
                 .addMappings(mapping -> mapping.skip(AssignmentDTO::getTasks, Assignment::setTasks));
         modelMapper.typeMap(TaskDTO.class, Task.class)
                 .addMappings(mapping -> mapping.skip(TaskDTO::getFiles, Task::setFiles));
+        modelMapper.typeMap(ExampleDTO.class, Example.class)
+                .addMappings(mapping -> mapping.skip(ExampleDTO::getFiles, Example::setFiles));
         modelMapper.typeMap(SubmissionDTO.class, Submission.class)
                 .addMappings(mapping -> mapping.skip(Submission::setFiles));
         modelMapper.createTypeMap(String.class, Visibility.class)

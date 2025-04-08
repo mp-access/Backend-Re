@@ -3,7 +3,7 @@ package ch.uzh.ifi.access.model.dto
 import lombok.Data
 
 @Data
-class TaskEvaluatorDTO(
+class ProblemEvaluatorDTO(
     var dockerImage: String? = null,
     var runCommand: String? = null,
     var testCommand: String? = null,
