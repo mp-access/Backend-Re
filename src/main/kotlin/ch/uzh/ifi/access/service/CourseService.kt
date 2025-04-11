@@ -156,7 +156,7 @@ class CourseService(
 
     // TODO: Remove, only for mock purpose
     private val taskEvaluatorDTO = TaskEvaluatorDTO("python",null,null,"run",null,7200, ArrayList())
-        private val examples = arrayOf(
+    private val examples = arrayOf(
         ExampleDTO("example-1", 1, HashMap(), 7200, taskEvaluatorDTO),
         ExampleDTO("example-2", 2, HashMap(), 7200, taskEvaluatorDTO),
         ExampleDTO("example-3", 3, HashMap(), 7200, taskEvaluatorDTO),

@@ -192,7 +192,7 @@ class CourseController(
 
     // Invoked by the teacher when publishing an example to inform the students
     @PostMapping("/{courseSlug}/examples/{exampleSlug}/publish")
-    @PreAuthorize("hasRole(#courseSlug+'-assistant')")
+    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
     fun notifyStudents(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
