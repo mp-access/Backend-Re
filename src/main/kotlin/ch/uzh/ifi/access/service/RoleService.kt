@@ -119,11 +119,12 @@ class RoleService(
         toRemove.forEach { login ->
             val username = usernameForLogin(login)
             try {
-                // Search for exact username match using search query
+                // keycloak username search with exact match does not work correctly.
+                // use non-exact match but then filter the result.
                 val users = accessRealm.users()
-                    .searchByUsername(username, true)
+                    .searchByUsername(username, false)
+                val user = users.firstOrNull { it.username == username }
 
-                val user = users.firstOrNull()
                 if (user != null) {
                     logger.debug { "Removing role $roleName from ${user.username}"}
                     accessRealm.users()[user.id].roles().realmLevel().remove(listOf(realmRoleRepresentation))
@@ -139,11 +140,12 @@ class RoleService(
         toAdd.forEach { login ->
             val username = usernameForLogin(login)
             try {
-                // Search for exact username match using search query
+                // keycloak username search with exact match does not work correctly.
+                // use non-exact match but then filter the result.
                 val users = accessRealm.users()
-                    .searchByUsername(username, true)
+                    .searchByUsername(username, false)
+                val user = users.firstOrNull { it.username == username }
 
-                val user = users.firstOrNull()
                 if (user != null) {
                     logger.debug { "Adding role $roleName to ${user.username}" }
                     accessRealm.users()[user.id].roles()
