@@ -8,6 +8,7 @@ import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.repository.*
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.PullImageResultCallback
@@ -18,10 +19,17 @@ import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
+import okhttp3.Request
+import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
 import org.apache.tika.Tika
 import org.keycloak.representations.idm.UserRepresentation
+import org.keycloak.util.JsonSerialization.mapper
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
@@ -45,6 +53,7 @@ import java.util.function.Consumer
 import java.util.stream.Stream
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.log
 
 @Service
 class CourseServiceForCaching(
@@ -82,11 +91,13 @@ class CourseService(
     private val evaluationRepository: EvaluationRepository,
     private val dockerClient: DockerClient,
     private val modelMapper: ModelMapper,
+    private val objectMapper: ObjectMapper,
     private val jsonMapper: JsonMapper,
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
     private val fileService: FileService,
-    private val tika: Tika
+    private val tika: Tika,
+    private val assistantServerUrl: String
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -113,27 +124,29 @@ class CourseService(
         }
     }
 
+    private val client = OkHttpClient()
+
     private fun verifyUserId(@Nullable userId: String?): String {
         return userId ?: SecurityContextHolder.getContext().authentication.name
     }
 
     fun getCourseBySlug(courseSlug: String): Course {
         return courseRepository.getBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace {
         return courseRepository.findBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
     fun getTaskById(taskId: Long): Task {
         return taskRepository.findById(taskId).get() ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId")
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId")
     }
 
     fun getTaskFileById(fileId: Long): TaskFile {
         return taskFileRepository.findById(fileId).get() ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
     }
     fun getCoursesOverview(): List<CourseOverview> {
         //return courseRepository.findCoursesBy()
@@ -147,7 +160,7 @@ class CourseService(
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
         return courseRepository.findCourseBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
     }
 
     fun enabledTasksOnly(tasks: List<Task>): List<Task> {
@@ -161,23 +174,23 @@ class CourseService(
 
     fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
         return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
-            throw ResponseStatusException( HttpStatus.NOT_FOUND,
-                    "No assignment found with the URL $assignmentSlug" )
+        throw ResponseStatusException( HttpStatus.NOT_FOUND,
+            "No assignment found with the URL $assignmentSlug" )
     }
 
     fun getAssignmentBySlug(courseSlug: String?, assignmentSlug: String): Assignment {
         return assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
         throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No assignment found with the URL $assignmentSlug"
-            )
+            HttpStatus.NOT_FOUND,
+            "No assignment found with the URL $assignmentSlug"
+        )
     }
 
     fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
         val workspace =
             taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug) ?:
             throw ResponseStatusException( HttpStatus.NOT_FOUND,
-                        "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug" )
+                "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug" )
         workspace.setUserId(userId)
         return workspace
     }
@@ -322,8 +335,8 @@ class CourseService(
             assignmentSlug,
             taskSlug
         ) ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
-            )
+            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
+        )
     }
 
     fun getGradingFiles(taskId: Long?): List<TaskFile> {
@@ -426,6 +439,81 @@ class CourseService(
         }
     }
 
+    // Evaluates a submission using the assistant API
+    fun evaluateSubmissionWithAssistant(submission: AssistantDTO): AssistantResponseDTO? {
+        val url = "$assistantServerUrl/evaluate"
+
+        val requestBodyJson = mapper.writeValueAsString(submission)
+        logger.debug { "Request body: $requestBodyJson" }
+
+        val requestBody = requestBodyJson.toRequestBody("application/json".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw RuntimeException("Failed to get response from assistant backend: ${response.message}")
+            }
+
+            val responseBody = response.body?.string() ?: throw RuntimeException("Empty response body")
+            val taskId = mapper.readValue(responseBody, TaskIdDTO::class.java).jobId
+
+            if (taskId.isNullOrBlank()) {
+                throw RuntimeException("Invalid taskId received from assistant backend")
+            }
+
+            // Polling loop
+            var attempts = 0
+            val maxAttempts = 20  // Adjust as needed
+            val delayMillis = 2000L  // 2 seconds delay per attempt
+
+            while (attempts < maxAttempts) {
+                val statusUrl = "$assistantServerUrl/evaluate/$taskId"
+                val statusRequest = Request.Builder().url(statusUrl).get().build()
+                client.newCall(statusRequest).execute().use { statusResponse ->
+                    if (!statusResponse.isSuccessful) {
+                        throw RuntimeException("Failed to fetch evaluation status: ${statusResponse.message}")
+                    }
+
+                    val statusBody = statusResponse.body?.string()
+                    val statusResponseDTO = mapper.readValue(statusBody, AssistantEvaluationResponseDTO::class.java)
+
+                    when (statusResponseDTO.status) {
+                        "completed" -> return statusResponseDTO.result  // Return completed result
+                        "not_found" -> throw RuntimeException("Task not found in assistant backend")
+                        "delayed" -> {
+                            // Keep polling
+                            logger.debug { "Task $taskId delayed, retrying..." }
+                        }
+                        "active" -> {
+                            // Keep polling
+                            logger.debug { "Task $taskId still active, retrying..." }
+                        }
+                        else -> throw RuntimeException("Unexpected status: ${statusResponseDTO.status}")
+                    }
+                }
+                Thread.sleep(delayMillis)  // Wait before next attempt
+                attempts++
+            }
+            throw RuntimeException("Evaluation timed out for taskId: $taskId")
+        }
+    }
+
+    fun <T> parseJsonOrEmpty(json: String?, objectMapper: ObjectMapper, clazz: Class<Array<T>>): List<T> {
+        return try {
+            if (!json.isNullOrBlank()) {
+                objectMapper.readValue(json, clazz).toList()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList() // Fallback to empty list if parsing fails
+        }
+    }
+
+
     @Caching(evict = [
         CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
         CacheEvict(value = ["studentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
@@ -454,6 +542,7 @@ class CourseService(
             )
         }
         val submission = submissionRepository.saveAndFlush(newSubmission)
+
         //pruneSubmissions(evaluation)
         submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
@@ -500,7 +589,7 @@ class CourseService(
                     // TODO: make this size configurable in task config.toml?
                     val resultFileSizeLimit = convertSizeToBytes("100K")
                     val persistentFileCopyCommands = task.persistentResultFilePaths.joinToString("\n") { path ->
-"""
+                        """
 # Check if results file exceeds permissible size limit
 if [[ -f "$path" ]]; then
     actual_size=${'$'}(stat -c%s "$path")
@@ -514,7 +603,7 @@ cp "$path" "/submission/${'$'}file_dir"
 """
                     }
                     val command = (
-"""
+                            """
 # copy submitted files to tmpfs
 /bin/cp -R /submission/* /workspace/;
 # run command (the cwd is set to /workspace already)
@@ -533,7 +622,7 @@ fi
 $persistentFileCopyCommands
 exit ${'$'}exit_code; 
 """
-                    )
+                            )
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
                         .withCmd("/bin/bash", "-c", command)
@@ -636,9 +725,73 @@ exit ${'$'}exit_code;
                     FileUtils.deleteQuietly(submissionDir.toFile())
                 }
             }
+
+
+            // Only evaluate with assistant if the submission file was defined in the config
+            if(task.llmSubmission != null) {
+                // Evaluate with Assistant API
+                try {
+                    // Collect the student's submitted code
+                    val llmSubmissionFile = submission.files
+                        .firstOrNull { file -> file.taskFile?.path == "/${task.llmSubmission}" } // Find the specific file
+
+                    submission.files.map {
+                        logger.debug { "Submission file: ${it.taskFile?.path}" }
+                    }
+
+                    var assistantResponse: AssistantResponseDTO? = null
+
+                    if (llmSubmissionFile?.content != null) {
+                        assistantResponse = evaluateSubmissionWithAssistant(
+                            AssistantDTO(
+                                question = task.instructions ?: "No instructions provided",
+                                answer = llmSubmissionFile.content ?: "No answer provided",
+                                llmType = task.llmModelFamily,
+                                chainOfThought = task.llmCot,
+                                votingCount = task.llmVoting,
+                                rubrics = parseJsonOrEmpty(task.llmRubrics, objectMapper, Array<RubricDTO>::class.java),
+                                prePrompt = task.llmPre,
+                                postPrompt = task.llmPost,
+                                prompt = task.llmPrompt,
+                                temperature = task.llmTemperature,
+                                fewShotExamples = parseJsonOrEmpty(
+                                    task.llmExamples,
+                                    objectMapper,
+                                    Array<FewShotExampleDTO>::class.java
+                                ),
+                                maxPoints = task.llmMaxPoints,
+                                modelSolution = task.llmSolution,
+                                llmModel = task.llmModel,
+                            )
+                        )
+                    }
+
+
+
+                    if (assistantResponse != null) {
+                        logger.debug { "Assistant internal feedback: ${assistantResponse.feedback}" }
+                        logger.debug { "Assistant scoring: ${assistantResponse.points}" }
+                    }
+
+                    // Incorporate the assistant feedback into the submission
+                    assistantResponse?.let {
+                        if (it.hint != null && it.hint != "" && it.status !== Status.correct) {
+                            newSubmission.logs += "\nHint: ${it.hint}"
+                        }
+                        val newPoints = newSubmission.points?.plus(it.points)
+                        newSubmission.points = minOf(newPoints!!, newSubmission.maxPoints!!)
+                        evaluation.update(newSubmission.points)
+                    }
+                } catch (e: Exception) {
+                    // print error
+                    logger.error { "Failed to evaluate submission with assistant: ${e.message}" }
+                }
+            }
+
         } catch (e: Exception) {
             newSubmission.output = "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         }
+
         submissionRepository.save(newSubmission)
     }
 
