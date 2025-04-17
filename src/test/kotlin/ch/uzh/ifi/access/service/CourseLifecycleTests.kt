@@ -1,53 +1,43 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.BaseTest
+import ch.uzh.ifi.access.DatabaseCleanupListener
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.projections.CourseWorkspace
-import com.fasterxml.jackson.databind.json.JsonMapper
-import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.MethodOrderer
+import org.junit.jupiter.api.Order
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.security.test.context.support.WithMockUser
-import org.springframework.test.web.servlet.MockMvc
-import org.springframework.web.server.ResponseStatusException
+import org.springframework.test.context.TestExecutionListeners
 import java.io.File
 import java.nio.file.Paths
 import java.time.LocalDateTime
 
-
+@SpringBootTest
+@TestExecutionListeners(
+    listeners = [DatabaseCleanupListener::class],
+    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
+)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class CourseLifecycleTests(
-    @Autowired val mvc: MockMvc,
-    @Autowired val jsonMapper: JsonMapper,
     @Autowired val courseLifecycle: CourseLifecycle,
     @Autowired val courseService: CourseService) : BaseTest() {
-
-    /* TODO: find a way to reset the db before/after testing
-             This is a bit tricky, because at the moment, both ACCESS and keycloak use the same postgres database,
-             so something like https://github.com/zonkyio/embedded-database-spring-test doesn't work, because that
-             temporary database lacks all the keycloak data, like roles, etc.
-     */
 
     @Test
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
     @Order(0)
-    @Disabled
     fun `Course import succeeds`() {
-        // delete existing course if any
-        try {
-            courseService.deleteCourse("access-mock-course")
-        } catch (_: ResponseStatusException) {
-        }
-
         val course = Course()
         course.slug = "access-mock-course"
         course.repository = "https://github.com/mp-access/Mock-Course-Re.git"
         val path = "Mock-Course-Re"
         val file = File(path)
         val absolutePath = Paths.get(file.absolutePath)
-
         courseLifecycle.createFromDirectory( absolutePath, course )
-
         courseService.getCourseBySlug("access-mock-course")
     }
 
