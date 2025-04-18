@@ -55,6 +55,10 @@ class Course {
     var assignments: MutableList<Assignment> = ArrayList()
 
     @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    @OrderBy("ordinalNum ASC")
+    var examples: MutableList<Task> = ArrayList()
+
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
     var globalFiles: MutableList<GlobalFile> = java.util.ArrayList()
 
     @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
