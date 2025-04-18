@@ -1,4 +1,8 @@
 ALTER TABLE task ADD COLUMN course_id bigint;
+
+AlTER TABLE task ADD COLUMN start_date timestamp(6);
+AlTER TABLE task ADD COLUMN end_date timestamp(6);
+
 ALTER TABLE task
     ADD CONSTRAINT fk_task_course
     FOREIGN KEY (course_id) REFERENCES course;

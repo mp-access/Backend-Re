@@ -6,6 +6,7 @@ import org.hibernate.annotations.Check
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.*
 
 @Entity
@@ -56,6 +57,12 @@ class Task {
     @ManyToOne(cascade = [CascadeType.ALL])
     @JoinColumn(name = "course_id")
     var course: Course? = null
+
+    @Column(name = "start_date")
+    var start: LocalDateTime? = null
+
+    @Column(name = "end_date")
+    var end: LocalDateTime? = null
 
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
     var files: MutableList<TaskFile> = ArrayList()
