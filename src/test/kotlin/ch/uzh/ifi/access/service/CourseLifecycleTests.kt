@@ -3,14 +3,10 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.DatabaseCleanupListener
 import ch.uzh.ifi.access.model.Course
-import ch.uzh.ifi.access.model.GlobalFile
 import ch.uzh.ifi.access.model.constants.Visibility
-import ch.uzh.ifi.access.projections.CourseSummary
-import ch.uzh.ifi.access.projections.CourseWorkspace
 import ch.uzh.ifi.access.repository.CourseRepository
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
-import org.hamcrest.core.IsEqual.equalTo
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Order
@@ -36,9 +32,6 @@ class CourseLifecycleTests(
     @Autowired val courseRepository: CourseRepository,
     @Autowired val courseService: CourseService) : BaseTest() {
 
-    fun getCourse(): Course {
-        return courseRepository.getBySlug("access-mock-course")!!
-    }
 
     /*
      * Import and update
@@ -67,26 +60,19 @@ class CourseLifecycleTests(
     }
 
     /*
-     * Course config
+     * Course
      */
 
-    @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
-    fun `Imported course slug correct`() {
-        assertEquals("access-mock-course", getCourse().slug)
+    fun getCourse(): Course {
+        return courseRepository.getBySlug("access-mock-course")!!
     }
 
     @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Imported course logo correct`() {
-        assertThat(getCourse().logo, startsWith("data:image/svg+xml;base64,"))
-    }
-
-    @Test
-    @Transactional
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
-    fun `Imported course visibility correct`() {
+    fun `Course basic metadata correct`() {
         val course = getCourse()
+        assertEquals("access-mock-course", course.slug)
+        assertThat(course.logo, startsWith("data:image/svg+xml;base64,"))
         assertEquals(Visibility.HIDDEN, course.defaultVisibility)
         assertEquals(Visibility.REGISTERED, course.overrideVisibility)
         assertEquals(LocalDateTime.of(2023,1,1,13,0), course.overrideStart)
@@ -96,7 +82,7 @@ class CourseLifecycleTests(
     @Test
     @Transactional
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Imported course information correct`() {
+    fun `Course information correct`() {
         val course = getCourse()
         assertThat(course.information, hasKey("de"))
         assertThat(course.information, hasKey("en"))
@@ -112,7 +98,7 @@ class CourseLifecycleTests(
     @Test
     @Transactional
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Imported course global files correct`() {
+    fun `Course global files correct`() {
         val course = getCourse()
         assertEquals(course.globalFiles.size, 2)
 
@@ -129,21 +115,9 @@ class CourseLifecycleTests(
     @Test
     @Transactional
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Imported course number of assignments correct`() {
+    fun `Course number of assignments correct`() {
         assertEquals(3, getCourse().assignments.size)
     }
-
-    /*
-     * Assignment config
-     */
-
-    @Test
-    @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Imported course assignment numbers correct`() {
-        assertEquals(listOf(1,2,3), getCourse().assignments.map{ it.ordinalNum }.toList())
-    }
-
 
 }
 

@@ -2,6 +2,7 @@ package ch.uzh.ifi.access
 
 import ch.uzh.ifi.access.service.CourseLifecycleTests
 import ch.uzh.ifi.access.api.PublicAPITests
+import ch.uzh.ifi.access.service.ImportAssignmentsTests
 import org.junit.jupiter.api.ClassOrderer
 import org.junit.jupiter.api.TestClassOrder
 import org.junit.platform.suite.api.SelectClasses
@@ -20,7 +21,11 @@ import java.sql.DriverManager
 abstract class BaseTest
 
 @Suite
-@SelectClasses(CourseLifecycleTests::class, PublicAPITests::class)
+@SelectClasses(
+    CourseLifecycleTests::class,
+    ImportAssignmentsTests::class,
+    PublicAPITests::class
+)
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
 class AllTests
 
