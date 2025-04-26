@@ -1,13 +1,11 @@
 package ch.uzh.ifi.access
 
 import ch.uzh.ifi.access.service.CourseLifecycleTests
-import ch.uzh.ifi.access.service.PublicAPITests
+import ch.uzh.ifi.access.api.PublicAPITests
 import org.junit.jupiter.api.ClassOrderer
 import org.junit.jupiter.api.TestClassOrder
 import org.junit.platform.suite.api.SelectClasses
 import org.junit.platform.suite.api.Suite
-import org.springframework.boot.WebApplicationType
-import org.springframework.boot.builder.SpringApplicationBuilder
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Configuration

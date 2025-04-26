@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.service
+package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.BaseTest
 import org.junit.jupiter.api.MethodOrderer
