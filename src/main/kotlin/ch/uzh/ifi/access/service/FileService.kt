@@ -48,25 +48,28 @@ class FileService(val tika: Tika) {
 
     fun storeFile(path: Path): FileData {
         val fileData = FileData()
-        val bytes = BufferedInputStream(Files.newInputStream(path))
-        val metadata = Metadata()
-        val detector = TikaConfig.getDefaultConfig().detector
-        val mimeType = detector.detect(bytes, metadata)
         fileData.path = path.toString()
         fileData.name = path.fileName.toString()
+        // because Tika actually cannot detect python3 scripts, we trust the file extension for now
+        val extension = FileNameUtils.getExtension(path.toString()).lowercase(Locale.getDefault())
+        if (listOf("py", "r", "sh", "bash").contains(extension)) {
+            fileData.mimeType = when (extension) {
+                "py" -> "text/x-python"
+                "r" -> "text/plain"
+                else -> "text/x-sh"
+            }
+            fileData.content = Files.readString(path)
+            return fileData.validated()
+        }
+        // otherwise we use Tika
+        val mimeType = tika.detect(path)
         fileData.mimeType = mimeType.toString()
-        // first, we trust the file extension, if we can recognize it
-        val extension = FileNameUtils.getExtension(path.toString())
-        if (listOf("py", "r", "sh", "bash").contains(extension.lowercase(Locale.getDefault()))) {
+        // if the mimeType is text, we store as text
+        if (mimeType.startsWith("text/")) {
             fileData.content = Files.readString(path)
             return fileData.validated()
         }
-        // if the mimeType is text, that's what we assume
-        if (mimeType.type == "text") {
-            fileData.content = Files.readString(path)
-            return fileData.validated()
-        }
-        // otherwise we store it as binary anyway
+        // otherwise we store it as binary
         fileData.contentBinary = Files.readAllBytes(path)
         return fileData.validated()
     }
