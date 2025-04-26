@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.BaseTest
-import ch.uzh.ifi.access.DatabaseCleanupListener
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Visibility
 import ch.uzh.ifi.access.repository.CourseRepository
@@ -9,59 +8,15 @@ import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.security.test.context.support.WithMockUser
-import org.springframework.test.context.TestExecutionListeners
 import org.springframework.transaction.annotation.Transactional
-import java.io.File
-import java.nio.file.Paths
 import java.time.LocalDateTime
 
-@SpringBootTest
-@TestExecutionListeners(
-    listeners = [DatabaseCleanupListener::class],
-    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
-)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
-class CourseLifecycleTests(
-    @Autowired val courseLifecycle: CourseLifecycle,
-    @Autowired val courseRepository: CourseRepository,
-    @Autowired val courseService: CourseService) : BaseTest() {
-
-
-    /*
-     * Import and update
-     */
-
-    @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
-    @Order(0)
-    fun `Course import succeeds`() {
-        val course = Course()
-        course.slug = "access-mock-course"
-        course.repository = "https://github.com/mp-access/Mock-Course-Re.git"
-        val path = "Mock-Course-Re"
-        val file = File(path)
-        val absolutePath = Paths.get(file.absolutePath)
-        courseLifecycle.createFromDirectory( absolutePath, course )
-        courseService.getCourseBySlug("access-mock-course")
-    }
-
-    @Test
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["supervisor"])
-    @Order(0)
-    fun `Course update succeeds`() {
-        val absolutePath = Paths.get(File("Mock-Course-Re").absolutePath)
-        courseService.updateCourseFromDirectory("access-mock-course", absolutePath)
-    }
-
-    /*
-     * Course
-     */
+class ImportCourseTests(@Autowired val courseRepository: CourseRepository) : BaseTest() {
 
     fun getCourse(): Course {
         return courseRepository.getBySlug("access-mock-course")!!
