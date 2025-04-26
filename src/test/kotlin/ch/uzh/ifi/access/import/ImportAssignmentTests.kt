@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.service
+package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.Assignment

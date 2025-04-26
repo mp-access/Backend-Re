@@ -1,8 +1,10 @@
-package ch.uzh.ifi.access.service
+package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.DatabaseCleanupListener
 import ch.uzh.ifi.access.model.Course
+import ch.uzh.ifi.access.service.CourseLifecycle
+import ch.uzh.ifi.access.service.CourseService
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -22,7 +24,8 @@ import java.nio.file.Paths
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ImportRepoTests(
     @Autowired val courseLifecycle: CourseLifecycle,
-    @Autowired val courseService: CourseService) : BaseTest() {
+    @Autowired val courseService: CourseService
+) : BaseTest() {
 
     @Test
     @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
