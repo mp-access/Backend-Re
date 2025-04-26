@@ -3,6 +3,8 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.Assignment
 import ch.uzh.ifi.access.repository.AssignmentRepository
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Test
@@ -25,6 +27,7 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
     fun `Assignment basic metadata correct`() {
         val assignment = getAssignment()
         assertEquals("basics", assignment.slug)
+        assertEquals(true, assignment.enabled)
         assertEquals(LocalDateTime.of(2023,1,1,13,0), assignment.start)
         assertEquals(LocalDateTime.of(2028,1,1,13,0), assignment.end)
 
@@ -33,7 +36,7 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
     @Test
     @Transactional
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
-    fun `Assignment ordinal numbers correct`() {
+    fun `Assignment task ordinal numbers correct`() {
         assertEquals(listOf(1,2,3,4), getAssignment().tasks.map{ it.ordinalNum }.toList())
     }
 
@@ -42,6 +45,20 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
     @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment number of tasks correct`() {
         assertEquals(4, getAssignment().tasks.size)
+    }
+
+    @Test
+    @Transactional
+    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    fun `Assignment information correct`() {
+        val assignment = getAssignment()
+        assertThat(assignment.information, hasKey("de"))
+        assertThat(assignment.information, hasKey("en"))
+        assertEquals(assignment.information.size, 2)
+        assignment.information.forEach { (language, info) ->
+            assertEquals(info.language, language)
+            assertThat(info.title, not(emptyString()))
+        }
     }
 
 

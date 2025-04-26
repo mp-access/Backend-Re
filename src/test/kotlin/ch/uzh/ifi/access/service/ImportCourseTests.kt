@@ -74,5 +74,12 @@ class ImportCourseTests(@Autowired val courseRepository: CourseRepository) : Bas
         assertEquals(3, getCourse().assignments.size)
     }
 
+    @Test
+    @Transactional
+    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    fun `Course assignments ordinal numbers correct`() {
+        assertEquals(listOf(1,2,3), getCourse().assignments.map{ it.ordinalNum }.toList())
+    }
+
 }
 

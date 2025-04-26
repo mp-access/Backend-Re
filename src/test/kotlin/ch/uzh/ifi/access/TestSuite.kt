@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.service.ImportCourseTests
 import ch.uzh.ifi.access.api.PublicAPITests
 import ch.uzh.ifi.access.service.ImportAssignmentTests
 import ch.uzh.ifi.access.service.ImportRepoTests
+import ch.uzh.ifi.access.service.ImportTaskTests
 import org.junit.jupiter.api.ClassOrderer
 import org.junit.jupiter.api.TestClassOrder
 import org.junit.platform.suite.api.SelectClasses
@@ -26,6 +27,7 @@ abstract class BaseTest
     ImportRepoTests::class,
     ImportCourseTests::class,
     ImportAssignmentTests::class,
+    ImportTaskTests::class,
     PublicAPITests::class
 )
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
