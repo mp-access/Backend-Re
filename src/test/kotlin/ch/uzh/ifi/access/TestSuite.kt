@@ -1,7 +1,8 @@
 package ch.uzh.ifi.access
 
+import ch.uzh.ifi.access.api.ManagementAPITests
 import ch.uzh.ifi.access.import.ImportCourseTests
-import ch.uzh.ifi.access.api.PublicAPITests
+import ch.uzh.ifi.access.api.SubmissionTests
 import ch.uzh.ifi.access.import.ImportAssignmentTests
 import ch.uzh.ifi.access.import.ImportRepoTests
 import ch.uzh.ifi.access.import.ImportTaskTests
@@ -28,7 +29,7 @@ abstract class BaseTest
     ImportCourseTests::class,
     ImportAssignmentTests::class,
     ImportTaskTests::class,
-    PublicAPITests::class
+    ManagementAPITests::class,
 )
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
 class AllTests

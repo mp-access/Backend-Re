@@ -20,7 +20,7 @@ object JsonReference {
 }
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
-class PublicAPITests(
+class ManagementAPITests(
     @Autowired val mvc: MockMvc) : BaseTest() {
 
     @Test
