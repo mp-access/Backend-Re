@@ -30,6 +30,7 @@ abstract class BaseTest
     ImportAssignmentTests::class,
     ImportTaskTests::class,
     ManagementAPITests::class,
+    SubmissionTests::class,
 )
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
 class AllTests
