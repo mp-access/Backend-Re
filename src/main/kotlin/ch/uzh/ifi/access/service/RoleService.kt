@@ -23,7 +23,7 @@ import java.util.*
 @Service
 class RoleService(
     private val accessRealm: RealmResource,
-    ) {
+) {
 
     private val logger = KotlinLogging.logger {}
 
@@ -115,7 +115,7 @@ class RoleService(
         val realmRole = accessRealm.roles()[roleName]
         val realmRoleRepresentation = realmRole.toRepresentation()
         // remove role from users which are not in usernames list
-        logger.debug { "removing users to $course: $toRemove"}
+        logger.debug { "removing users to $course: $toRemove" }
         toRemove.forEach { login ->
             val username = usernameForLogin(login)
             try {
@@ -126,7 +126,7 @@ class RoleService(
                 val user = users.firstOrNull { it.username == username }
 
                 if (user != null) {
-                    logger.debug { "Removing role $roleName from ${user.username}"}
+                    logger.debug { "Removing role $roleName from ${user.username}" }
                     accessRealm.users()[user.id].roles().realmLevel().remove(listOf(realmRoleRepresentation))
                 } else {
                     logger.warn { "User with username $username not found" }
@@ -136,7 +136,7 @@ class RoleService(
             }
         }
         // add role to all users in usernames list
-        logger.debug { "adding users to $course: ${toAdd}"}
+        logger.debug { "adding users to $course: ${toAdd}" }
         toAdd.forEach { login ->
             val username = usernameForLogin(login)
             try {
@@ -159,7 +159,6 @@ class RoleService(
             }
         }
     }
-
 
 
     fun createCourseRoles(courseSlug: String?): String? {
@@ -186,9 +185,10 @@ class RoleService(
     }
 
     fun registerSupervisor(memberDTO: MemberDTO, rolesToAssign: List<RoleRepresentation>?): String {
-        val member = accessRealm.users().search(memberDTO.username).stream().findFirst().map { user: UserRepresentation ->
-            accessRealm.users()[user.id].roles().realmLevel().add(rolesToAssign)
-        }
+        val member =
+            accessRealm.users().search(memberDTO.username).stream().findFirst().map { user: UserRepresentation ->
+                accessRealm.users()[user.id].roles().realmLevel().add(rolesToAssign)
+            }
         return memberDTO.username!! // TODO: safety
     }
 
@@ -214,8 +214,10 @@ class RoleService(
 
     fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
         val matchByUsername = user.username == student
-        val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
-        val matchByAffiliationEmail = user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it == student } == true
+        val matchByAffiliationID =
+            user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
+        val matchByAffiliationEmail =
+            user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it == student } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } == true
         val matchByEmail = user.email == student
         return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
@@ -223,8 +225,10 @@ class RoleService(
 
     fun userRegisteredForCourse(user: UserRepresentation, registrationIDs: Set<String>): Boolean {
         val matchByUsername = user.username in registrationIDs
-        val matchByAffiliationID = user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in registrationIDs } == true
-        val matchByAffiliationEmail = user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it in registrationIDs } == true
+        val matchByAffiliationID =
+            user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in registrationIDs } == true
+        val matchByAffiliationEmail =
+            user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it in registrationIDs } == true
         val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it in registrationIDs } == true
         val matchByEmail = user.email in registrationIDs
         return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
@@ -241,20 +245,20 @@ class RoleService(
     fun updateStudentRoles(slug: String, registrationIDs: Set<String>, roleName: String) {
         val role = accessRealm.roles()[roleName]
         val roleRepresentation = role.toRepresentation()
-        logger.debug { "A: updating role ${roleRepresentation}"}
+        logger.debug { "A: updating role ${roleRepresentation}" }
         role.getUserMembers(0, -1).toSet()
             .filter { member: UserRepresentation ->
                 registrationIDs.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
             }
             .forEach { member: UserRepresentation ->
-                logger.debug { "A: removing role ${roleRepresentation} from ${member.username}"}
+                logger.debug { "A: removing role ${roleRepresentation} from ${member.username}" }
                 accessRealm.users()[member.id].roles().realmLevel().remove(listOf(roleRepresentation))
             }
         accessRealm.users().list(0, -1).forEach { user ->
             registrationIDs
                 .filter { studentMatchesUser(it, user) }
                 .map {
-                    logger.debug { "A: adding role ${roleRepresentation} to ${user.username}"}
+                    logger.debug { "A: adding role ${roleRepresentation} to ${user.username}" }
                     accessRealm.users()[user.id].roles().realmLevel().add(listOf(roleRepresentation))
                     accessRealm.users()[user.id].update(updateRoleTimestamp(user))
                 }
@@ -272,13 +276,13 @@ class RoleService(
         val assistantRoleToAdd = assistantRole.toRepresentation()
         val bothRoles = listOf(studentRole, assistantRole)
         val bothRolesToAdd = listOf(studentRoleToAdd, assistantRoleToAdd)
-        logger.debug { "B: updating roles for ${username} (roles to sync from course ${course.slug}: ${bothRoles})"}
+        logger.debug { "B: updating roles for ${username} (roles to sync from course ${course.slug}: ${bothRoles})" }
         bothRoles.map { it.getUserMembers(0, -1) }.flatten().toSet()
             .filter {
                 studentMatchesUser(username, it)
             }
             .forEach {
-                logger.debug { "B: removing ${bothRoles} from ${username}"}
+                logger.debug { "B: removing ${bothRoles} from ${username}" }
                 accessRealm.users()[it.id].roles().realmLevel().remove(bothRolesToAdd)
             }
         accessRealm.users().list(0, -1).forEach {
@@ -292,7 +296,7 @@ class RoleService(
                 accessRealm.users()[it.id].roles().realmLevel().add(listOf(assistantRoleToAdd))
                 accessRealm.users()[it.id].update(updateRoleTimestamp(it))
             }
-            if  (studentMatchesUser(username, it)) {
+            if (studentMatchesUser(username, it)) {
                 logger.debug { "Y: matching user ${username} to ${it.username} did not register for course ${course.slug}" }
             }
         }
@@ -304,7 +308,7 @@ class RoleService(
         val sessions = resource.getUserSessions(0, 1000).filter {
             // only care about users who are students in the given course
             val roles = getUserRoles(it.username, it.userId)
-            val matchesRole = roles.any { role -> role.name == "$courseSlug-student"}
+            val matchesRole = roles.any { role -> role.name == "$courseSlug-student" }
             // users who were active in the last 5 minutes are considered online
             val recentActivity = it.lastAccess + 300 < System.currentTimeMillis()
             matchesRole && recentActivity

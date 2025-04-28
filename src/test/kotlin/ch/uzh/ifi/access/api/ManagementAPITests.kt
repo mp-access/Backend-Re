@@ -20,8 +20,7 @@ object JsonReference {
 }
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
-class ManagementAPITests(
-    @Autowired val mvc: MockMvc) : BaseTest() {
+class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
 
     @Test
     @Order(0)
@@ -33,7 +32,8 @@ class ManagementAPITests(
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
                 .with(csrf())
-                .content(payload))
+                .content(payload)
+        )
             .andExpect(status().isOk)
     }
 
@@ -45,7 +45,8 @@ class ManagementAPITests(
             get("/courses/access-mock-course/summary")
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
             .andExpect(content().json(JsonReference.get("courseSummary_0participants")))
@@ -61,7 +62,8 @@ class ManagementAPITests(
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
                 .with(csrf())
-                .content(payload))
+                .content(payload)
+        )
             .andExpect(status().isOk)
     }
 
@@ -73,12 +75,17 @@ class ManagementAPITests(
             get("/courses/access-mock-course/participants")
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
-            .andExpect(content().json("""
+            .andExpect(
+                content().json(
+                    """
                 [ { "firstName" : "Student", "lastName" : "Test", "email" : "student@uzh.ch", "username" : "student@uzh.ch", "registrationId" : "student@uzh.ch" } ]
-                """))
+                """
+                )
+            )
     }
 
     @Test
@@ -89,7 +96,8 @@ class ManagementAPITests(
             get("/courses/access-mock-course/summary")
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
             .andExpect(content().json(JsonReference.get("courseSummary_1participant")))
@@ -104,7 +112,8 @@ class ManagementAPITests(
             get("/courses/access-mock-course/participants/student@uzh.ch")
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
             .andExpect(content().json(JsonReference.get("participant")))
@@ -130,7 +139,8 @@ class ManagementAPITests(
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
                 .with(csrf())
-                .content(payload))
+                .content(payload)
+        )
             .andExpect(status().isOk)
     }
 

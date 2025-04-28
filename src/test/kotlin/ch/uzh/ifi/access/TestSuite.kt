@@ -1,9 +1,9 @@
 package ch.uzh.ifi.access
 
 import ch.uzh.ifi.access.api.ManagementAPITests
-import ch.uzh.ifi.access.import.ImportCourseTests
 import ch.uzh.ifi.access.api.SubmissionTests
 import ch.uzh.ifi.access.import.ImportAssignmentTests
+import ch.uzh.ifi.access.import.ImportCourseTests
 import ch.uzh.ifi.access.import.ImportRepoTests
 import ch.uzh.ifi.access.import.ImportTaskTests
 import org.junit.jupiter.api.ClassOrderer

@@ -58,17 +58,21 @@ class WebhooksController(
     private val logger = KotlinLogging.logger {}
 
     @PostMapping("/courses/{course}/update/gitlab")
-    fun hookGitlab(@PathVariable("course") course: String,
-                     @RequestHeader("X-Gitlab-Token") secret: String) {
-        logger.debug { "webhook (secret) triggered for $course"}
+    fun hookGitlab(
+        @PathVariable("course") course: String,
+        @RequestHeader("X-Gitlab-Token") secret: String
+    ) {
+        logger.debug { "webhook (secret) triggered for $course" }
         courseService.webhookUpdateWithSecret(course, secret)
     }
+
     @PostMapping("/courses/{course}/update/github")
-    fun hookGithub(@PathVariable("course") course: String,
-                   @RequestHeader("X-Hub-Signature-256") signature: String,
-                   @RequestBody body: String
+    fun hookGithub(
+        @PathVariable("course") course: String,
+        @RequestHeader("X-Hub-Signature-256") signature: String,
+        @RequestBody body: String
     ) {
-        logger.debug { "webhook (hmac) triggered for $course"}
+        logger.debug { "webhook (hmac) triggered for $course" }
         val sig = signature.substringAfter("sha256=")
         courseService.webhookUpdateWithHmac(course, sig, body)
     }
@@ -79,12 +83,11 @@ class WebhooksController(
 @RestController
 @RequestMapping("/courses")
 @EnableAsync
-class CourseController (
+class CourseController(
     private val courseService: CourseService,
     private val courseServiceForCaching: CourseServiceForCaching,
     private val roleService: RoleService
-)
-    {
+) {
 
     private val logger = KotlinLogging.logger {}
 
@@ -211,8 +214,10 @@ class CourseController (
 
     @GetMapping("/{course}/participants/{participant}")
     fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant)?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No participant $participant"
+        )
         return courseService.getCourseProgress(course, user.username)
     }
 
@@ -222,8 +227,10 @@ class CourseController (
         @PathVariable assignment: String,
         @PathVariable participant: String
     ): AssignmentProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant)?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No participant $participant"
+        )
         return courseService.getAssignmentProgress(course, assignment, user.username)
     }
 
@@ -232,15 +239,17 @@ class CourseController (
         @PathVariable course: String, @PathVariable assignment: String,
         @PathVariable task: String, @PathVariable participant: String
     ): TaskProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant)?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $participant")
+        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No participant $participant"
+        )
         return courseService.getTaskProgress(course, assignment, task, user.username)
     }
 
-        @GetMapping("/{course}/summary")
+    @GetMapping("/{course}/summary")
     fun getCourseSummary(@PathVariable course: String): CourseSummary? {
         return courseService.getCourseSummary(course)
     }
 
 
-    }
+}

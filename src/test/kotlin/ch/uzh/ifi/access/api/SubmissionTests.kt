@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.BaseTest
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.hamcrest.Matchers
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback
@@ -122,11 +121,13 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
                    "files": [$files]}""".trimIndent()
     }
 
-    fun submissionTest(command: String,
-                       points: org.hamcrest.Matcher<Any>,
-                       edit: String,
-                       user: String = "student@uzh.ch",
-                       task: String = "variable_assignment") {
+    fun submissionTest(
+        command: String,
+        points: org.hamcrest.Matcher<Any>,
+        edit: String,
+        user: String = "student@uzh.ch",
+        task: String = "variable_assignment"
+    ) {
         val payload = when (task) {
             "carpark" -> submissionPayload(
                 command, mapOf(
@@ -138,6 +139,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
                     34 to "03_classes/carpark_multiple_inheritance/task/tests.py",
                 )
             ).replace("class Car:", edit)
+
             else -> submissionPayload(
                 command, mapOf(
                     18 to "02_basics/variable_assignment/task/script.py",
@@ -149,14 +151,16 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             post("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/submit")
                 .contentType("application/json")
                 .with(csrf())
-                .content(payload))
+                .content(payload)
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andDo {
                 mvc.perform(
                     get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/$user")
                         .contentType("application/json")
-                        .with(csrf()))
+                        .with(csrf())
+                )
                     .andDo(logResponse)
                     .andExpect(status().isOk)
                     .andExpect(jsonPath("$.submissions[0].command", `is`(command)))
@@ -165,66 +169,91 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `Can run code template to receive null points`() {
         submissionTest("run", nullValue(), "x = 0")
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `Can test code template to receive null points`() {
         submissionTest("test", nullValue(), "x = 0")
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `Can submit code template to receive 0 points`() {
         submissionTest("grade", `is`(0.0), "x = 0")
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `Can submit half-correct solution to receive half points`() {
         submissionTest("grade", `is`(1.0), "x = 42")
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `Can submit correct solution to receive full points`() {
         submissionTest("grade", `is`(2.0), "x = 41+1")
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(1)
     fun `Cannot submit solution when out of attempts`() {
-        val payload = submissionPayload("grade", mapOf(
-            18 to "02_basics/variable_assignment/task/script.py",
-            19 to "02_basics/variable_assignment/task/tests.py",
-        ) )
+        val payload = submissionPayload(
+            "grade", mapOf(
+                18 to "02_basics/variable_assignment/task/script.py",
+                19 to "02_basics/variable_assignment/task/tests.py",
+            )
+        )
         mvc.perform(
             post("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/submit")
                 .contentType("application/json")
                 .with(csrf())
-                .content(payload))
+                .content(payload)
+        )
             .andDo(logResponse)
             .andExpect(status().isForbidden)
             .andExpect(status().reason(containsString("Submission rejected - no remaining attempts!")))
     }
 
     @Test
-    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(1)
     fun `Task files count, template and templateBinary correct`() {
         mvc.perform(
             get("/courses/access-mock-course/assignments/classes/tasks/carpark-multiple-inheritance/users/student@uzh.ch")
                 .contentType("application/json")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             // FYI, checking whether an attribute is null after filtering doesn't work, because the result is [null]:
@@ -241,20 +270,27 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     }
 
     @Test
-    @AccessUser(username="supervisor@uzh.ch", authorities = ["supervisor", "access-mock-course-supervisor", "access-mock-course"])
+    @AccessUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-supervisor", "access-mock-course"]
+    )
     @Order(0)
     fun `Privileged user can see solution and grading files of student`() {
         mvc.perform(
             get("/courses/access-mock-course/assignments/classes/tasks/carpark-multiple-inheritance/users/student@uzh.ch")
                 .contentType("application/json")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.files.length()", `is`(17)))
     }
 
     @Test
-    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "not_email@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(0)
     fun `The points of the best, not the latest submission counts`() {
         submissionTest("grade", `is`(2.0), "x = 21+21", "not_email@uzh.ch")
@@ -262,7 +298,8 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
                 .contentType("application/json")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.submissions[0].command", `is`("grade")))
@@ -271,13 +308,17 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     }
 
     @Test
-    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "not_email@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(1)
     fun `Remaining and max number of attempts correct`() {
         mvc.perform(
             get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
                 .contentType("application/json")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.remainingAttempts", `is`(1)))
@@ -285,13 +326,17 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     }
 
     @Test
-    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @AccessUser(
+        username = "not_email@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(1)
     fun `Other task metadata correct`() {
         mvc.perform(
             get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
                 .contentType("application/json")
-                .with(csrf()))
+                .with(csrf())
+        )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.active", `is`(true)))

@@ -21,10 +21,10 @@ class ResultFile {
     @Column(nullable = false)
     var mimeType: String? = null
 
-    @Column(nullable=true, columnDefinition="text")
+    @Column(nullable = true, columnDefinition = "text")
     var content: String? = null
 
-    @Column(nullable=true, columnDefinition="bytea")
+    @Column(nullable = true, columnDefinition = "bytea")
     var contentBinary: ByteArray? = null
 
     val binary: Boolean

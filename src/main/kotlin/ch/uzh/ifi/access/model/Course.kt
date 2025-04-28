@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Visibility
 import jakarta.persistence.*
-import org.hibernate.annotations.Formula
 import java.time.LocalDateTime
 
 @Entity

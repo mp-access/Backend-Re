@@ -4,7 +4,7 @@ import lombok.Data
 import java.time.LocalDateTime
 
 @Data
-class CourseDTO (
+class CourseDTO(
     var slug: String? = null,
     var repository: String? = null,
     var repositoryUser: String? = null,

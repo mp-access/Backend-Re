@@ -23,33 +23,33 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment basic metadata correct`() {
         val assignment = getAssignment()
         assertEquals("basics", assignment.slug)
         assertEquals(true, assignment.enabled)
-        assertEquals(LocalDateTime.of(2023,1,1,13,0), assignment.start)
-        assertEquals(LocalDateTime.of(2028,1,1,13,0), assignment.end)
+        assertEquals(LocalDateTime.of(2023, 1, 1, 13, 0), assignment.start)
+        assertEquals(LocalDateTime.of(2028, 1, 1, 13, 0), assignment.end)
 
     }
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment task ordinal numbers correct`() {
-        assertEquals(listOf(1,2,3,4), getAssignment().tasks.map{ it.ordinalNum }.toList())
+        assertEquals(listOf(1, 2, 3, 4), getAssignment().tasks.map { it.ordinalNum }.toList())
     }
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment number of tasks correct`() {
         assertEquals(4, getAssignment().tasks.size)
     }
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment information correct`() {
         val assignment = getAssignment()
         assertThat(assignment.information, hasKey("de"))
@@ -63,4 +63,3 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
 
 
 }
-

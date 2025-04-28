@@ -3,14 +3,10 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.GlobalFile
 import ch.uzh.ifi.access.model.ResultFile
 import ch.uzh.ifi.access.model.TaskFile
-import ch.uzh.ifi.access.model.dto.TaskFileDTO
 import org.apache.commons.codec.binary.Base64
 import org.apache.commons.compress.utils.FileNameUtils
 import org.apache.tika.Tika
-import org.apache.tika.config.TikaConfig
-import org.apache.tika.metadata.Metadata
 import org.springframework.stereotype.Service
-import java.io.BufferedInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*

@@ -31,7 +31,7 @@ class CourseLifecycle(
     private val dockerClient: DockerClient,
     private val cci: CourseConfigImporter,
     private val fileService: FileService
-    ) {
+) {
 
     private val logger = KotlinLogging.logger {}
 
@@ -61,7 +61,7 @@ class CourseLifecycle(
 
     @Transactional
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
-        logger.debug { "Updating ${course.slug} from ${coursePath}"}
+        logger.debug { "Updating ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
         val supervisor = roleService.getCurrentUser()
@@ -74,20 +74,20 @@ class CourseLifecycle(
         course.supervisors.add(roleService.registerSupervisor(supervisorDTO, course.slug))
 
         // Disable all global files, re-enable the relevant ones later
-        course.globalFiles.forEach{ file -> file.enabled = false }
+        course.globalFiles.forEach { file -> file.enabled = false }
         courseDTO.globalFiles?.grading?.forEach { filePath ->
             createOrUpdateGlobalFile(course, coursePath, filePath).grading = true
         }
 
         // Disable all assignments and tasks, re-enable the relevant ones later
-        course.assignments.forEach{ assignment ->
+        course.assignments.forEach { assignment ->
             assignment.tasks.forEach { task -> task.enabled = false }
             assignment.enabled = false
         }
         courseDTO.assignments.forEachIndexed { index, assignmentDir ->
             val assignmentPath = coursePath.resolve(assignmentDir)
             val assignmentDTO = cci.readAssignmentConfig(assignmentPath)
-            logger.debug { "Updating ${assignmentDTO.slug}"}
+            logger.debug { "Updating ${assignmentDTO.slug}" }
             val assignment = course.assignments.stream()
                 .filter { existing: Assignment -> existing.slug == assignmentDTO.slug }.findFirst()
                 .orElseGet { course.createAssignment() }
@@ -98,14 +98,14 @@ class CourseLifecycle(
             assignmentDTO.tasks.forEachIndexed { index, taskDir ->
                 val taskPath = assignmentPath.resolve(taskDir)
                 val taskDTO = cci.readTaskConfig(taskPath)
-                logger.debug { "Updating from taskDTO ${taskDTO.slug}"}
+                logger.debug { "Updating from taskDTO ${taskDTO.slug}" }
                 val task = assignment.tasks.stream()
                     .filter { existing: Task -> existing.slug == taskDTO.slug }.findFirst()
                     .orElseGet {
-                        logger.debug { "No existing task found, creating new task for ${taskDTO.slug}"}
+                        logger.debug { "No existing task found, creating new task for ${taskDTO.slug}" }
                         assignment.createTask()
                     }
-                logger.debug { "Updating task ${task.slug}"}
+                logger.debug { "Updating task ${task.slug}" }
                 pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
                 modelMapper.map(taskDTO, task)
                 task.information.forEach { it.value.task = task }
@@ -148,10 +148,10 @@ class CourseLifecycle(
                     createOrUpdateTaskFile(task, taskPath, filePath).grading = true
                 }
                 taskDTO.files?.editable?.forEach { filePath ->
-                    createOrUpdateTaskFile( task, taskPath, filePath ).editable = true
+                    createOrUpdateTaskFile(task, taskPath, filePath).editable = true
                 }
                 taskDTO.files?.solution?.forEach { filePath ->
-                    createOrUpdateTaskFile( task, taskPath, filePath ).solution = true
+                    createOrUpdateTaskFile(task, taskPath, filePath).solution = true
                 }
                 // update persistent file paths
                 task.persistentResultFilePaths.clear()
@@ -164,7 +164,6 @@ class CourseLifecycle(
         }
         return courseRepository.save(course)
     }
-
 
 
     private fun createOrUpdateTaskFile(task: Task, parentPath: Path, path: String): TaskFile {
@@ -196,14 +195,16 @@ class CourseLifecycle(
     }
 
     private fun cloneRepository(course: Course): Path {
-        logger.debug { "Cloning ${course.slug} from ${course.repository}"}
+        logger.debug { "Cloning ${course.slug} from ${course.repository}" }
         return cloneRepository(course.repository!!, course.repositoryUser, course.repositoryPassword)
     }
+
     private fun cloneRepository(courseDTO: CourseDTO): Path {
-        logger.debug { "Cloning ${courseDTO.slug} from ${courseDTO.repository}"}
+        logger.debug { "Cloning ${courseDTO.slug} from ${courseDTO.repository}" }
         return cloneRepository(courseDTO.repository!!, courseDTO.repositoryUser, courseDTO.repositoryPassword)
 
     }
+
     private fun cloneRepository(url: String, user: String?, password: String?): Path {
         val coursePath = workingDir.resolve("courses").resolve("course_" + Instant.now().toEpochMilli())
         return try {
@@ -212,7 +213,7 @@ class CourseLifecycle(
                 .setDirectory(coursePath.toFile())
             if (user != null && password != null) {
                 git
-                .setCredentialsProvider(UsernamePasswordCredentialsProvider(user, password))
+                    .setCredentialsProvider(UsernamePasswordCredentialsProvider(user, password))
             }
             git.call()
             coursePath

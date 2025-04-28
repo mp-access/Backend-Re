@@ -37,7 +37,7 @@ class SecurityConfig(private val env: Environment) {
 
 
     private fun parseAuthorities(token: Jwt): Collection<GrantedAuthority> {
-        return token.getClaimAsStringList("enrollments").map { role -> SimpleGrantedAuthority(role)}
+        return token.getClaimAsStringList("enrollments").map { role -> SimpleGrantedAuthority(role) }
     }
 
     private fun isAuthorizedAPIKey(context: RequestAuthorizationContext): Boolean {
@@ -53,47 +53,52 @@ class SecurityConfig(private val env: Environment) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http.sessionManagement {
-            it.sessionConcurrency{
+            it.sessionConcurrency {
                 it.maximumSessions(1)
             }
         }
-        .csrf { it.ignoringRequestMatchers(
-            "/courses/contact/**",
-            "/courses/{course}/summary",
-            "/courses/{course}/participants/**",
-            "/courses/{course}/assistants/**",
-            "/webhooks/**")
-        }
-        .authorizeHttpRequests { authorize ->
-            authorize
-                .requestMatchers(
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
+            .csrf {
+                it.ignoringRequestMatchers(
                     "/courses/contact/**",
-                    "/webhooks/**"
-                ).permitAll()
-                .requestMatchers(
+                    "/courses/{course}/summary",
                     "/courses/{course}/participants/**",
                     "/courses/{course}/assistants/**",
-                    "/courses/{course}/summary",
-                    "/pruneSubmissions"
-                ).access { _, context ->
-                    AuthorityAuthorizationDecision(isAuthorizedAPIKey(context), parseAuthorities(listOf("supervisor")))
-                }
+                    "/webhooks/**"
+                )
+            }
+            .authorizeHttpRequests { authorize ->
+                authorize
+                    .requestMatchers(
+                        "/v3/api-docs/**",
+                        "/swagger-ui/**",
+                        "/courses/contact/**",
+                        "/webhooks/**"
+                    ).permitAll()
+                    .requestMatchers(
+                        "/courses/{course}/participants/**",
+                        "/courses/{course}/assistants/**",
+                        "/courses/{course}/summary",
+                        "/pruneSubmissions"
+                    ).access { _, context ->
+                        AuthorityAuthorizationDecision(
+                            isAuthorizedAPIKey(context),
+                            parseAuthorities(listOf("supervisor"))
+                        )
+                    }
 
-            .anyRequest().authenticated()
-        }
-        .oauth2ResourceServer {
-            it.jwt {
-                it.jwtAuthenticationConverter { source: Jwt ->
-                    JwtAuthenticationToken(
-                        source,
-                        parseAuthorities(source),
-                        source.getClaimAsString("email")
-                    )
+                    .anyRequest().authenticated()
+            }
+            .oauth2ResourceServer {
+                it.jwt {
+                    it.jwtAuthenticationConverter { source: Jwt ->
+                        JwtAuthenticationToken(
+                            source,
+                            parseAuthorities(source),
+                            source.getClaimAsString("email")
+                        )
+                    }
                 }
             }
-        }
         return http.build()
     }
 
