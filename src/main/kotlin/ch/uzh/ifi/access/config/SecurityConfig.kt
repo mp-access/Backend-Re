@@ -123,6 +123,11 @@ class SecurityConfig(private val env: Environment) {
     }
 
     @Bean
+    fun assistantServerUrl(): String {
+        return env.getProperty("ASSISTANT_SERVER_URL", "http://localhost:4000")
+    }
+
+    @Bean
     fun accessRealm(): RealmResource {
         val keycloakClient = Keycloak.getInstance(
             env.getProperty("AUTH_SERVER_URL", "http://0.0.0.0:8080"), "master",
