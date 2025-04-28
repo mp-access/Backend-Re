@@ -110,4 +110,28 @@ class ManagementAPITests(
             .andExpect(content().json(JsonReference.get("participant")))
     }
 
+    @Test
+    @Order(5)
+    fun `Can register remaining participants`() {
+        // curl -X POST 'http://localhost:8081/api/courses/access-mock-course/participants' -H 'Content-Type: application/json' -H 'X-API-Key: 1234' --data '["student@uzh.ch"]'
+        // student@uzh.ch:     registered by keycloak username
+        // 123456789@eduid.ch: registered by swissEduPersonUniqueID
+        // fname.lname@uzh.ch: registered by swissEduIDLinkedAffiliationMail
+        // 123456789@uzh.ch:   registered by swissEduIDLinkedAffiliationUniqueID
+        // by_email@uzh.ch:    registered by keycloak email address
+        val payload = """["student@uzh.ch", 
+                          "123456789@eduid.ch",
+                          "fname.lname@uzh.ch",
+                          "123456789@uzh.ch",
+                          "by_email@uzh.ch"
+            ]""".trimIndent()
+        mvc.perform(
+            post("/courses/access-mock-course/participants")
+                .contentType("application/json")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+                .content(payload))
+            .andExpect(status().isOk)
+    }
+
 }

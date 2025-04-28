@@ -3,8 +3,7 @@ package ch.uzh.ifi.access.api
 import ch.uzh.ifi.access.BaseTest
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.hamcrest.Matchers
-import org.hamcrest.Matchers.containsString
-import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback
 import org.junit.jupiter.api.extension.ExtendWith
@@ -123,11 +122,29 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
                    "files": [$files]}""".trimIndent()
     }
 
-    fun submissionTest(command: String, points: org.hamcrest.Matcher<Any>, edit: String = "x = 0") {
-        val payload = submissionPayload(command, mapOf(
-            18 to "02_basics/variable_assignment/task/script.py",
-            19 to "02_basics/variable_assignment/task/tests.py",
-        )).replace("x = 0", edit)
+    fun submissionTest(command: String,
+                       points: org.hamcrest.Matcher<Any>,
+                       edit: String,
+                       user: String = "student@uzh.ch",
+                       task: String = "variable_assignment") {
+        val payload = when (task) {
+            "carpark" -> submissionPayload(
+                command, mapOf(
+                    29 to "03_classes/carpark_multiple_inheritance/task/script.py",
+                    30 to "03_classes/carpark_multiple_inheritance/task/car.py",
+                    31 to "03_classes/carpark_multiple_inheritance/task/combustion_car.py",
+                    32 to "03_classes/carpark_multiple_inheritance/task/electric_car.py",
+                    33 to "03_classes/carpark_multiple_inheritance/task/hybrid_car.py",
+                    34 to "03_classes/carpark_multiple_inheritance/task/tests.py",
+                )
+            ).replace("class Car:", edit)
+            else -> submissionPayload(
+                command, mapOf(
+                    18 to "02_basics/variable_assignment/task/script.py",
+                    19 to "02_basics/variable_assignment/task/tests.py",
+                )
+            ).replace("x = 0", edit)
+        }
         mvc.perform(
             post("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/submit")
                 .contentType("application/json")
@@ -137,7 +154,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(status().isOk)
             .andDo {
                 mvc.perform(
-                    get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/student@uzh.ch")
+                    get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/$user")
                         .contentType("application/json")
                         .with(csrf()))
                     .andDo(logResponse)
@@ -151,21 +168,21 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
     @Order(0)
     fun `Can run code template to receive null points`() {
-        submissionTest("run", Matchers.nullValue())
+        submissionTest("run", nullValue(), "x = 0")
     }
 
     @Test
     @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
     @Order(0)
     fun `Can test code template to receive null points`() {
-        submissionTest("test", Matchers.nullValue())
+        submissionTest("test", nullValue(), "x = 0")
     }
 
     @Test
     @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
     @Order(0)
     fun `Can submit code template to receive 0 points`() {
-        submissionTest("grade", `is`(0.0))
+        submissionTest("grade", `is`(0.0), "x = 0")
     }
 
     @Test
@@ -200,6 +217,90 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(status().reason(containsString("Submission rejected - no remaining attempts!")))
     }
 
+    @Test
+    @AccessUser(username="student@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @Order(1)
+    fun `Task files count, template and templateBinary correct`() {
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/classes/tasks/carpark-multiple-inheritance/users/student@uzh.ch")
+                .contentType("application/json")
+                .with(csrf()))
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            // FYI, checking whether an attribute is null after filtering doesn't work, because the result is [null]:
+            //     .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].templateBinary", nullValue()))
+            // this also doesn't work, because the result becomes []:
+            //     .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')][0].templateBinary", nullValue()))
+            // that's why we check whether the resulting projection hasSize(1) and contains the expected value
+            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')]", hasSize<Any>(1)))
+            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].template", contains(notNullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].templateBinary", contains(nullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].template", contains(nullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].templateBinary", contains(notNullValue())))
+            .andExpect(jsonPath("$.files.length()", `is`(8)))
+    }
+
+    @Test
+    @AccessUser(username="supervisor@uzh.ch", authorities = ["supervisor", "access-mock-course-supervisor", "access-mock-course"])
+    @Order(0)
+    fun `Privileged user can see solution and grading files of student`() {
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/classes/tasks/carpark-multiple-inheritance/users/student@uzh.ch")
+                .contentType("application/json")
+                .with(csrf()))
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.files.length()", `is`(17)))
+    }
+
+    @Test
+    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @Order(0)
+    fun `The points of the best, not the latest submission counts`() {
+        submissionTest("grade", `is`(2.0), "x = 21+21", "not_email@uzh.ch")
+        submissionTest("grade", `is`(0.0), "x = 0", "not_email@uzh.ch")
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
+                .contentType("application/json")
+                .with(csrf()))
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.submissions[0].command", `is`("grade")))
+            .andExpect(jsonPath("$.submissions[0].points", `is`(0.0)))
+            .andExpect(jsonPath("$.points", `is`(2.0)))
+    }
+
+    @Test
+    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @Order(1)
+    fun `Remaining and max number of attempts correct`() {
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
+                .contentType("application/json")
+                .with(csrf()))
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.remainingAttempts", `is`(1)))
+            .andExpect(jsonPath("$.maxAttempts", `is`(3)))
+    }
+
+    @Test
+    @AccessUser(username="not_email@uzh.ch", authorities = ["student", "access-mock-course-student", "access-mock-course"])
+    @Order(1)
+    fun `Other task metadata correct`() {
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
+                .contentType("application/json")
+                .with(csrf()))
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.active", `is`(true)))
+            .andExpect(jsonPath("$.name", `is`("Task 1")))
+            .andExpect(jsonPath("$.slug", `is`("variable-assignment")))
+            .andExpect(jsonPath("$.ordinalNum", `is`(1)))
+            .andExpect(jsonPath("$.testable", `is`(true)))
+            .andExpect(jsonPath("$.deadline", `is`("2028-01-01T13:00:00")))
+    }
 
 
 }
