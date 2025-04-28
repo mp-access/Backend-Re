@@ -3,7 +3,6 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.MemberDTO
-import ch.uzh.ifi.access.model.dto.TaskFileDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -198,11 +197,11 @@ class CourseLifecycle(
 
     private fun cloneRepository(course: Course): Path {
         logger.debug { "Cloning ${course.slug} from ${course.repository}"}
-        return cloneRepository(course.repository!!, course.repositoryUser, course.repositoryPassword,)
+        return cloneRepository(course.repository!!, course.repositoryUser, course.repositoryPassword)
     }
     private fun cloneRepository(courseDTO: CourseDTO): Path {
         logger.debug { "Cloning ${courseDTO.slug} from ${courseDTO.repository}"}
-        return cloneRepository(courseDTO.repository!!, courseDTO.repositoryUser, courseDTO.repositoryPassword, )
+        return cloneRepository(courseDTO.repository!!, courseDTO.repositoryUser, courseDTO.repositoryPassword)
 
     }
     private fun cloneRepository(url: String, user: String?, password: String?): Path {
@@ -223,11 +222,14 @@ class CourseLifecycle(
     }
 
     private fun pullDockerImage(imageName: String) {
-        try {
-            dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete()
-        } catch (e: InterruptedException) {
-            //CourseService.log.error("Failed to pull docker image {}", imageName)
-            Thread.currentThread().interrupt()
+        val response = dockerClient.inspectImageCmd(imageName).exec()
+        if (response.id == null) {
+            try {
+                dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete()
+            } catch (e: InterruptedException) {
+                //CourseService.log.error("Failed to pull docker image {}", imageName)
+                Thread.currentThread().interrupt()
+            }
         }
     }
 
