@@ -2,12 +2,15 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
 import jakarta.persistence.*
+import org.hibernate.annotations.Check
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.*
 
 @Entity
+@Check(constraints = "((assignment_id IS NOT NULL AND course_id IS NULL) OR (assignment_id IS NULL AND course_id IS NOT NULL))")
 class Task {
     @Id
     @GeneratedValue
@@ -27,11 +30,9 @@ class Task {
     // tasks which are not enabled are not referenced by any assignment config
     // it could be that the assignments slug was changed
     var enabled = false
-
-    @Column(nullable = false)
+    
     var maxPoints: Double? = null
 
-    @Column(nullable = false)
     var maxAttempts: Int? = null
 
     var attemptWindow: Duration? = null
@@ -39,7 +40,6 @@ class Task {
     @Column(nullable = false)
     var dockerImage: String? = null
 
-    @Column(nullable = false)
     var runCommand: String? = null
 
     var testCommand: String? = null
@@ -51,8 +51,18 @@ class Task {
     var timeLimit = 30
 
     @ManyToOne(cascade = [CascadeType.ALL])
-    @JoinColumn(nullable = false, name = "assignment_id")
+    @JoinColumn(name = "assignment_id")
     var assignment: Assignment? = null
+
+    @ManyToOne(cascade = [CascadeType.ALL])
+    @JoinColumn(name = "course_id")
+    var course: Course? = null
+
+    @Column(name = "start_date")
+    var start: LocalDateTime? = null
+
+    @Column(name = "end_date")
+    var end: LocalDateTime? = null
 
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
     var files: MutableList<TaskFile> = ArrayList()
@@ -102,4 +112,15 @@ class Task {
 
     val isTestable: Boolean
         get() = hasCommand(Command.TEST)
+
+    @PrePersist
+    @PreUpdate
+    fun validateAssignmentOrCourseReference() {
+        val hasCourse = course != null
+        val hasAssignment = assignment != null
+
+        if (hasCourse == hasAssignment) {
+            throw IllegalStateException("A task must have either a course or an assignment reference, but not both or neither.")
+        }
+    }
 }
