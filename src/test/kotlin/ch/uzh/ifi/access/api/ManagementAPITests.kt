@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.BaseTest
+import ch.uzh.ifi.access.JsonReference
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
@@ -13,11 +14,6 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
-object JsonReference {
-    fun get(filename: String): String {
-        return JsonReference::class.java.classLoader.getResource("publicAPIJson/$filename.json")?.readText()!!
-    }
-}
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
@@ -106,7 +102,6 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
     @Test
     @Order(5)
     fun `Can get results for individual participant`() {
-        // TODO change this test to work with any number of submissions
         // curl -X GET 'http://localhost:8081/api/courses/access-mock-course/participants/student@uzh.ch' -H 'Content-Type: application/json' -H 'X-API-Key: 1234'
         mvc.perform(
             get("/courses/access-mock-course/participants/student@uzh.ch")
