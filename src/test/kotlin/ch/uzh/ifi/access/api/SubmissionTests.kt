@@ -53,14 +53,21 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         val payload = when (task) {
             "carpark" -> submissionPayload(
                 command, mapOf(
-                    29 to "03_classes/carpark_multiple_inheritance/task/script.py",
-                    30 to "03_classes/carpark_multiple_inheritance/task/car.py",
-                    31 to "03_classes/carpark_multiple_inheritance/task/combustion_car.py",
-                    32 to "03_classes/carpark_multiple_inheritance/task/electric_car.py",
-                    33 to "03_classes/carpark_multiple_inheritance/task/hybrid_car.py",
-                    34 to "03_classes/carpark_multiple_inheritance/task/tests.py",
+                    34 to "03_classes/carpark_multiple_inheritance/task/script.py",
+                    35 to "03_classes/carpark_multiple_inheritance/task/car.py",
+                    36 to "03_classes/carpark_multiple_inheritance/task/combustion_car.py",
+                    37 to "03_classes/carpark_multiple_inheritance/task/electric_car.py",
+                    38 to "03_classes/carpark_multiple_inheritance/task/hybrid_car.py",
+                    39 to "03_classes/carpark_multiple_inheritance/task/tests.py",
                 )
             ).replace("class Car:", edit)
+
+            "testing" -> submissionPayload(
+                command, mapOf(
+                    29 to "02_basics/for_testing/task/script.py",
+                    30 to "02_basics/for_testing/task/tests.py",
+                )
+            ).replace("a=0;b=0;c=0;d=0", edit)
 
             else -> submissionPayload(
                 command, mapOf(
@@ -69,8 +76,13 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
                 )
             ).replace("x = 0", edit)
         }
+        val url = when (task) {
+            "carpark" -> "classes/tasks/carpark-multiple-inheritance"
+            "testing" -> "basics/tasks/for-testing"
+            else -> "basics/tasks/variable-assignment"
+        }
         mvc.perform(
-            post("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/submit")
+            post("/courses/access-mock-course/assignments/$url/submit")
                 .contentType("application/json")
                 .with(csrf())
                 .content(payload)
@@ -79,7 +91,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(status().isOk)
             .andDo {
                 mvc.perform(
-                    get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/$user")
+                    get("/courses/access-mock-course/assignments/$url/users/$user")
                         .contentType("application/json")
                         .with(csrf())
                 )
@@ -178,16 +190,15 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
-            // FYI, checking whether an attribute is null after filtering doesn't work, because the result is [null]:
-            //     .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].templateBinary", nullValue()))
-            // this also doesn't work, because the result becomes []:
+            // FYI, getting the first result of a filtered jsonPath is impossible; it will just be []
             //     .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')][0].templateBinary", nullValue()))
-            // that's why we check whether the resulting projection hasSize(1) and contains the expected value
+            // see https://github.com/json-path/JsonPath/issues/272
+            // that's why we check whether the resulting projection hasSize(1) and contains the expected value:
             .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')]", hasSize<Any>(1)))
-            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].template", contains(notNullValue())))
-            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].templateBinary", contains(nullValue())))
-            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].template", contains(nullValue())))
-            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].templateBinary", contains(notNullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].template", hasItem(notNullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/instructions_en.md')].templateBinary", hasItem(nullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].template", hasItem(nullValue())))
+            .andExpect(jsonPath("$.files[?(@.path=='/resource/cars.png')].templateBinary", hasItem(notNullValue())))
             .andExpect(jsonPath("$.files.length()", `is`(8)))
     }
 
@@ -215,18 +226,25 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     )
     @Order(0)
     fun `The points of the best, not the latest submission counts`() {
-        submissionTest("grade", `is`(2.0), "x = 21+21", "not_email@uzh.ch")
-        submissionTest("grade", `is`(0.0), "x = 0", "not_email@uzh.ch")
+        submissionTest("run", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        submissionTest("grade", `is`(0.0), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        submissionTest("test", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        submissionTest("test", `is`(nullValue()), "a=1;b=2;c=3;d=4", "not_email@uzh.ch", "testing")
+        submissionTest("run", `is`(nullValue()), "a=1;b=2;c=3;d=4", "not_email@uzh.ch", "testing")
+        submissionTest("grade", `is`(3.0), "a=1;b=2;c=3;d=0", "not_email@uzh.ch", "testing")
+        submissionTest("grade", `is`(1.0), "a=1;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        submissionTest("grade", `is`(3.0), "a=0;b=2;c=3;d=4", "not_email@uzh.ch", "testing")
+        submissionTest("grade", `is`(2.0), "a=0;b=2;c=3;d=0", "not_email@uzh.ch", "testing")
         mvc.perform(
-            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
+            get("/courses/access-mock-course/assignments/basics/tasks/for-testing/users/not_email@uzh.ch")
                 .contentType("application/json")
                 .with(csrf())
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.submissions[0].command", `is`("grade")))
-            .andExpect(jsonPath("$.submissions[0].points", `is`(0.0)))
-            .andExpect(jsonPath("$.points", `is`(2.0)))
+            .andExpect(jsonPath("$.submissions[0].points", `is`(2.0)))
+            .andExpect(jsonPath("$.points", `is`(3.0)))
     }
 
     @Test
@@ -237,14 +255,14 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     @Order(1)
     fun `Remaining and max number of attempts correct`() {
         mvc.perform(
-            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
+            get("/courses/access-mock-course/assignments/basics/tasks/for-testing/users/not_email@uzh.ch")
                 .contentType("application/json")
                 .with(csrf())
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.remainingAttempts", `is`(1)))
-            .andExpect(jsonPath("$.maxAttempts", `is`(3)))
+            .andExpect(jsonPath("$.maxAttempts", `is`(6)))
     }
 
     @Test
@@ -268,6 +286,5 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(jsonPath("$.testable", `is`(true)))
             .andExpect(jsonPath("$.deadline", `is`("2028-01-01T13:00:00")))
     }
-
 
 }

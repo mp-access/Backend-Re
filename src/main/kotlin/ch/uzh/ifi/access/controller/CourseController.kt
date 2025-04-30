@@ -213,12 +213,26 @@ class CourseController(
     }
 
     @GetMapping("/{course}/participants/{participant}")
-    fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
+    fun getCourseProgress(
+        @PathVariable course: String, @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
+    ): CourseProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
         )
-        return courseService.getCourseProgress(course, user.username)
+        // TODO: reduce the number of parameters being passed around
+        return courseService.getCourseProgress(
+            course,
+            user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
@@ -237,7 +251,7 @@ class CourseController(
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
     fun getTaskProgress(
         @PathVariable course: String, @PathVariable assignment: String,
-        @PathVariable task: String, @PathVariable participant: String
+        @PathVariable task: String, @PathVariable participant: String,
     ): TaskProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,

@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access
 
+import ch.uzh.ifi.access.api.AfterSubmissionTests
 import ch.uzh.ifi.access.api.ManagementAPITests
 import ch.uzh.ifi.access.api.SubmissionTests
 import ch.uzh.ifi.access.import.ImportAssignmentTests
@@ -39,6 +40,7 @@ import java.sql.DriverManager
     ImportTaskTests::class,
     ManagementAPITests::class,
     SubmissionTests::class,
+    AfterSubmissionTests::class,
 )
 
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)

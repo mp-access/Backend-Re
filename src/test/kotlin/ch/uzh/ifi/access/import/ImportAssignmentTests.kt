@@ -37,14 +37,14 @@ class ImportAssignmentTests(@Autowired val assignmentRepository: AssignmentRepos
     @Transactional
     @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment task ordinal numbers correct`() {
-        assertEquals(listOf(1, 2, 3, 4), getAssignment().tasks.map { it.ordinalNum }.toList())
+        assertEquals(listOf(1, 2, 3, 4, 5), getAssignment().tasks.map { it.ordinalNum }.toList())
     }
 
     @Test
     @Transactional
     @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Assignment number of tasks correct`() {
-        assertEquals(4, getAssignment().tasks.size)
+        assertEquals(5, getAssignment().tasks.size)
     }
 
     @Test

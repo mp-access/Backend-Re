@@ -103,6 +103,24 @@
       "maxAttempts" : 2,
       "ordinalNum" : 4,
       "attemptRefill" : 86400
+    }, {
+      "slug" : "for-testing",
+      "information" : {
+        "en" : {
+          "title" : "For Testing ACCESS",
+          "language" : "en",
+          "instructionsFile" : "instructions_en.md"
+        }
+      }, 
+      "maxAttempts" : 6,
+      "maxPoints" : 4.0,
+      "dockerImage" : "python:latest",
+      "runCommand" : "python task/script.py",
+      "gradeCommand" : "python -m grading.tests",
+      "testCommand" : "python -m unittest discover -v task",
+      "ordinalNum" : 5,
+      "attemptRefill" : 86400,
+      "timeLimit" : 30
     } ],
     "slug" : "basics",
     "information" : {
@@ -112,7 +130,7 @@
       }
     },
     "end" : "2028-01-01T13:00:00",
-    "maxPoints" : 6.0,
+    "maxPoints" : 10.0,
     "start" : "2023-01-01T13:00:00",
     "ordinalNum" : 2
   }, {

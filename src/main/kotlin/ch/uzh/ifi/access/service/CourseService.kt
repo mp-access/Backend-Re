@@ -533,7 +533,7 @@ cp "$path" "/submission/${'$'}file_dir"
 """
                     }
                     val command = (
-                            """
+                    """
 # copy submitted files to tmpfs
 /bin/cp -R /submission/* /workspace/;
 # run command (the cwd is set to /workspace already)
@@ -552,7 +552,7 @@ fi
 $persistentFileCopyCommands
 exit ${'$'}exit_code; 
 """
-                            )
+                    )
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
                         .withCmd("/bin/bash", "-c", command)
@@ -843,7 +843,20 @@ exit ${'$'}exit_code;
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
     }
 
-    fun getTaskProgress(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
+    fun getTaskProgress(
+        courseSlug: String,
+        assignmentSlug: String,
+        taskSlug: String,
+        userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): TaskProgressDTO {
+        // there is one special rule for this function:
+        // if only includeGrade is true and submissionLimit is 1, the BEST, latest submission will be included
+        // in all other cases, the <submissionLimit> most recent submissions are included in reverse chronological order
+        val onlyLatestGraded = submissionLimit == 1 && includeGrade && !includeTest && !includeRun
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
         logger.debug { "Searching for evaluations for $userId ($userIds)..." }
@@ -874,39 +887,67 @@ exit ${'$'}exit_code;
                 }.toMap().toMutableMap(),
                 listOf()
             )
-        } else {
-            return TaskProgressDTO(
-                userId,
-                taskSlug,
-                evaluation.bestScore,
-                task.maxPoints,
-                evaluation.remainingAttempts,
-                task.maxAttempts,
-                task.information.map { (language, info) ->
-                    language to TaskInformationDTO(
-                        info.language,
-                        info.title,
-                        info.instructionsFile
-                    )
-                }.toMap().toMutableMap(),
-                evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points != null }?.let { listOf(it) }
-                    ?: listOf()
-            )
         }
+        return TaskProgressDTO(
+            userId,
+            taskSlug,
+            evaluation.bestScore,
+            task.maxPoints,
+            evaluation.remainingAttempts,
+            task.maxAttempts,
+            task.information.map { (language, info) ->
+                language to TaskInformationDTO(
+                    info.language,
+                    info.title,
+                    info.instructionsFile
+                )
+            }.toMap().toMutableMap(),
+            evaluation.submissions.sortedBy { it.ordinalNum }
+                .reversed()
+                .filter {
+                    (it.command == Command.GRADE && includeGrade) ||
+                    (it.command == Command.TEST && includeTest) ||
+                    (it.command == Command.RUN && includeRun)
+                }
+                .let { submissions ->
+                    if (onlyLatestGraded) listOf(
+                        submissions.first { it.points == evaluation.bestScore }
+                    )
+                    else if (submissionLimit == 0) submissions
+                    else submissions.take(submissionLimit)
+                }
+        )
     }
 
-    private fun getTasksProgress(assignment: Assignment, userId: String): List<TaskProgressDTO> {
-        return assignment.tasks.mapNotNull { task ->
+    private fun getTasksProgress(
+        assignment: Assignment,
+        userId: String,
+        submissionLimit: Int,
+        includeGrade: Boolean,
+        includeTest: Boolean,
+        includeRun: Boolean
+    ): List<TaskProgressDTO> {
+        return assignment.tasks.map { task ->
             getTaskProgress(
                 assignment.course!!.slug!!,
                 assignment.slug!!,
                 task.slug!!,
-                userId
+                userId,
+                submissionLimit,
+                includeGrade,
+                includeTest,
+                includeRun
             )
         }
     }
 
-    fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
+    fun getAssignmentProgress(
+        courseSlug: String, assignmentSlug: String, userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
         return AssignmentProgressDTO(
             userId, assignmentSlug,
@@ -916,11 +957,18 @@ exit ${'$'}exit_code;
                     info.title
                 )
             }.toMap().toMutableMap(),
-            getTasksProgress(assignment, userId)
+            getTasksProgress(assignment, userId, submissionLimit, includeGrade, includeTest, includeRun)
         )
     }
 
-    fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
+    fun getCourseProgress(
+        courseSlug: String,
+        userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(
             userId,
@@ -939,7 +987,13 @@ exit ${'$'}exit_code;
                             info.title
                         )
                     }.toMap().toMutableMap(),
-                    getTasksProgress(assignment, userId)
+                    getTasksProgress(
+                        assignment, userId,
+                        submissionLimit,
+                        includeGrade,
+                        includeTest,
+                        includeRun
+                    )
                 )
             }.toList()
         )
