@@ -239,25 +239,45 @@ class CourseController(
     fun getAssignmentProgress(
         @PathVariable course: String,
         @PathVariable assignment: String,
-        @PathVariable participant: String
+        @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): AssignmentProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
         )
-        return courseService.getAssignmentProgress(course, assignment, user.username)
+        return courseService.getAssignmentProgress(
+            course, assignment, user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
     fun getTaskProgress(
         @PathVariable course: String, @PathVariable assignment: String,
         @PathVariable task: String, @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): TaskProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
         )
-        return courseService.getTaskProgress(course, assignment, task, user.username)
+        return courseService.getTaskProgress(
+            course, assignment, task, user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/summary")
