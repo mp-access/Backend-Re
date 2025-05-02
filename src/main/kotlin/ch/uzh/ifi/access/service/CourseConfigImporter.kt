@@ -29,6 +29,10 @@ class CourseConfigImporter(
             course.assignments.add(directory.asText())
         }
 
+        config["examples"].forEach { directory ->
+            course.examples.add(directory.asText())
+        }
+
         course.defaultVisibility = config["visibility"].get("default").asText()
         course.overrideVisibility = config["visibility"].get("override").asText()
         course.overrideStart = LocalDateTime.parse(config["visibility"].get("override_start").asText())
@@ -86,7 +90,6 @@ class CourseConfigImporter(
         }
 
         return assignment
-
     }
 
     fun readTaskConfig(path: Path): TaskDTO {
@@ -134,9 +137,54 @@ class CourseConfigImporter(
         task.files = files
 
         return task
-
     }
 
+    fun readExampleConfig(path: Path): TaskDTO {
+        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
+        val example = TaskDTO()
+
+        example.slug = config["slug"].asText()
+        example.refill = config["refill"].asInt()
+        example.maxAttempts = 1
+        example.maxPoints = 1.0
+
+        val instructionFiles = config["information"].fields().asSequence().map { field ->
+            val information = TaskInformationDTO()
+            val data = field.value
+            information.language = field.key
+            information.title = data.get("title").asText()
+            information.instructionsFile = data.get("instructions_file").asText()
+            example.information[field.key] = information
+            information.instructionsFile!!
+        }.toList()
+
+        val evaluator = TaskEvaluatorDTO()
+        evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
+        evaluator.runCommand = config["evaluator"].get("run_command").asTextOrNull()
+        evaluator.testCommand = config["evaluator"].get("test_command").asTextOrNull()
+        evaluator.gradeCommand = config["evaluator"].get("grade_command").asText()
+        example.evaluator = evaluator
+
+        val files = TaskFilesDTO()
+        files.instruction = instructionFiles
+        config["files"].fields().forEachRemaining { field ->
+            val data = field.value
+            val filenames = ArrayList<String>()
+            data.forEach { filename ->
+                filenames.add(filename.asText())
+            }
+            when (field.key) {
+                "visible" -> files.visible = filenames
+                "editable" -> files.editable = filenames
+                "grading" -> files.grading = filenames
+                "solution" -> files.solution = filenames
+                "persist" -> files.persist = filenames
+            }
+        }
+        example.files = files
+
+        return example
+    }
 }
 
 class InvalidCourseException : Throwable() {

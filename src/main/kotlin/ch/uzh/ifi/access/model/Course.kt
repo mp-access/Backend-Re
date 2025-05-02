@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Visibility
 import jakarta.persistence.*
-import org.hibernate.annotations.Formula
 import java.time.LocalDateTime
 
 @Entity
@@ -89,6 +88,13 @@ class Course {
         assignments.add(newAssignment)
         newAssignment.course = this
         return newAssignment
+    }
+
+    fun createExample(): Task {
+        val newExample = Task()
+        examples.add(newExample)
+        newExample.course = this
+        return newExample
     }
 
     fun createFile(): GlobalFile {

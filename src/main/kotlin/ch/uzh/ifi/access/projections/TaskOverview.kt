@@ -18,7 +18,17 @@ interface TaskOverview {
     val maxAttempts: Int?
     fun setUserId(userId: String?)
 
-    @get:Value("#{target.assignment.active}")
+    @get:Value(
+        """
+      #{
+        target.assignment != null 
+          ? target.assignment.active 
+          : (target.start != null 
+              ? target.start.isBefore(T(java.time.LocalDateTime).now()) 
+              : false)
+      }
+      """
+    )
     val isActive: Boolean
 
     @get:Value("#{@courseService.calculateAvgTaskPoints(target.slug)}")

@@ -60,7 +60,14 @@ class CourseServiceForCaching(
             // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
             val userIds = roleService.getAllUserIdsFor(user.username)
             val coursePoints = courseRepository.getTotalPoints(courseSlug, userIds.toTypedArray()) ?: 0.0
-            val studentDTO = StudentDTO(user.firstName, user.lastName, user.email, coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(), user.username, login)
+            val studentDTO = StudentDTO(
+                user.firstName,
+                user.lastName,
+                user.email,
+                coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(),
+                user.username,
+                login
+            )
             studentDTO
         } else {
             StudentDTO(registrationId = login)
@@ -118,23 +125,33 @@ class CourseService(
     }
 
     fun getCourseBySlug(courseSlug: String): Course {
-        return courseRepository.getBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No course found with the URL $courseSlug"
+        )
     }
+
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace {
-        return courseRepository.findBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        return courseRepository.findBySlug(courseSlug) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No course found with the URL $courseSlug"
+        )
     }
 
     fun getTaskById(taskId: Long): Task {
-        return taskRepository.findById(taskId).get() ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task found with the ID $taskId")
+        return taskRepository.findById(taskId).get() ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No task found with the ID $taskId"
+        )
     }
 
     fun getTaskFileById(fileId: Long): TaskFile {
-        return taskFileRepository.findById(fileId).get() ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No task file found with the ID $fileId")
+        return taskFileRepository.findById(fileId).get() ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No task file found with the ID $fileId"
+        )
     }
+
     fun getCoursesOverview(): List<CourseOverview> {
         //return courseRepository.findCoursesBy()
         return courseRepository.findCoursesByAndDeletedFalse()
@@ -146,35 +163,35 @@ class CourseService(
     }
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
-        return courseRepository.findCourseBySlug(courseSlug) ?:
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")
+        return courseRepository.findCourseBySlug(courseSlug) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No course found with the URL $courseSlug"
+        )
     }
 
     fun enabledTasksOnly(tasks: List<Task>): List<Task> {
         return tasks.filter { it.enabled }
     }
 
-    // TODO: Remove, only for mock purpose
-    private val taskEvaluatorDTO = TaskEvaluatorDTO("python",null,null,"run",null,7200, ArrayList())
-    private val examples = arrayOf(
-        ExampleDTO("example-1", 1, HashMap(), 7200, taskEvaluatorDTO),
-        ExampleDTO("example-2", 2, HashMap(), 7200, taskEvaluatorDTO),
-        ExampleDTO("example-3", 3, HashMap(), 7200, taskEvaluatorDTO),
-        ExampleDTO("example-4", 4, HashMap(), 7200, taskEvaluatorDTO),
-    )
-
-    fun getExamples(courseSlug: String?): Array<ExampleDTO> {
-        // TODO: return exampleRepository.findBySlug(courseSlug)
-        return this.examples;
+    fun getExamples(courseSlug: String?): List<TaskWorkspace> {
+        return taskRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
-    fun getExample(courseSlug: String?, exampleSlug: String?): ExampleDTO {
-        // TODO: return exampleRepository.findBySlug(courseSlug)
-        return this.examples.find { it.slug == exampleSlug } ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No assignment found with the URL $exampleSlug"
-        )
+    fun getExample(courseSlug: String?, exampleSlug: String?): TaskWorkspace {
+        return taskRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
     }
+
+//    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
+//        return taskRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
+//            ?: throw ResponseStatusException(
+//                HttpStatus.NOT_FOUND,
+//                "No example found with the URL $exampleSlug"
+//            )
+//    }
 
     // TODO: clean up these confusing method names
     fun getAssignments(courseSlug: String?): List<AssignmentWorkspace> {
@@ -182,14 +199,16 @@ class CourseService(
     }
 
     fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
-        return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
-            throw ResponseStatusException( HttpStatus.NOT_FOUND,
-                    "No assignment found with the URL $assignmentSlug" )
+        return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No assignment found with the URL $assignmentSlug"
+            )
     }
 
     fun getAssignmentBySlug(courseSlug: String?, assignmentSlug: String): Assignment {
-        return assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug) ?:
-        throw ResponseStatusException(
+        return assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug)
+            ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No assignment found with the URL $assignmentSlug"
             )
@@ -197,9 +216,11 @@ class CourseService(
 
     fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
         val workspace =
-            taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug) ?:
-            throw ResponseStatusException( HttpStatus.NOT_FOUND,
-                        "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug" )
+            taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
+                ?: throw ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug"
+                )
         workspace.setUserId(userId)
         return workspace
     }
@@ -304,13 +325,14 @@ class CourseService(
         return calculateAssignmentPoints(tasks, userIds)
 
     }
+
     fun calculateAssignmentPoints(tasks: List<Task>, userIds: List<String>): Double {
         return tasks.stream().mapToDouble { task: Task -> calculateTaskPoints(task.id, userIds) }.sum()
     }
 
     @Cacheable("assignmentMaxPoints")
     fun calculateAssignmentMaxPoints(tasks: List<Task>): Double {
-        return tasks.stream().filter{ it.enabled }.mapToDouble { it.maxPoints!! }.sum()
+        return tasks.stream().filter { it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
     fun calculateCoursePoints(slug: String, userId: String?): Double {
@@ -344,8 +366,8 @@ class CourseService(
             assignmentSlug,
             taskSlug
         ) ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
-            )
+            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
+        )
     }
 
     fun getGradingFiles(taskId: Long?): List<TaskFile> {
@@ -444,14 +466,15 @@ class CourseService(
             submissionRepository.deleteAll(prune)
             submissionRepository.flush()
             evaluationRepository.flush()
-            logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map{it.ordinalNum}}" }
+            logger.debug { " -->> Pruning ${evaluation.userId}/${evaluation.task?.assignment?.slug}/${evaluation.task?.slug} [${command}]: ${prune.map { it.ordinalNum }}" }
         }
     }
 
-    @Caching(evict = [
-        CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
-        CacheEvict(value = ["studentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
-        CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
+    @Caching(
+        evict = [
+            CacheEvict(value = ["getStudent"], key = "#courseSlug + '-' + #submissionDTO.userId"),
+            CacheEvict(value = ["studentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
+            CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
     fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
@@ -484,9 +507,9 @@ class CourseService(
         val globalFiles = course.globalFiles
         try {
             task.dockerImage?.let {
-                try  {
+                try {
                     dockerClient.inspectImageCmd(it).exec()
-                }catch (e: NotFoundException) {
+                } catch (e: NotFoundException) {
                     dockerClient.pullImageCmd(it)
                         .exec(PullImageResultCallback())
                         .awaitCompletion()
@@ -522,7 +545,7 @@ class CourseService(
                     // TODO: make this size configurable in task config.toml?
                     val resultFileSizeLimit = convertSizeToBytes("100K")
                     val persistentFileCopyCommands = task.persistentResultFilePaths.joinToString("\n") { path ->
-"""
+                        """
 # Check if results file exceeds permissible size limit
 if [[ -f "$path" ]]; then
     actual_size=${'$'}(stat -c%s "$path")
@@ -536,7 +559,7 @@ cp "$path" "/submission/${'$'}file_dir"
 """
                     }
                     val command = (
-"""
+                            """
 # copy submitted files to tmpfs
 /bin/cp -R /submission/* /workspace/;
 # run command (the cwd is set to /workspace already)
@@ -555,7 +578,7 @@ fi
 $persistentFileCopyCommands
 exit ${'$'}exit_code; 
 """
-                    )
+                            )
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
                         .withCmd("/bin/bash", "-c", command)
@@ -574,9 +597,9 @@ exit ${'$'}exit_code;
                         try {
                             dockerClient.stopContainerCmd(container.id).withTimeout(0).exec()
                             killedContainer = true
-                            logger.debug { "Stopped container ${container.id}"}
+                            logger.debug { "Stopped container ${container.id}" }
                         } catch (e: Exception) {
-                            logger.debug { "Container ${container.id} probably stopped already"}
+                            logger.debug { "Container ${container.id} probably stopped already" }
                         }
                     }, task.timeLimit.coerceAtMost(180).toLong(), TimeUnit.SECONDS)
                     dockerClient.startContainerCmd(container.id).exec()
@@ -588,7 +611,7 @@ exit ${'$'}exit_code;
                     scheduler.shutdown()
 
                     submission.logs = readLogsFile(submissionDir)
-                    logger.debug { "Submission $submissionDir finished with statusCode $statusCode"}
+                    logger.debug { "Submission $submissionDir finished with statusCode $statusCode" }
                     val persistentResultFileErrors: MutableList<String> = mutableListOf()
                     task.persistentResultFilePaths.forEach { path ->
                         try {
@@ -630,16 +653,26 @@ exit ${'$'}exit_code;
                             202 -> {
                                 Results(
                                     0.0,
-                                    mutableListOf("One or more files you're supposed to write exceeds the file size limit of ${bytesToHumanReadable(resultFileSizeLimit)}")
+                                    mutableListOf(
+                                        "One or more files you're supposed to write exceeds the file size limit of ${
+                                            bytesToHumanReadable(
+                                                resultFileSizeLimit
+                                            )
+                                        }"
+                                    )
                                 )
                             }
                             // none of the above, hopefully there are grading results
                             else -> {
                                 try {
-                                    jsonMapper.readValue(Files.readString(submissionDir.resolve("grade_results.json")), Results::class.java)
+                                    jsonMapper.readValue(
+                                        Files.readString(submissionDir.resolve("grade_results.json")),
+                                        Results::class.java
+                                    )
                                 } catch (e: NoSuchFileException) {
                                     logger.debug { "Submission $submissionDir no grade_results.json" }
-                                    Results(null,
+                                    Results(
+                                        null,
                                         mutableListOf("No grading results. Please report this as a bug and provide as much detail as possible.")
                                     )
                                 }
@@ -659,7 +692,8 @@ exit ${'$'}exit_code;
                 }
             }
         } catch (e: Exception) {
-            newSubmission.output = "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
+            newSubmission.output =
+                "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         }
         submissionRepository.save(newSubmission)
     }
@@ -678,8 +712,11 @@ exit ${'$'}exit_code;
     }
 
     private fun writeContainerFile(filePath: Path, data: String?, binaryData: ByteArray?) {
-        if (binaryData != null) { Files.write(filePath, binaryData) }
-        else { Files.writeString(filePath, data) }
+        if (binaryData != null) {
+            Files.write(filePath, binaryData)
+        } else {
+            Files.writeString(filePath, data)
+        }
     }
 
     private fun createContainerFile(submissionDir: Path, taskFile: TaskFile) {
@@ -723,7 +760,7 @@ exit ${'$'}exit_code;
                 return updateCourse(courseSlug)
             }
         }
-        logger.debug { "Provided webhook secret does not match secret of course $courseSlug"}
+        logger.debug { "Provided webhook secret does not match secret of course $courseSlug" }
         throw ResponseStatusException(HttpStatus.FORBIDDEN)
     }
 
@@ -739,15 +776,17 @@ exit ${'$'}exit_code;
                 return updateCourse(courseSlug)
             }
         }
-        logger.debug { "Provided webhook signature does not match secret of course $courseSlug"}
+        logger.debug { "Provided webhook signature does not match secret of course $courseSlug" }
         throw ResponseStatusException(HttpStatus.FORBIDDEN)
     }
 
     @Transactional
-    @Caching(evict = [
-        CacheEvict(value = ["getMaxPoints"], key = "#courseSlug"),
-        CacheEvict(value = ["assignmentMaxPoints"], allEntries = true),
-    ])
+    @Caching(
+        evict = [
+            CacheEvict(value = ["getMaxPoints"], key = "#courseSlug"),
+            CacheEvict(value = ["assignmentMaxPoints"], allEntries = true),
+        ]
+    )
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.updateFromRepository(existingCourse)
@@ -756,7 +795,7 @@ exit ${'$'}exit_code;
     @Transactional
     fun updateCourseFromDirectory(courseSlug: String, directory: Path): Course {
         val existingCourse = getCourseBySlug(courseSlug)
-        return courseLifecycle.updateFromDirectory(existingCourse, directory )
+        return courseLifecycle.updateFromDirectory(existingCourse, directory)
     }
 
     @Transactional
@@ -766,31 +805,36 @@ exit ${'$'}exit_code;
     }
 
     fun sendMessage(contactDTO: ContactDTO) {
-        val filePath = workingDir.resolve("contact").resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+        val filePath =
+            workingDir.resolve("contact").resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
         Files.createDirectories(filePath.parent)
         if (!filePath.toFile().exists()) Files.createFile(filePath)
         Files.writeString(filePath, contactDTO.formatContent())
     }
 
     @Transactional
-    @Caching(evict = [
-        CacheEvict(value = ["usernameForLogin"], key = "#username"),
-        CacheEvict(value = ["userRoles"], key = "#username"),
-        CacheEvict(value = ["usernameForLogin"], key = "#username"),
-        CacheEvict(value = ["getAllUserIdsFor"], key = "#username"),
-    ])
+    @Caching(
+        evict = [
+            CacheEvict(value = ["usernameForLogin"], key = "#username"),
+            CacheEvict(value = ["userRoles"], key = "#username"),
+            CacheEvict(value = ["usernameForLogin"], key = "#username"),
+            CacheEvict(value = ["getAllUserIdsFor"], key = "#username"),
+        ]
+    )
     fun updateStudentRoles(username: String) {
         logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
         getCourses().forEach { course ->
-            logger.debug { "syncing to ${course.slug}"}
+            logger.debug { "syncing to ${course.slug}" }
             roleService.updateStudentRoles(course, username)
         }
     }
 
     @Transactional
-    @Caching(evict = [
-        CacheEvict(value = ["userRoles"], allEntries = true),
-    ])
+    @Caching(
+        evict = [
+            CacheEvict(value = ["userRoles"], allEntries = true),
+        ]
+    )
     fun setRoleUsers(course: Course, usernames: List<String>, role: Role): Pair<List<String>, List<String>> {
         val existingUsers = when (role) {
             Role.SUPERVISOR -> course.supervisors
@@ -825,7 +869,7 @@ exit ${'$'}exit_code;
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
     }
 
-    fun getTaskProgress( courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
+    fun getTaskProgress(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
         logger.debug { "Searching for evaluations for $userId ($userIds)..." }
@@ -847,7 +891,13 @@ exit ${'$'}exit_code;
                 task.maxPoints,
                 task.maxAttempts,
                 task.maxAttempts,
-                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
+                task.information.map { (language, info) ->
+                    language to TaskInformationDTO(
+                        info.language,
+                        info.title,
+                        info.instructionsFile
+                    )
+                }.toMap().toMutableMap(),
                 listOf()
             )
         } else {
@@ -858,8 +908,15 @@ exit ${'$'}exit_code;
                 task.maxPoints,
                 evaluation.remainingAttempts,
                 task.maxAttempts,
-                task.information.map { (language, info) -> language to TaskInformationDTO(info.language, info.title, info.instructionsFile) }.toMap().toMutableMap(),
-                evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points != null }?.let { listOf(it) } ?: listOf()
+                task.information.map { (language, info) ->
+                    language to TaskInformationDTO(
+                        info.language,
+                        info.title,
+                        info.instructionsFile
+                    )
+                }.toMap().toMutableMap(),
+                evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points != null }?.let { listOf(it) }
+                    ?: listOf()
             )
         }
     }
@@ -877,38 +934,55 @@ exit ${'$'}exit_code;
 
     fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
-        return AssignmentProgressDTO(userId, assignmentSlug,
-            assignment.information.map { (language, info) -> language to AssignmentInformationDTO(info.language, info.title) }.toMap().toMutableMap(),
-            getTasksProgress(assignment, userId))
+        return AssignmentProgressDTO(
+            userId, assignmentSlug,
+            assignment.information.map { (language, info) ->
+                language to AssignmentInformationDTO(
+                    info.language,
+                    info.title
+                )
+            }.toMap().toMutableMap(),
+            getTasksProgress(assignment, userId)
+        )
     }
 
     fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
-        return CourseProgressDTO(userId,
-            course.information.map { (language, info) -> language to CourseInformationDTO(
-                info.language, info.title, info.description, info.university, info.period) }.toMap().toMutableMap(),
-            course.assignments.filter{ it.isPublished }. map { assignment ->
+        return CourseProgressDTO(
+            userId,
+            course.information.map { (language, info) ->
+                language to CourseInformationDTO(
+                    info.language, info.title, info.description, info.university, info.period
+                )
+            }.toMap().toMutableMap(),
+            course.assignments.filter { it.isPublished }.map { assignment ->
                 AssignmentProgressDTO(
                     null,
                     assignment.slug!!,
-                    assignment.information.map { (language, info) -> language to AssignmentInformationDTO(info.language, info.title) }.toMap().toMutableMap(),
+                    assignment.information.map { (language, info) ->
+                        language to AssignmentInformationDTO(
+                            info.language,
+                            info.title
+                        )
+                    }.toMap().toMutableMap(),
                     getTasksProgress(assignment, userId)
                 )
-            }.toList())
+            }.toList()
+        )
     }
 
     fun setStudents(courseSlug: String, students: List<String>) {
         val course: Course = getCourseBySlug(courseSlug)
         course.registeredStudents = students.toMutableSet()
         courseRepository.save(course)
-        logger.debug { "Set ${course.registeredStudents.size} students in course $courseSlug"}
+        logger.debug { "Set ${course.registeredStudents.size} students in course $courseSlug" }
     }
 
     fun setAssistants(courseSlug: String, assistants: List<String>) {
         val course: Course = getCourseBySlug(courseSlug)
         course.assistants = assistants.toMutableSet()
         courseRepository.save(course)
-        logger.debug { "Set ${course.assistants.size} assistants in course $courseSlug"}
+        logger.debug { "Set ${course.assistants.size} assistants in course $courseSlug" }
     }
 
     fun convertSizeToBytes(sizeStr: String): Long {

@@ -7,7 +7,12 @@ import org.springframework.security.access.prepost.PostFilter
 
 interface TaskFileRepository : JpaRepository<TaskFile?, Long?> {
     @Transactional
-    @PostFilter("hasRole(filterObject.task.assignment.course.slug + '-assistant') or filterObject.isPublished")
+    @PostFilter(
+        """
+        hasRole((filterObject.task.assignment?.course?.slug ?: filterObject.task.course?.slug) + '-assistant') 
+        or filterObject.isPublished
+    """
+    )
     fun findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId: Long?): List<TaskFile>
 
     @Transactional
