@@ -8,4 +8,7 @@ import org.springframework.data.rest.core.config.Projection
 interface CourseWorkspace : CourseOverview {
     @get:Value("#{@courseService.getAssignments(target.slug)}")
     val assignments: List<AssignmentWorkspace?>?
+
+    @get:Value("#{@courseService.getExamples(target.slug)}")
+    val examples: List<TaskWorkspace?>?
 }
