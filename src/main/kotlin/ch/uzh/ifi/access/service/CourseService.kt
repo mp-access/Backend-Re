@@ -173,16 +173,20 @@ class CourseService(
         return tasks.filter { it.enabled }
     }
 
+    // TODO: make this return TaskOverview
     fun getExamples(courseSlug: String?): List<TaskWorkspace> {
         return taskRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
-    fun getExample(courseSlug: String?, exampleSlug: String?): TaskWorkspace {
-        return taskRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
+    fun getExample(courseSlug: String?, exampleSlug: String?, userId: String?): TaskWorkspace {
+        val workspace = taskRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No example found with the URL $exampleSlug"
             )
+
+        workspace.setUserId(userId)
+        return workspace
     }
 
 //    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
