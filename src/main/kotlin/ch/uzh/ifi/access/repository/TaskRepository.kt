@@ -26,18 +26,4 @@ interface TaskRepository : JpaRepository<Task?, Long?> {
         assignmentSlug: String?,
         taskSlug: String?
     ): Boolean
-
-    fun findByCourse_SlugOrderByOrdinalNumDesc(
-        courseSlug: String?
-    ): List<TaskWorkspace>
-
-    fun findByCourse_SlugAndSlug(
-        courseSlug: String?,
-        exampleSlug: String?
-    ): TaskWorkspace?
-
-    fun getByCourse_SlugAndSlug(
-        courseSlug: String?,
-        exampleSlug: String?
-    ): Task?
 }
