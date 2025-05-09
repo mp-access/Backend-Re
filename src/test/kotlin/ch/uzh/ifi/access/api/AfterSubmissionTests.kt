@@ -16,11 +16,12 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
 
+    // this will identify task.py by its shebang (which test.py is missing)
     private val taskJsonPathTemplate = """
         $.assignments[?(@.slug=='basics')]
          .tasks[?(@.slug=='for-testing')]
          .submissions
-         ..files[?(@.taskFileId==29)]
+         ..files[?(@.content =~ /#![\s\S]*/ )]
          .content
     """
 

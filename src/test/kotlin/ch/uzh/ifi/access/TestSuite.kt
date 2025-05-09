@@ -11,14 +11,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.junit.jupiter.api.ClassOrderer
 import org.junit.jupiter.api.TestClassOrder
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback
+import org.junit.jupiter.api.extension.ExecutionCondition
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.platform.suite.api.SelectClasses
 import org.junit.platform.suite.api.Suite
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.context.annotation.Configuration
-import org.springframework.core.io.ClassPathResource
-import org.springframework.jdbc.datasource.init.ScriptUtils
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContext
@@ -26,11 +24,10 @@ import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.User
 import org.springframework.security.test.context.support.WithSecurityContext
 import org.springframework.security.test.context.support.WithSecurityContextFactory
-import org.springframework.test.context.TestContext
-import org.springframework.test.context.TestExecutionListener
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.ResultHandler
-import java.sql.DriverManager
+import java.io.File
+import java.util.concurrent.TimeUnit
 
 @Suite
 @SelectClasses(
@@ -91,38 +88,22 @@ object JsonReference {
     }
 }
 
-class DatabaseCleanupListener : TestExecutionListener {
+abstract class AccessTestExecutionCondition : ExecutionCondition {
 
-    @Configuration
-    private class DummyConfig
+    private val logger = KotlinLogging.logger {}
 
-    override fun beforeTestClass(testContext: TestContext) {
-        // We could retrieve the application variables like this:
-
-        /*
-        val env = SpringApplicationBuilder()
-            .sources(DummyConfig::class.java)
-            .web(WebApplicationType.NONE)
-            .build()
-            .run()
-            .environment
-
-        val url = env.getProperty("spring.datasource.url")
-        val user = env.getProperty("spring.datasource.username")
-        val pass = env.getProperty("spring.datasource.password")
-         */
-
-        // However, not to risk production data, let's just hardcode the dev variables:
-
-        val url = "jdbc:postgresql://localhost:5432/access"
-        val user = "admin"
-        val pass = "admin"
-        val connection = DriverManager.getConnection(url, user, pass)
-        val resource = ClassPathResource("/drop_all.sql")
-        ScriptUtils.executeSqlScript(connection, resource)
-        connection.close()
-        println("Dropped all ACCESS tables and sequences")
-    }
+    // this function CC-BY-SA 4.0 https://stackoverflow.com/a/52441962
+    fun runCommand(
+        command: String,
+        workingDir: String,
+    ): String = runCatching {
+        ProcessBuilder("\\s".toRegex().split(command))
+            .directory(File(workingDir))
+            .redirectOutput(ProcessBuilder.Redirect.PIPE)
+            .redirectError(ProcessBuilder.Redirect.PIPE)
+            .start().also { it.waitFor(60, TimeUnit.SECONDS) }
+            .inputStream.bufferedReader().readText()
+    }.onFailure { logger.error { it.printStackTrace() } }.getOrElse { "" }
 }
 
 class AccessUserSecurityContextFactory : WithSecurityContextFactory<AccessUser> {

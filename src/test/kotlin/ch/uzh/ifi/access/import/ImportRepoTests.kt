@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
-import ch.uzh.ifi.access.DatabaseCleanupListener
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.service.CourseLifecycle
 import ch.uzh.ifi.access.service.CourseService
@@ -12,15 +11,11 @@ import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.security.test.context.support.WithMockUser
-import org.springframework.test.context.TestExecutionListeners
+import org.springframework.web.server.ResponseStatusException
 import java.io.File
 import java.nio.file.Paths
 
 @SpringBootTest
-@TestExecutionListeners(
-    listeners = [DatabaseCleanupListener::class],
-    mergeMode = TestExecutionListeners.MergeMode.MERGE_WITH_DEFAULTS
-)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ImportRepoTests(
     @Autowired val courseLifecycle: CourseLifecycle,
@@ -31,6 +26,11 @@ class ImportRepoTests(
     @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
     @Order(0)
     fun `Course import succeeds`() {
+        // delete existing course if any
+        try {
+            courseService.deleteCourse("access-mock-course")
+        } catch (_: ResponseStatusException) {
+        }
         val course = Course()
         course.slug = "access-mock-course"
         course.repository = "https://github.com/mp-access/Mock-Course-Re.git"

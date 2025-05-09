@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
+
 
 @ExtendWith(SpringExtension::class, BaseTest.CurlCommandListener::class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
@@ -50,37 +52,41 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         user: String = "student@uzh.ch",
         task: String = "variable_assignment"
     ) {
-        val payload = when (task) {
-            "carpark" -> submissionPayload(
-                command, mapOf(
-                    34 to "03_classes/carpark_multiple_inheritance/task/script.py",
-                    35 to "03_classes/carpark_multiple_inheritance/task/car.py",
-                    36 to "03_classes/carpark_multiple_inheritance/task/combustion_car.py",
-                    37 to "03_classes/carpark_multiple_inheritance/task/electric_car.py",
-                    38 to "03_classes/carpark_multiple_inheritance/task/hybrid_car.py",
-                    39 to "03_classes/carpark_multiple_inheritance/task/tests.py",
-                )
-            ).replace("class Car:", edit)
-
-            "testing" -> submissionPayload(
-                command, mapOf(
-                    29 to "02_basics/for_testing/task/script.py",
-                    30 to "02_basics/for_testing/task/tests.py",
-                )
-            ).replace("a=0;b=0;c=0;d=0", edit)
-
-            else -> submissionPayload(
-                command, mapOf(
-                    18 to "02_basics/variable_assignment/task/script.py",
-                    19 to "02_basics/variable_assignment/task/tests.py",
-                )
-            ).replace("x = 0", edit)
+        val prefix = when (task) {
+            "carpark" -> "03_classes/carpark_multiple_inheritance"
+            "testing" -> "02_basics/for_testing"
+            else -> "02_basics/variable_assignment"
+        }
+        val toReplace = when (task) {
+            "carpark" -> "class Car:"
+            "testing" -> "a=0;b=0;c=0;d=0"
+            else -> "x = 0"
         }
         val url = when (task) {
             "carpark" -> "classes/tasks/carpark-multiple-inheritance"
             "testing" -> "basics/tasks/for-testing"
             else -> "basics/tasks/variable-assignment"
         }
+        // retrieve the correct task file IDs for the given task
+        val result = mvc.perform(
+            get("/courses/access-mock-course/assignments/$url/users/$user")
+                .contentType("application/json")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andReturn()
+        val responseContent: String = result.response.contentAsString
+        val taskWorkspace: Map<String, Any> =
+            ObjectMapper().readValue(responseContent, Map::class.java) as Map<String, Any>
+        val fileMap = (taskWorkspace.get("files")!! as ArrayList<LinkedHashMap<String, Any>>).filter {
+            it.get("editable") as Boolean == true
+        }.map {
+            it.get("id") as Int to prefix + it.get("path")
+        }.toMap()
+        val payload = submissionPayload(command, fileMap).replace(toReplace, edit)
+
+        // create a submission
         mvc.perform(
             post("/courses/access-mock-course/assignments/$url/submit")
                 .contentType("application/json")
@@ -90,6 +96,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andDo(logResponse)
             .andExpect(status().isOk)
             .andDo {
+                // get the submission history
                 mvc.perform(
                     get("/courses/access-mock-course/assignments/$url/users/$user")
                         .contentType("application/json")
