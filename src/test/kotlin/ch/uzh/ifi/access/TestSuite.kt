@@ -38,6 +38,7 @@ import java.util.concurrent.TimeUnit
     ManagementAPITests::class,
     SubmissionTests::class,
     AfterSubmissionTests::class,
+    PerformanceTests::class,
 )
 
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
