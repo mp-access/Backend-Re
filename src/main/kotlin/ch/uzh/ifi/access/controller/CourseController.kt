@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
@@ -18,6 +19,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.Semaphore
 
@@ -212,12 +214,60 @@ class CourseController(
 
     // Invoked by the teacher when publishing an example to inform the students
     @PostMapping("/{courseSlug}/examples/{exampleSlug}/publish")
-    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
-    fun notifyStudents(
+//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    fun publishExample(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
+        @RequestBody duration: Int,
     ) {
+        val activeExample = courseService.getExamples(courseSlug).filter {
+            it.status == TaskStatus.Interactive
+        }.firstOrNull()
+
+        if (activeExample != null) {
+            throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "An interactive example already exists."
+            )
+        }
+
+        courseService.publishExampleBySlug(courseSlug, exampleSlug, duration)
+
         emitterService.sendMessage(courseSlug, "redirect", "/courses/$courseSlug/examples/$exampleSlug")
+        emitterService.sendMessage(courseSlug, "timer-update", "$duration/$duration")
+    }
+
+    // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
+    @PutMapping("/{courseSlug}/examples/{exampleSlug}/extend")
+//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    fun extendExampleDeadline(
+        @PathVariable courseSlug: String,
+        @PathVariable exampleSlug: String,
+        @RequestBody duration: Int,
+    ) {
+        val updatedExample = courseService.extendExampleDeadlineBySlug(courseSlug, exampleSlug, duration)
+
+        val totalDuration = Duration.between(updatedExample.start!!, updatedExample.end!!).toSeconds();
+        val secondsLeft = Duration.between(LocalDateTime.now(), updatedExample.end!!).toSeconds();
+
+        emitterService.sendMessage(
+            courseSlug,
+            "timer-extend",
+            "Submission time extended by the lecturer by $duration seconds."
+        )
+        emitterService.sendMessage(courseSlug, "timer-update", "$secondsLeft/$totalDuration")
+    }
+
+    // Invoked by the teacher when want to terminate the active example
+    @PutMapping("/{courseSlug}/examples/{exampleSlug}/terminate")
+//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    fun terminateExample(
+        @PathVariable courseSlug: String,
+        @PathVariable exampleSlug: String
+    ) {
+        courseService.terminateExampleBySlug(courseSlug, exampleSlug)
+
+        emitterService.sendMessage(courseSlug, "terminate", "Example terminated by teacher.")
     }
 
     // A text event endpoint to publish events to clients

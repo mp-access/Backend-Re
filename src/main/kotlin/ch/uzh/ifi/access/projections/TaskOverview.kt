@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.projections
 
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.TaskInformation
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 
@@ -21,15 +22,23 @@ interface TaskOverview {
     @get:Value(
         """
       #{
-        target.assignment != null 
-          ? target.assignment.active 
-          : (target.start != null 
-              ? target.start.isBefore(T(java.time.LocalDateTime).now()) 
-              : false)
+        target.assignment != null
+          ? (target.assignment.start == null or target.assignment.start.isAfter(T(java.time.LocalDateTime).now())
+              ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Planned
+              : target.assignment.end.isAfter(T(java.time.LocalDateTime).now())
+                ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Active
+                : T(ch.uzh.ifi.access.model.constants.TaskStatus).Closed
+          )
+          : (target.start == null or target.start.isAfter(T(java.time.LocalDateTime).now())
+              ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Planned
+              : target.end.isAfter(T(java.time.LocalDateTime).now())
+                ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Interactive
+                : T(ch.uzh.ifi.access.model.constants.TaskStatus).Active
+          )
       }
       """
     )
-    val isActive: Boolean
+    val status: TaskStatus?
 
     @get:Value("#{@courseService.calculateAvgTaskPoints(target.slug)}")
     val avgPoints: Double?
