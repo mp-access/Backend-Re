@@ -218,7 +218,7 @@ class CourseController(
     fun publishExample(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
-        @RequestBody duration: Int,
+        @RequestBody body: ExampleDurationDTO,
     ) {
         val activeExample = courseService.getExamples(courseSlug).filter {
             it.status == TaskStatus.Interactive
@@ -231,10 +231,10 @@ class CourseController(
             )
         }
 
-        courseService.publishExampleBySlug(courseSlug, exampleSlug, duration)
+        courseService.publishExampleBySlug(courseSlug, exampleSlug, body.duration)
 
         emitterService.sendMessage(courseSlug, "redirect", "/courses/$courseSlug/examples/$exampleSlug")
-        emitterService.sendMessage(courseSlug, "timer-update", "$duration/$duration")
+        emitterService.sendMessage(courseSlug, "timer-update", "${body.duration}/${body.duration}")
     }
 
     // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
@@ -243,9 +243,9 @@ class CourseController(
     fun extendExampleDeadline(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
-        @RequestBody duration: Int,
+        @RequestBody body: ExampleDurationDTO,
     ) {
-        val updatedExample = courseService.extendExampleDeadlineBySlug(courseSlug, exampleSlug, duration)
+        val updatedExample = courseService.extendExampleDeadlineBySlug(courseSlug, exampleSlug, body.duration)
 
         val totalDuration = Duration.between(updatedExample.start!!, updatedExample.end!!).toSeconds();
         val secondsLeft = Duration.between(LocalDateTime.now(), updatedExample.end!!).toSeconds();
@@ -253,7 +253,7 @@ class CourseController(
         emitterService.sendMessage(
             courseSlug,
             "timer-extend",
-            "Submission time extended by the lecturer by $duration seconds."
+            "Submission time extended by the lecturer by ${body.duration} seconds."
         )
         emitterService.sendMessage(courseSlug, "timer-update", "$secondsLeft/$totalDuration")
     }
