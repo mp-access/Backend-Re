@@ -214,7 +214,7 @@ class CourseController(
 
     // Invoked by the teacher when publishing an example to inform the students
     @PostMapping("/{courseSlug}/examples/{exampleSlug}/publish")
-//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
     fun publishExample(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
@@ -239,7 +239,7 @@ class CourseController(
 
     // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
     @PutMapping("/{courseSlug}/examples/{exampleSlug}/extend")
-//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
     fun extendExampleDeadline(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String,
@@ -260,7 +260,7 @@ class CourseController(
 
     // Invoked by the teacher when want to terminate the active example
     @PutMapping("/{courseSlug}/examples/{exampleSlug}/terminate")
-//    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
     fun terminateExample(
         @PathVariable courseSlug: String,
         @PathVariable exampleSlug: String
