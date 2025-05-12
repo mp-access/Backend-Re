@@ -164,7 +164,7 @@ class CourseController(
 
     @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
-    fun evaluateSubmission(
+    fun evaluateTaskSubmission(
         @PathVariable course: String,
         @PathVariable assignment: String,
         @PathVariable task: String?,
@@ -176,14 +176,38 @@ class CourseController(
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
-    @GetMapping("/{courseSlug}/examples/{exampleSlug}")
-    @PreAuthorize("hasRole(#courseSlug)")
-    fun getExample(
-        @PathVariable courseSlug: String,
-        @PathVariable exampleSlug: String,
+    @PostMapping("/{course}/examples/{example}/submit")
+    @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
+    fun evaluateExampleSubmission(
+        @PathVariable course: String,
+        @PathVariable example: String?,
+        @RequestBody submission: SubmissionDTO,
         authentication: Authentication
+    ) {
+        submission.userId = authentication.name
+        // Is there a better way than passing null to assignmentSlug?
+        courseService.createSubmission(course, null, example!!, submission)
+    }
+
+
+    @GetMapping("/{course}/examples/{example}/users/{user}")
+    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
+    fun getExample(
+        @PathVariable course: String?,
+        @PathVariable example: String?,
+        @PathVariable user: String?
     ): TaskWorkspace {
-        return courseService.getExample(courseSlug, exampleSlug)
+        return courseService.getExample(course, example, user)
+    }
+
+    // TODO: Change this to returning TaskOverview, as we don't need more information. However, when changing it, an error occurs in the courses/{course} endpoint.
+    @GetMapping("/{courseSlug}/examples")
+    @PreAuthorize("hasRole(#courseSlug)")
+    fun getExamples(
+        @PathVariable courseSlug: String,
+        authentication: Authentication
+    ): List<TaskWorkspace> {
+        return courseService.getExamples(courseSlug)
     }
 
     // Invoked by the teacher when publishing an example to inform the students

@@ -83,6 +83,7 @@ class CourseService(
     private val courseRepository: CourseRepository,
     private val assignmentRepository: AssignmentRepository,
     private val taskRepository: TaskRepository,
+    private val exampleRepository: ExampleRepository,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
     private val courseServiceForCaching: CourseServiceForCaching,
@@ -173,25 +174,29 @@ class CourseService(
         return tasks.filter { it.enabled }
     }
 
+    // TODO: make this return TaskOverview
     fun getExamples(courseSlug: String?): List<TaskWorkspace> {
-        return taskRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
+        return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
-    fun getExample(courseSlug: String?, exampleSlug: String?): TaskWorkspace {
-        return taskRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
+    fun getExample(courseSlug: String?, exampleSlug: String?, userId: String?): TaskWorkspace {
+        val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
+
+        workspace.setUserId(userId)
+        return workspace
+    }
+
+    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
+        return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No example found with the URL $exampleSlug"
             )
     }
-
-//    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
-//        return taskRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
-//            ?: throw ResponseStatusException(
-//                HttpStatus.NOT_FOUND,
-//                "No example found with the URL $exampleSlug"
-//            )
-//    }
 
     // TODO: clean up these confusing method names
     fun getAssignments(courseSlug: String?): List<AssignmentWorkspace> {
@@ -476,8 +481,13 @@ class CourseService(
             CacheEvict(value = ["studentWithPoints"], key = "#courseSlug + '-' + #submissionDTO.userId"),
             CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
-    fun createSubmission(courseSlug: String, assignmentSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
-        val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
+    fun createSubmission(courseSlug: String, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
+        val task = if (assignmentSlug == null) {
+            getExampleBySlug(courseSlug, taskSlug)
+        } else {
+            getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
+        }
+
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
