@@ -175,11 +175,11 @@ class CourseService(
     }
 
     // TODO: make this return TaskOverview
-    fun getExamples(courseSlug: String?): List<TaskWorkspace> {
+    fun getExamples(courseSlug: String): List<TaskWorkspace> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
-    fun getExample(courseSlug: String?, exampleSlug: String?, userId: String?): TaskWorkspace {
+    fun getExample(courseSlug: String, exampleSlug: String, userId: String): TaskWorkspace {
         val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -190,7 +190,7 @@ class CourseService(
         return workspace
     }
 
-    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
+    fun getExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -198,7 +198,7 @@ class CourseService(
             )
     }
 
-    fun publishExampleBySlug(courseSlug: String?, exampleSlug: String?, duration: Int) {
+    fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int) {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -218,7 +218,7 @@ class CourseService(
         exampleRepository.saveAndFlush(example);
     }
 
-    fun extendExampleDeadlineBySlug(courseSlug: String?, exampleSlug: String?, duration: Int): Task {
+    fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -250,7 +250,7 @@ class CourseService(
         return example
     }
 
-    fun terminateExampleBySlug(courseSlug: String?, exampleSlug: String?) {
+    fun terminateExampleBySlug(courseSlug: String, exampleSlug: String) {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,

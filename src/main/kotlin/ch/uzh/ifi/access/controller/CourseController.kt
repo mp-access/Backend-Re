@@ -182,7 +182,7 @@ class CourseController(
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
     fun evaluateExampleSubmission(
         @PathVariable course: String,
-        @PathVariable example: String?,
+        @PathVariable example: String,
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
@@ -195,34 +195,34 @@ class CourseController(
     @GetMapping("/{course}/examples/{example}/users/{user}")
     @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
     fun getExample(
-        @PathVariable course: String?,
-        @PathVariable example: String?,
-        @PathVariable user: String?
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @PathVariable user: String
     ): TaskWorkspace {
         return courseService.getExample(course, example, user)
     }
 
     // TODO: Change this to returning TaskOverview, as we don't need more information. However, when changing it, an error occurs in the courses/{course} endpoint.
-    @GetMapping("/{courseSlug}/examples")
-    @PreAuthorize("hasRole(#courseSlug)")
+    @GetMapping("/{course}/examples")
+    @PreAuthorize("hasRole(#course)")
     fun getExamples(
-        @PathVariable courseSlug: String,
+        @PathVariable course: String,
         authentication: Authentication
     ): List<TaskWorkspace> {
-        return courseService.getExamples(courseSlug)
+        return courseService.getExamples(course)
     }
 
     // Invoked by the teacher when publishing an example to inform the students
-    @PostMapping("/{courseSlug}/examples/{exampleSlug}/publish")
-    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PostMapping("/{course}/examples/{example}/publish")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
     fun publishExample(
-        @PathVariable courseSlug: String,
-        @PathVariable exampleSlug: String,
+        @PathVariable course: String,
+        @PathVariable example: String,
         @RequestBody body: ExampleDurationDTO,
     ) {
-        val activeExample = courseService.getExamples(courseSlug).filter {
+        val activeExample = courseService.getExamples(course).firstOrNull {
             it.status == TaskStatus.Interactive
-        }.firstOrNull()
+        }
 
         if (activeExample != null) {
             throw ResponseStatusException(
@@ -231,58 +231,58 @@ class CourseController(
             )
         }
 
-        courseService.publishExampleBySlug(courseSlug, exampleSlug, body.duration)
+        courseService.publishExampleBySlug(course, example, body.duration)
 
-        emitterService.sendMessage(courseSlug, "redirect", "/courses/$courseSlug/examples/$exampleSlug")
-        emitterService.sendMessage(courseSlug, "timer-update", "${body.duration}/${body.duration}")
+        emitterService.sendMessage(course, "redirect", "/courses/$course/examples/$example")
+        emitterService.sendMessage(course, "timer-update", "${body.duration}/${body.duration}")
     }
 
     // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
-    @PutMapping("/{courseSlug}/examples/{exampleSlug}/extend")
-    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PutMapping("/{course}/examples/{example}/extend")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
     fun extendExampleDeadline(
-        @PathVariable courseSlug: String,
-        @PathVariable exampleSlug: String,
+        @PathVariable course: String,
+        @PathVariable example: String,
         @RequestBody body: ExampleDurationDTO,
     ) {
-        val updatedExample = courseService.extendExampleDeadlineBySlug(courseSlug, exampleSlug, body.duration)
+        val updatedExample = courseService.extendExampleDeadlineBySlug(course, example, body.duration)
 
-        val totalDuration = Duration.between(updatedExample.start!!, updatedExample.end!!).toSeconds();
-        val secondsLeft = Duration.between(LocalDateTime.now(), updatedExample.end!!).toSeconds();
+        val totalDuration = Duration.between(updatedExample.start!!, updatedExample.end!!).toSeconds()
+        val secondsLeft = Duration.between(LocalDateTime.now(), updatedExample.end!!).toSeconds()
 
         emitterService.sendMessage(
-            courseSlug,
+            course,
             "timer-extend",
             "Submission time extended by the lecturer by ${body.duration} seconds."
         )
-        emitterService.sendMessage(courseSlug, "timer-update", "$secondsLeft/$totalDuration")
+        emitterService.sendMessage(course, "timer-update", "$secondsLeft/$totalDuration")
     }
 
     // Invoked by the teacher when want to terminate the active example
-    @PutMapping("/{courseSlug}/examples/{exampleSlug}/terminate")
-    @PreAuthorize("hasRole(#courseSlug+'-supervisor')")
+    @PutMapping("/{course}/examples/{example}/terminate")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
     fun terminateExample(
-        @PathVariable courseSlug: String,
-        @PathVariable exampleSlug: String
+        @PathVariable course: String,
+        @PathVariable example: String
     ) {
-        courseService.terminateExampleBySlug(courseSlug, exampleSlug)
+        courseService.terminateExampleBySlug(course, example)
 
-        emitterService.sendMessage(courseSlug, "terminate", "Example terminated by teacher.")
+        emitterService.sendMessage(course, "terminate", "Example terminated by teacher.")
     }
 
     // A text event endpoint to publish events to clients
-    @GetMapping("/{courseSlug}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
-    fun subscribe(@PathVariable courseSlug: String, authentication: Authentication): ResponseEntity<SseEmitter> {
+    @GetMapping("/{course}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun subscribe(@PathVariable course: String, authentication: Authentication): ResponseEntity<SseEmitter> {
         val headers = HttpHeaders()
-        val emitter = emitterService.registerEmitter(courseSlug, authentication.name)
+        val emitter = emitterService.registerEmitter(course, authentication.name)
         headers.add("Cache-Control", "no-transform") // needed to work with webpack-dev-server
         return ResponseEntity<SseEmitter>(emitter, headers, HttpStatus.OK)
     }
 
     // Sent by the client to keep the emitter alive
-    @GetMapping("/{courseSlug}/heartbeat/{emitterId}")
-    fun heartbeat(@PathVariable courseSlug: String, @PathVariable emitterId: String) {
-        emitterService.keepAliveEmitter(courseSlug, emitterId)
+    @GetMapping("/{course}/heartbeat/{emitterId}")
+    fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String) {
+        emitterService.keepAliveEmitter(course, emitterId)
     }
 
     @GetMapping("/{courseSlug}/studentPoints")
