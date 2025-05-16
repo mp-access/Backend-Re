@@ -175,11 +175,11 @@ class CourseService(
     }
 
     // TODO: make this return TaskOverview
-    fun getExamples(courseSlug: String?): List<TaskWorkspace> {
+    fun getExamples(courseSlug: String): List<TaskWorkspace> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
-    fun getExample(courseSlug: String?, exampleSlug: String?, userId: String?): TaskWorkspace {
+    fun getExample(courseSlug: String, exampleSlug: String, userId: String): TaskWorkspace {
         val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -190,12 +190,88 @@ class CourseService(
         return workspace
     }
 
-    fun getExampleBySlug(courseSlug: String?, exampleSlug: String?): Task {
+    fun getExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No example found with the URL $exampleSlug"
             )
+    }
+
+    fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int) {
+        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
+
+        if (duration <= 0)
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Duration must be a positive value"
+            )
+
+        val now = LocalDateTime.now()
+        example.start = now
+        example.end = now.plusSeconds(duration.toLong())
+
+        exampleRepository.saveAndFlush(example);
+    }
+
+    fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
+        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
+
+        if (duration <= 0)
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Duration must be a positive value"
+            )
+
+        val now = LocalDateTime.now()
+        if (example.start == null || example.start!!.isAfter(now)) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "$exampleSlug has not been published"
+            )
+        } else if (example.end!!.isBefore(now)) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "$exampleSlug is past due"
+            )
+        }
+
+        example.end = example.end!!.plusSeconds(duration.toLong())
+        exampleRepository.saveAndFlush(example);
+
+        return example
+    }
+
+    fun terminateExampleBySlug(courseSlug: String, exampleSlug: String) {
+        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
+
+        val now = LocalDateTime.now()
+        if (example.start == null || example.start!!.isAfter(now)) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "$exampleSlug has not been published"
+            )
+        } else if (example.end!!.isBefore(now)) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "$exampleSlug is past due"
+            )
+        }
+
+        example.end = now
+        exampleRepository.saveAndFlush(example);
     }
 
     // TODO: clean up these confusing method names
