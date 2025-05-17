@@ -1,12 +1,16 @@
 package ch.uzh.ifi.access.config
 
+import ch.uzh.ifi.access.service.CourseService
+import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
 import org.keycloak.admin.client.resource.RealmResource
+import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.Environment
+import org.springframework.security.authentication.event.AuthenticationSuccessEvent
 import org.springframework.security.authorization.AuthorityAuthorizationDecision
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -19,6 +23,7 @@ import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext
+import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
 
@@ -136,5 +141,24 @@ class SecurityConfig(private val env: Environment) {
             "admin-cli"
         )
         return keycloakClient.realm("access")
+    }
+
+    @Component
+    class AuthenticationSuccessListener(
+        val courseService: CourseService,
+        val roleService: RoleService
+    ) : ApplicationListener<AuthenticationSuccessEvent> {
+
+        override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
+            // This ensures the necessary roles are added to the Keycloak account when the user first logs in
+            // because at that point, the roles_initialized_at attribute will yet be missing
+            val initialized =
+                (event.authentication as JwtAuthenticationToken).token.getClaimAsString("roles_initialized_at")
+            if (initialized == null) {
+                val username = event.authentication.name
+                roleService.initializeUserRoles(username, courseService)
+            }
+        }
+
     }
 }

@@ -2,22 +2,19 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
-import ch.uzh.ifi.access.model.dto.MemberDTO
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.apache.commons.collections4.SetUtils
 import org.keycloak.admin.client.resource.RealmResource
+import org.keycloak.admin.client.resource.RoleResource
 import org.keycloak.admin.client.resource.UserResource
 import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
-import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
-import org.springframework.security.core.Authentication
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
-import java.util.*
+import java.util.concurrent.Semaphore
 
 
 @Service
@@ -25,10 +22,55 @@ class RoleService(
     private val accessRealm: RealmResource,
 ) {
 
+    /* How users and roles are managed in ACCESS:
+     *
+     * Course membership (student/assistant/supervisor) is stored in two locations:
+     *  - as strings in lists of each Course entity ("Registration IDs")
+     *  - as roles in Keycloak ("Keycloak roles")
+     *
+     * This is necessary because if a user has never logged into ACCESS, then
+     * there is no corresponding Keycloak account to store roles for. Furthermore,
+     *  different systems (e.g., OLAT, MY) may identify users by different names.
+     *
+     * Note the following nomenclature:
+     *  - registrationID: as given by external systems, stored in Course entity
+     *  - username: the Keycloak username of a user
+     *  - user: Keycloak user, typically as a UserRepresentation
+     *  - user.id: the Keycloak internal UUID of a user
+     *  - authentication.name: SpringSecurity username, same as Keycloak username
+     *
+     * We need to match whatever registrationID might have been used to register
+     * a user in a course (username, email, or claims like swissEduPersonUniqueID)
+     * to their Keycloak account. For each registration in a Course, a corresponding
+     * Keycloak role needs to be added to the Keycloak account of the user.
+     *
+     * Updating Keycloak roles happens in the following two scenarios.
+     *
+     *** (1) A user logs into ACCESS for the very first time ***
+     *
+     * In this case, Keycloak creates a new account and copies certain claims from the
+     * OIDC Token. We need to go through all courses and check if any of these have
+     * been used as registrationIDs in a Course and add the corresponding roles to
+     * the Keycloak account. Consequences:
+     *   --> All Courses need to be checked
+     *   --> Roles are only added, but no roles are removed
+     * Implemented in RoleService.initializeUserRoles
+     * Called by SecurityConfig.AuthenticationSuccessListener
+     *
+     *** (2) The registered users of a Course are modified via the API ***
+     *
+     * Here, a user might gain or lose roles for a specific Course. Consequences:
+     *   --> Only one specific Course is affected
+     *   --> Roles may be added, removed, or both
+     * Implemented in RoleService.updateRoleUsers
+     * Called by CourseController.updateRoles
+     *
+     */
+
     private val logger = KotlinLogging.logger {}
 
     companion object {
-        private const val SEARCH_LIMIT = 10
+        // additional claims from OIDC Token which may be used as registrationIDs
         private val ATTRIBUTE_KEYS = listOf(
             "swissEduIDLinkedAffiliationUniqueID",
             "swissEduIDLinkedAffiliationMail",
@@ -36,270 +78,178 @@ class RoleService(
         )
     }
 
-
-    fun getCurrentUser(): String {
-        val authentication: Authentication = SecurityContextHolder.getContext().authentication
-        return authentication.name
+    fun UserRepresentation.toResource(): UserResource {
+        return getUserResourceById(this.id)
     }
 
-    @CacheEvict("userRoles", allEntries = true)
-    fun setFirstLoginRoles(user: UserRepresentation, roles: List<String>) {
-        // this method does never *removes* any roles, so it can only work correctly for the first login
-        accessRealm.users()[user.id].roles().realmLevel().add(roles.map {
-            accessRealm.roles()[it].toRepresentation()
-        })
-
-    }
+    /* Searching and finding users */
 
     fun getUserResourceById(userId: String): UserResource {
         return accessRealm.users().get(userId)
     }
 
-    @Cacheable("usernameForLogin", key = "#username") // TODO: evict this somehwere?
-    fun usernameForLogin(username: String): String {
-        if (username.isBlank()) return username
-
-        return findUserByAllCriteria(username)?.username ?: username
+    fun getRoleByName(roleName: String): RoleResource {
+        return accessRealm.roles().get(roleName)
     }
 
-    fun findUserByAllCriteria(login: String): UserRepresentation? {
+    fun findUserByAllCriteria(registrationID: String): UserRepresentation? {
         val usersResource = accessRealm.users()
-        findUserByUsername(usersResource, login)?.let { return it }
-        findUserByEmail(usersResource, login)?.let { return it }
-        findUserByAttributes(usersResource, login)?.let { return it }
+        // @formatter:off
+        return findUserByUsername(usersResource, registrationID) ?:
+               findUserByEmail(usersResource, registrationID) ?:
+               findUserByAttributes(usersResource, registrationID)
+        // @formatter:on
+    }
+
+    private fun findUserByUsername(users: UsersResource, registrationID: String): UserRepresentation? {
+        // keycloak username search with exact match does not work correctly, it seems.
+        // use non-exact match but then filter the result for an exact match.
+        return users.searchByUsername(registrationID, false).firstOrNull { it.username == registrationID }
+    }
+
+    private fun findUserByEmail(users: UsersResource, registrationID: String): UserRepresentation? {
+        return users.search(null, null, null, registrationID, 0, 1).firstOrNull()
+    }
+
+    private fun findUserByAttributes(users: UsersResource, registrationID: String): UserRepresentation? {
+        val queries = mutableListOf<String>()
+        for (key in ATTRIBUTE_KEYS) {
+            val attributeQuery = "$key:$registrationID"
+            queries.add(attributeQuery)
+            val results = users.searchByAttributes(attributeQuery)
+            results.firstOrNull { user ->
+                user.attributes?.get(key)?.any { it == registrationID } == true
+            }?.let { return it }
+        }
+        logger.debug {
+            "Could not find user for registrationID '$registrationID' using queries '${
+                queries.joinToString(
+                    ", "
+                )
+            }'"
+        }
         return null
     }
 
-    private fun findUserByUsername(users: UsersResource, login: String): UserRepresentation? {
-        return try {
-            users.search(login, 0, 1) // exact match, limit 1
-                .firstOrNull()
-        } catch (e: Exception) {
-            logger.warn { "Error searching by username: ${e.message}" }
-            null
-        }
+    fun getRegistrationIDCandidates(user: UserRepresentation): List<String> {
+        val results = mutableSetOf<String>()
+        user.username?.let { results.add(it) }
+        user.email?.let { results.add(it) }
+        user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.firstOrNull()?.let { results.add(it) }
+        user.attributes?.get("swissEduPersonUniqueID")?.firstOrNull()?.let { results.add(it) }
+        return results.toList()
     }
 
-    private fun findUserByEmail(users: UsersResource, login: String): UserRepresentation? {
-        return try {
-            users.search(null, null, null, login, 0, 1)
-                .firstOrNull()
-        } catch (e: Exception) {
-            logger.warn { "Error searching by email: ${e.message}" }
-            null
-        }
+    @Cacheable("RoleService.getRegistrationIDCandidates", key = "#registrationID")
+    fun getRegistrationIDCandidates(registrationID: String): List<String> {
+        val user = findUserByAllCriteria(registrationID) ?: return emptyList()
+        return getRegistrationIDCandidates(user)
     }
 
-    private fun findUserByAttributes(users: UsersResource, login: String): UserRepresentation? {
-        return try {
-            val queries = mutableListOf<String>()
-            for (key in ATTRIBUTE_KEYS) {
-                val attributeQuery = "$key:$login"
-                queries.add(attributeQuery)
-                val results = users.searchByAttributes(attributeQuery)
-                results.firstOrNull { user ->
-                    user.attributes?.get(key)?.any { it == login } == true
-                }?.let { return it }
+    /* Managing user roles */
+
+    private val semaphore = Semaphore(1)
+
+    fun initializeUserRoles(username: String, courseService: CourseService) {
+        try {
+            semaphore.acquire()
+            val user = findUserByAllCriteria(username)
+            if (user == null) {
+                logger.error { "Trying to initialize roles for $username: no matching username in Keycloak" }
+            } else {
+                // get all possible names that this user might be identified as
+                val searchNames = getRegistrationIDCandidates(user)
+                // check all courses if the user has been registered under one of the possible identifiers
+                val roles = courseService.getUserRoles(searchNames)
+                logger.info { "Initializing roles for $username: $roles" }
+                // add the corresponding Keycloak roles
+                user.toResource().roles().realmLevel().add(roles.map {
+                    getRoleByName(it).toRepresentation()
+                })
+                // set the roles_initialized_at attribute to the current time (prevents future calls to this method)
+                val attributes = user.attributes ?: mutableMapOf()
+                attributes["roles_initialized_at"] = listOf(LocalDateTime.now().toString())
+                user.attributes = attributes
+                user.toResource().update(user)
             }
-            logger.debug { "Could not find user for login '$login' using queries '${queries.joinToString(",")}'" }
-            null
         } catch (e: Exception) {
-            logger.warn { "Error searching by attributes: ${e.message}" }
-            null
+            logger.error { "Error initializing roles for $username: ${e.message}" }
+            throw e
+        } finally {
+            semaphore.release()
         }
     }
 
-    @CacheEvict("userRoles", allEntries = true)
-    fun setRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
+    fun updateRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
         val roleName = role.withCourse(course.slug)
-        val realmRole = accessRealm.roles()[roleName]
-        val realmRoleRepresentation = realmRole.toRepresentation()
-        // remove role from users which are not in usernames list
-        logger.debug { "removing users to $course: $toRemove" }
-        toRemove.forEach { login ->
-            val username = usernameForLogin(login)
-            try {
-                // keycloak username search with exact match does not work correctly.
-                // use non-exact match but then filter the result.
-                val users = accessRealm.users()
-                    .searchByUsername(username, false)
-                val user = users.firstOrNull { it.username == username }
-
-                if (user != null) {
-                    logger.debug { "Removing role $roleName from ${user.username}" }
-                    accessRealm.users()[user.id].roles().realmLevel().remove(listOf(realmRoleRepresentation))
-                } else {
-                    logger.warn { "User with username $username not found" }
+        val realmRoleRepresentation = getRoleByName(roleName).toRepresentation()
+        logger.debug { "removing users from $course $roleName matching registrationIDs : $toRemove" }
+        toRemove.forEach { registrationID ->
+            val user = findUserByAllCriteria(registrationID)
+            if (user == null) {
+                logger.warn { "User with registrationID $registrationID not found" }
+            } else {
+                try {
+                    logger.debug { "Removing role $roleName from user ${user.username} (registrationID: $registrationID)" }
+                    user.toResource().roles().realmLevel().remove(listOf(realmRoleRepresentation))
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to remove role $roleName from user ${user.username} (registrationID: $registrationID)" }
                 }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to remove role $roleName to user $username" }
             }
         }
-        // add role to all users in usernames list
-        logger.debug { "adding users to $course: ${toAdd}" }
-        toAdd.forEach { login ->
-            val username = usernameForLogin(login)
-            try {
-                // keycloak username search with exact match does not work correctly.
-                // use non-exact match but then filter the result.
-                val users = accessRealm.users()
-                    .searchByUsername(username, false)
-                val user = users.firstOrNull { it.username == username }
-
-                if (user != null) {
-                    logger.debug { "Adding role $roleName to ${user.username}" }
-                    accessRealm.users()[user.id].roles()
-                        .realmLevel()
-                        .add(listOf(realmRoleRepresentation))
-                } else {
-                    logger.warn { "User with username $username not found" }
+        logger.debug { "adding users to $course $roleName matching registrationIDs : $toAdd" }
+        toAdd.forEach { registrationID ->
+            val user = findUserByAllCriteria(registrationID)
+            if (user == null) {
+                logger.warn { "User with registrationID $registrationID not found" }
+            } else {
+                try {
+                    logger.debug { "Adding role $roleName to user ${user.username} (registrationID: $registrationID)" }
+                    user.toResource().roles().realmLevel().add(listOf(realmRoleRepresentation))
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to add role $roleName to user ${user.username} (registrationID: $registrationID)" }
                 }
-            } catch (e: Exception) {
-                logger.error(e) { "Failed to add role $roleName to user $username" }
             }
         }
     }
 
-
-    fun createCourseRoles(courseSlug: String?): String? {
-        val studentRole = Role.STUDENT.withCourse(courseSlug)
+    fun createCourseRoles(courseSlug: String): String? {
+        val studentRoleName = Role.STUDENT.withCourse(courseSlug)
         return accessRealm.roles().list(courseSlug, true).stream()
-            .filter { role: RoleRepresentation -> role.name == studentRole }.findFirst().orElseGet {
+            // if the roles already exists, just return the base student role
+            .filter { role: RoleRepresentation -> role.name == studentRoleName }.findFirst()
+            // otherwise create the role hierarchy
+            .orElseGet {
+                // the basic role is equal to the course slug, e.g.: "course-name"
                 val basicCourseRole = RoleRepresentation()
                 basicCourseRole.name = courseSlug
                 accessRealm.roles().create(basicCourseRole)
-                Arrays.stream(Role.entries.toTypedArray()).forEach { role ->
+                // create the different group roles, i.e.:
+                // "course-name-student"
+                // "course-name-assistant"
+                // "course-name-supervisor"
+                // these have sub-roles (e.g., "course-name" and "student")
+                Role.entries.forEach { role ->
                     val userRole = RoleRepresentation()
                     userRole.name = role.withCourse(courseSlug)
                     userRole.isComposite = true
                     val userRoleComposites = Composites()
-                    val associatedRoles: MutableSet<String> =
-                        SetUtils.hashSet(courseSlug, role.jsonName)
+                    val associatedRoles: MutableSet<String> = mutableSetOf(courseSlug, role.jsonName)
                     role.subRole?.let { subRole -> associatedRoles.add(subRole.withCourse(courseSlug)) }
                     userRoleComposites.realm = associatedRoles
                     userRole.composites = userRoleComposites
                     accessRealm.roles().create(userRole)
                 }
-                accessRealm.roles()[studentRole].toRepresentation()
+                getRoleByName(studentRoleName).toRepresentation()
             }.id
     }
 
-    fun registerSupervisor(memberDTO: MemberDTO, rolesToAssign: List<RoleRepresentation>?): String {
-        val member =
-            accessRealm.users().search(memberDTO.username).stream().findFirst().map { user: UserRepresentation ->
-                accessRealm.users()[user.id].roles().realmLevel().add(rolesToAssign)
-            }
-        return memberDTO.username!! // TODO: safety
-    }
-
-    fun registerSupervisor(newMember: MemberDTO, courseSlug: String?): String {
-        val role = Role.SUPERVISOR
-        val realmRole = accessRealm.roles()[role.withCourse(courseSlug)]
-        val existingMembers = realmRole.getUserMembers(0, -1)
-        val rolesToAssign = listOf(realmRole.toRepresentation())
-        return existingMembers.map { obj -> obj.username }
-            .filter { username: String -> username == newMember.username }
-            .firstOrNull() ?: registerSupervisor(newMember, rolesToAssign)
-    }
-
-    fun getMembers(courseSlug: String): MutableList<UserRepresentation>? {
-        return accessRealm.roles()[Role.STUDENT.withCourse(courseSlug)]
-            .getUserMembers(0, -1)
-    }
-
-    @Cacheable(value = ["userRoles"], key = "#username")
-    fun getUserRoles(username: String, userId: String): MutableList<RoleRepresentation> {
-        return accessRealm.users()[userId].roles().realmLevel().listEffective()
-    }
-
-    fun studentMatchesUser(student: String, user: UserRepresentation): Boolean {
-        val matchByUsername = user.username == student
-        val matchByAffiliationID =
-            user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it == student } == true
-        val matchByAffiliationEmail =
-            user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it == student } == true
-        val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it == student } == true
-        val matchByEmail = user.email == student
-        return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
-    }
-
-    fun userRegisteredForCourse(user: UserRepresentation, registrationIDs: Set<String>): Boolean {
-        val matchByUsername = user.username in registrationIDs
-        val matchByAffiliationID =
-            user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.any { it in registrationIDs } == true
-        val matchByAffiliationEmail =
-            user.attributes?.get("swissEduIDLinkedAffiliationMail")?.any { it in registrationIDs } == true
-        val matchByPersonID = user.attributes?.get("swissEduPersonUniqueID")?.any { it in registrationIDs } == true
-        val matchByEmail = user.email in registrationIDs
-        return (matchByUsername || matchByAffiliationID || matchByAffiliationEmail || matchByPersonID || matchByEmail)
-    }
-
-    fun updateRoleTimestamp(user: UserRepresentation): UserRepresentation {
-        val currentAttributes = user.attributes ?: mutableMapOf()
-        currentAttributes["roles_synced_at"] = listOf(LocalDateTime.now().toString())
-        user.attributes = currentAttributes
-        return user
-    }
-
-    // TODO merge the next two methods
-    fun updateStudentRoles(slug: String, registrationIDs: Set<String>, roleName: String) {
-        val role = accessRealm.roles()[roleName]
-        val roleRepresentation = role.toRepresentation()
-        logger.debug { "A: updating role ${roleRepresentation}" }
-        role.getUserMembers(0, -1).toSet()
-            .filter { member: UserRepresentation ->
-                registrationIDs.stream().noneMatch { student: String -> studentMatchesUser(student, member) }
-            }
-            .forEach { member: UserRepresentation ->
-                logger.debug { "A: removing role ${roleRepresentation} from ${member.username}" }
-                accessRealm.users()[member.id].roles().realmLevel().remove(listOf(roleRepresentation))
-            }
-        accessRealm.users().list(0, -1).forEach { user ->
-            registrationIDs
-                .filter { studentMatchesUser(it, user) }
-                .map {
-                    logger.debug { "A: adding role ${roleRepresentation} to ${user.username}" }
-                    accessRealm.users()[user.id].roles().realmLevel().add(listOf(roleRepresentation))
-                    accessRealm.users()[user.id].update(updateRoleTimestamp(user))
-                }
-        }
-    }
-
-    fun updateStudentRoles(course: Course, username: String) {
-        val registeredStudents = course.registeredStudents
-        val registeredAssistants = course.assistants
-        val studentRoleName = Role.STUDENT.withCourse(course.slug)
-        val assistantRoleName = Role.ASSISTANT.withCourse(course.slug)
-        val studentRole = accessRealm.roles()[studentRoleName]
-        val assistantRole = accessRealm.roles()[assistantRoleName]
-        val studentRoleToAdd = studentRole.toRepresentation()
-        val assistantRoleToAdd = assistantRole.toRepresentation()
-        val bothRoles = listOf(studentRole, assistantRole)
-        val bothRolesToAdd = listOf(studentRoleToAdd, assistantRoleToAdd)
-        logger.debug { "B: updating roles for ${username} (roles to sync from course ${course.slug}: ${bothRoles})" }
-        bothRoles.map { it.getUserMembers(0, -1) }.flatten().toSet()
-            .filter {
-                studentMatchesUser(username, it)
-            }
-            .forEach {
-                logger.debug { "B: removing ${bothRoles} from ${username}" }
-                accessRealm.users()[it.id].roles().realmLevel().remove(bothRolesToAdd)
-            }
-        accessRealm.users().list(0, -1).forEach {
-            if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registeredStudents)) {
-                logger.debug { "B: adding role ${studentRoleToAdd} to ${it.username}" }
-                accessRealm.users()[it.id].roles().realmLevel().add(listOf(studentRoleToAdd))
-                accessRealm.users()[it.id].update(updateRoleTimestamp(it))
-            }
-            if (studentMatchesUser(username, it) && userRegisteredForCourse(it, registeredAssistants)) {
-                logger.debug { "B: adding roles ${assistantRoleToAdd} to ${it.username}" }
-                accessRealm.users()[it.id].roles().realmLevel().add(listOf(assistantRoleToAdd))
-                accessRealm.users()[it.id].update(updateRoleTimestamp(it))
-            }
-            if (studentMatchesUser(username, it)) {
-                logger.debug { "Y: matching user ${username} to ${it.username} did not register for course ${course.slug}" }
-            }
-        }
+    fun setCourseSupervisor(courseSlug: String?): String {
+        val registrationID = SecurityContextHolder.getContext().authentication.name
+        val roleResource = getRoleByName(Role.SUPERVISOR.withCourse(courseSlug))
+        val user = findUserByAllCriteria(registrationID)
+        user?.toResource()?.roles()?.realmLevel()?.add(listOf(roleResource.toRepresentation()))
+        return registrationID
     }
 
     fun getOnlineCount(courseSlug: String): Int {
@@ -307,7 +257,7 @@ class RoleService(
         val resource = accessRealm.clients().get(clientRepresentation.id)
         val sessions = resource.getUserSessions(0, 1000).filter {
             // only care about users who are students in the given course
-            val roles = getUserRoles(it.username, it.userId)
+            val roles = accessRealm.users()[it.userId].roles().realmLevel().listEffective()
             val matchesRole = roles.any { role -> role.name == "$courseSlug-student" }
             // users who were active in the last 5 minutes are considered online
             val recentActivity = it.lastAccess + 300 < System.currentTimeMillis()
@@ -316,14 +266,4 @@ class RoleService(
         return sessions.size
     }
 
-    @Cacheable("getAllUserIdsFor", key = "#userId")
-    fun getAllUserIdsFor(userId: String): List<String> {
-        val user = findUserByAllCriteria(userId) ?: return emptyList()
-        val results = mutableListOf<String>()
-        user.username?.let { results.add(it) }
-        user.email?.let { results.add(it) }
-        user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.firstOrNull()?.let { results.add(it) }
-        user.attributes?.get("swissEduPersonUniqueID")?.firstOrNull()?.let { results.add(it) }
-        return results
-    }
 }
