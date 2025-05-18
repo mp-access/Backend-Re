@@ -20,7 +20,6 @@ import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
 import org.apache.commons.collections4.ListUtils
 import org.apache.commons.io.FileUtils
-import org.apache.tika.Tika
 import org.keycloak.representations.idm.UserRepresentation
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
@@ -93,10 +92,19 @@ class CourseService(
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
     private val fileService: FileService,
-    private val tika: Tika
 ) {
 
     private val logger = KotlinLogging.logger {}
+
+    @Transactional
+    fun initCache() {
+        courseRepository.findAllByDeletedFalse().forEach {
+            it.registeredStudents.map {
+                roleService.findUserByAllCriteria(it)
+            }
+        }
+
+    }
 
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)

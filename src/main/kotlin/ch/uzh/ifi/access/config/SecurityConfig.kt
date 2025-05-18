@@ -145,8 +145,8 @@ class SecurityConfig(private val env: Environment) {
 
     @Component
     class AuthenticationSuccessListener(
+        val roleService: RoleService,
         val courseService: CourseService,
-        val roleService: RoleService
     ) : ApplicationListener<AuthenticationSuccessEvent> {
 
         override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
