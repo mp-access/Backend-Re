@@ -5,5 +5,5 @@ import lombok.Data
 
 @Data
 class ExampleDurationDTO(
-    var duration: Int
+    var duration: Int = 0
 )
