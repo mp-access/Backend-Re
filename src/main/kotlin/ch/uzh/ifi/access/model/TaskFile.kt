@@ -23,10 +23,10 @@ class TaskFile {
     @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 
-    @Column(nullable=true, columnDefinition="text")
+    @Column(nullable = true, columnDefinition = "text")
     var template: String? = null
 
-    @Column(nullable=true, columnDefinition="bytea")
+    @Column(nullable = true, columnDefinition = "bytea")
     var templateBinary: ByteArray? = null
 
     val binary: Boolean
@@ -51,5 +51,5 @@ class TaskFile {
     var instruction = false
 
     val isPublished: Boolean
-        get() = !grading && instruction || visible || (solution && task?.assignment?.isPastDue?: false)
+        get() = !grading && instruction || visible || (solution && task?.assignment?.isPastDue ?: false)
 }

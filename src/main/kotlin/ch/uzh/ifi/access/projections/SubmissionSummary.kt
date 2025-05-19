@@ -17,4 +17,3 @@ interface SubmissionSummary {
     val files: List<Any?>?
     val persistentResultFiles: List<Any?>?
 }
-

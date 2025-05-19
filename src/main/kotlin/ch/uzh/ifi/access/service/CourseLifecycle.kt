@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
-import ch.uzh.ifi.access.model.dto.MemberDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -64,15 +63,13 @@ class CourseLifecycle(
         logger.debug { "Updating ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
-        val supervisor = roleService.getCurrentUser()
-        val supervisorDTO = MemberDTO(supervisor, supervisor)
-        //courseDTO.supervisors.add(supervisorDTO)
         modelMapper.map(courseDTO, course)
         course.examples.clear() // TODO: The model mapper maps examples which should not. So I have to clear them first
         course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
-        course.studentRole = roleService.createCourseRoles(course.slug)
-        course.supervisors.add(roleService.registerSupervisor(supervisorDTO, course.slug))
+        course.studentRole = roleService.createCourseRoles(course.slug!!)
+        val supervisorRegistrationID = roleService.setCourseSupervisor(course.slug)
+        course.supervisors.add(supervisorRegistrationID)
 
         // Disable all global files, re-enable the relevant ones later
         course.globalFiles.forEach { file -> file.enabled = false }
