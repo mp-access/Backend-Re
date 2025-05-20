@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -51,7 +52,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         edit: String,
         user: String = "student@uzh.ch",
         task: String = "variable_assignment"
-    ) {
+    ): ResultActions {
         val prefix = when (task) {
             "carpark" -> "03_classes/carpark_multiple_inheritance"
             "testing" -> "02_basics/for_testing"
@@ -95,18 +96,16 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
-            .andDo {
-                // get the submission history
-                mvc.perform(
-                    get("/courses/access-mock-course/assignments/$url/users/$user")
-                        .contentType("application/json")
-                        .with(csrf())
-                )
-                    .andDo(logResponse)
-                    .andExpect(status().isOk)
-                    .andExpect(jsonPath("$.submissions[0].command", `is`(command)))
-                    .andExpect(jsonPath("$.submissions[0].points", points))
-            }
+        // get the submission history
+        return mvc.perform(
+            get("/courses/access-mock-course/assignments/$url/users/$user")
+                .contentType("application/json")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.submissions[0].command", `is`(command)))
+            .andExpect(jsonPath("$.submissions[0].points", points))
     }
 
     @Test
@@ -145,8 +144,15 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         authorities = ["student", "access-mock-course-student", "access-mock-course"]
     )
     @Order(0)
-    fun `Can submit half-correct solution to receive half points`() {
+    fun `Can submit half-correct solution to receive half points and receive correct hint`() {
         submissionTest("grade", `is`(1.0), "x = 42")
+            .andExpect(
+                jsonPath(
+                    "$.submissions[0].output", `is`(
+                        "The solution seems to contain x = 42, please assign something slightly more complex"
+                    )
+                )
+            )
     }
 
     @Test

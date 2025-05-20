@@ -225,7 +225,7 @@ class ExecutionService(
                     }
                 }
                 results.hints.addAll(persistentResultFileErrors)
-                submission.output = results.hints.toList().firstOrNull()
+                submission.output = results.hints.filterNotNull().firstOrNull()
                 if (results.points != null) {
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
