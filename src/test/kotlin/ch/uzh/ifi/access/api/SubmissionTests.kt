@@ -180,7 +180,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         )
             .andDo(logResponse)
             .andExpect(status().isForbidden)
-            .andExpect(status().reason(containsString("Submission rejected - no remaining attempts!")))
+            .andExpect(status().reason(containsString("Submission rejected - no remaining attempts")))
     }
 
     @Test

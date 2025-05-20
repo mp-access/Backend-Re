@@ -30,21 +30,6 @@ class CourseRootController(
     fun editCourse(@RequestBody courseDTO: CourseDTO): String? {
         return courseService.editCourse(courseDTO).slug
     }
-
-    /*
-    @GetMapping("/pruneSubmissions")
-    @PreAuthorize("hasRole('supervisor')")
-    fun pruneSubmissions(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
-        courseService.globalPruneSubmissions()
-        return "done"
-    }
-    */
-
-    @PostMapping("/contact")
-    fun sendMessage(@RequestBody contactDTO: ContactDTO?) {
-        courseService.sendMessage(contactDTO!!)
-    }
-
 }
 
 @RestController
@@ -133,11 +118,10 @@ class CourseController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
-        // TODO: what prevents a client from sending a grading command with restricted = false?
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
-    @GetMapping("/{courseSlug}/studentPoints")
+    @GetMapping("/{courseSlug}/points")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudentsWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
         return courseService.getStudentsWithPoints(courseSlug)

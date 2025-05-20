@@ -88,10 +88,13 @@ class RoleService(
         )
     }
 
+    fun getCurrentUsername(): String {
+        return SecurityContextHolder.getContext().authentication.name
+    }
+
     fun UserRepresentation.toResource(): UserResource {
         return proxy.getUserResourceById(this.id)
     }
-
 
     /* Searching and finding users */
 
@@ -269,7 +272,7 @@ class RoleService(
     }
 
     fun setCourseSupervisor(courseSlug: String?): String {
-        val registrationID = SecurityContextHolder.getContext().authentication.name
+        val registrationID = getCurrentUsername()
         val roleResource = getRoleByName(Role.SUPERVISOR.withCourse(courseSlug))
         val user = proxy.findUserByAllCriteria(registrationID)
         user?.toResource()?.roles()?.realmLevel()?.add(listOf(roleResource.toRepresentation()))

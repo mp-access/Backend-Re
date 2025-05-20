@@ -19,10 +19,6 @@ class FileData(
     var contentBinary: ByteArray? = null,
 ) {
 
-    fun isBinary(): Boolean {
-        return contentBinary != null
-    }
-
     fun validated(): FileData {
         if (path != null &&
             name != null &&
@@ -34,9 +30,7 @@ class FileData(
 
 }
 
-class InvalidFileException : Throwable() {
-
-}
+class InvalidFileException : Throwable()
 
 // Abstracts away much of the hassle of dealing with various file types
 @Service

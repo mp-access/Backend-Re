@@ -25,7 +25,6 @@ class CourseLifecycle(
     private val workingDir: Path,
     private val roleService: RoleService,
     private val courseRepository: CourseRepository,
-//    private val persistentResultFilePathRepository: PersistentResultFilePathRepository,
     private val modelMapper: ModelMapper,
     private val dockerClient: DockerClient,
     private val cci: CourseConfigImporter,
@@ -33,6 +32,8 @@ class CourseLifecycle(
 ) {
 
     private val logger = KotlinLogging.logger {}
+
+    // TODO: proper config validation
 
     fun createFromRepository(courseDTO: CourseDTO): Course {
         val coursePath = cloneRepository(courseDTO)
