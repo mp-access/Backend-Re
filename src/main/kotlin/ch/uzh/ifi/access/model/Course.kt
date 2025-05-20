@@ -68,7 +68,7 @@ class Course {
     @ElementCollection
     var registeredStudents: MutableSet<String> = mutableSetOf()
 
-    val studentsCount: Long
+    val participantCount: Long
         get() = registeredStudents.size.toLong()
 
     @Transient

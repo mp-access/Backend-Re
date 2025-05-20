@@ -23,7 +23,7 @@ interface CourseOverview {
 
     @get:Value("#{@roleService.getOnlineCount(target.slug)}")
     val onlineCount: Long?
-    val studentsCount: Long?
+    val participantCount: Long?
 
     @get:Value("#{@courseService.getTeamMembers(target.supervisors)}")
     val supervisors: Set<MemberOverview>?

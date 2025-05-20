@@ -16,7 +16,7 @@ interface CourseSummary {
 
     @get:Value("#{@courseService.getMaxPoints(target.slug)}")
     val maxPoints: Double?
-    val studentsCount: Long?
+    val participantCount: Long?
 
     @get:Value("#{@courseService.getTeamMembers(target.supervisors)}")
     val supervisors: Set<MemberOverview?>?
