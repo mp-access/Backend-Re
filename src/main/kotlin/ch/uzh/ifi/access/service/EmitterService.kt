@@ -58,7 +58,6 @@ class EmitterService {
             }
         }, 1, TimeUnit.SECONDS)
 
-        logger.debug { "Nr of emitters[slug]:  (${emitters[slug]?.size})" }
         return emitter
     }
 
