@@ -16,9 +16,7 @@ class CacheConfig {
             "calculateAvgTaskPoints",
             "getStudent",
             "studentWithPoints",
-            "userRoles",
-            "usernameForLogin",
-            "getAllUserIdsFor",
+            "RoleService.getRegistrationIDCandidates",
             "getMaxPoints",
             "assignmentMaxPoints",
         )

@@ -13,6 +13,7 @@ interface CourseInformationPublic {
     var university: String?
     var period: String?
 }
+
 @Projection(types = [AssignmentInformation::class])
 interface AssignmentInformationPublic {
     var language: String?

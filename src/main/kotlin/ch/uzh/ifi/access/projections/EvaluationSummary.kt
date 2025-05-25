@@ -1,4 +1,5 @@
 package ch.uzh.ifi.access.projections
+
 import ch.uzh.ifi.access.model.Evaluation
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection

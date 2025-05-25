@@ -19,12 +19,16 @@ import java.time.temporal.ChronoUnit
 class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest() {
 
     fun getTask(): Task {
-        return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug("access-mock-course", "classes", "carpark-multiple-inheritance")!!
+        return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
+            "access-mock-course",
+            "classes",
+            "carpark-multiple-inheritance"
+        )!!
     }
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Task basic metadata correct`() {
         val task = getTask()
         assertEquals("carpark-multiple-inheritance", task.slug)
@@ -36,7 +40,7 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Task evaluator correct`() {
         val task = getTask()
         assertThat(task.dockerImage, startsWith("python"))
@@ -47,7 +51,7 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Task number of files correct`() {
         val files = getTask().files
         assertEquals(files.filter { it.instruction }.size, 1)
@@ -59,7 +63,7 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Task files correct`() {
         val files = getTask().files
         files.map {
@@ -70,11 +74,13 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
                     assertThat(it.template, equalTo(null))
                     assertThat(it.templateBinary, not(equalTo(null)))
                 }
+
                 "/instructions_en.md" -> {
                     assertEquals(it.mimeType, "text/x-web-markdown")
                     assertThat(it.templateBinary, equalTo(null))
                     assertThat(it.template, not(equalTo(null)))
                 }
+
                 else -> {
                     assertEquals(it.mimeType, "text/x-python")
                     assertThat(it.templateBinary, equalTo(null))
@@ -87,7 +93,7 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
 
     @Test
     @Transactional
-    @WithMockUser(username="supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["access-mock-course-supervisor"])
     fun `Task information correct`() {
         val task = getTask()
         assertThat(task.information, hasKey("en"))
@@ -101,4 +107,3 @@ class ImportTaskTests(@Autowired val taskRepository: TaskRepository) : BaseTest(
 
 
 }
-

@@ -131,6 +131,7 @@ tasks.withType<Test> {
     useJUnitPlatform()
     filter {
         includeTestsMatching("ch.uzh.ifi.access.AllTests")
+        includeTestsMatching("ch.uzh.ifi.access.PerformanceTests")
     }
     testLogging {
         events("passed", "skipped", "failed")

@@ -52,25 +52,25 @@ class CourseServiceForCaching(
     private val courseRepository: CourseRepository,
 ) {
 
-    @Cacheable("studentWithPoints", key = "{#courseSlug, #login}")
-    fun getStudentWithPoints(courseSlug: String, login: String): StudentDTO {
-        val user = roleService.findUserByAllCriteria(login)
+    @Cacheable("studentWithPoints", key = "{#courseSlug, #registrationID}")
+    fun getStudentWithPoints(courseSlug: String, registrationID: String): StudentDTO {
+        val user = roleService.findUserByAllCriteria(registrationID)
         return if (user != null) {
             // TODO!: make sure evaluations are saved under only a single user ID in the future!
             // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
-            val userIds = roleService.getAllUserIdsFor(user.username)
-            val coursePoints = courseRepository.getTotalPoints(courseSlug, userIds.toTypedArray()) ?: 0.0
+            val registrationIDs = roleService.getRegistrationIDCandidates(user.username)
+            val coursePoints = courseRepository.getTotalPoints(courseSlug, registrationIDs.toTypedArray()) ?: 0.0
             val studentDTO = StudentDTO(
                 user.firstName,
                 user.lastName,
                 user.email,
                 coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(),
                 user.username,
-                login
+                registrationID
             )
             studentDTO
         } else {
-            StudentDTO(registrationId = login)
+            StudentDTO(registrationId = registrationID)
         }
     }
 
@@ -121,7 +121,7 @@ class CourseService(
         }
     }
 
-    private fun verifyUserId(@Nullable userId: String?): String {
+    private fun getCurrentUsername(@Nullable userId: String?): String {
         return userId ?: SecurityContextHolder.getContext().authentication.name
     }
 
@@ -140,17 +140,11 @@ class CourseService(
     }
 
     fun getTaskById(taskId: Long): Task {
-        return taskRepository.findById(taskId).get() ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No task found with the ID $taskId"
-        )
+        return taskRepository.findById(taskId).get()
     }
 
     fun getTaskFileById(fileId: Long): TaskFile {
-        return taskFileRepository.findById(fileId).get() ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No task file found with the ID $fileId"
-        )
+        return taskFileRepository.findById(fileId).get()
     }
 
     fun getCoursesOverview(): List<CourseOverview> {
@@ -339,11 +333,11 @@ class CourseService(
     }
 
     fun getRemainingAttempts(taskId: Long?, userId: String?, maxAttempts: Int): Int {
-        return getEvaluation(taskId, verifyUserId(userId))?.remainingAttempts ?: maxAttempts
+        return getEvaluation(taskId, getCurrentUsername(userId))?.remainingAttempts ?: maxAttempts
     }
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        val res = getEvaluation(taskId, verifyUserId(userId))?.nextAttemptAt
+        val res = getEvaluation(taskId, getCurrentUsername(userId))?.nextAttemptAt
         return res
     }
 
@@ -390,19 +384,19 @@ class CourseService(
     }
 
     fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
-        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        val userIds = roleService.getRegistrationIDCandidates(getCurrentUsername(userId))
         return calculateTaskPoints(taskId, userIds)
     }
 
     fun calculateTaskPoints(taskId: Long?, userIds: List<String>): Double {
         // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
         return userIds.maxOfOrNull {
-            getEvaluation(taskId, verifyUserId(it))?.bestScore ?: 0.0
+            getEvaluation(taskId, getCurrentUsername(it))?.bestScore ?: 0.0
         } ?: 0.0
     }
 
     fun calculateAssignmentPoints(tasks: List<Task>): Double {
-        val userIds = roleService.getAllUserIdsFor(verifyUserId(null))
+        val userIds = roleService.getRegistrationIDCandidates(getCurrentUsername(null))
         return calculateAssignmentPoints(tasks, userIds)
 
     }
@@ -417,7 +411,7 @@ class CourseService(
     }
 
     fun calculateCoursePoints(slug: String, userId: String?): Double {
-        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        val userIds = roleService.getRegistrationIDCandidates(getCurrentUsername(userId))
         return courseRepository.getTotalPoints(slug, userIds.toTypedArray()) ?: 0.0
     }
 
@@ -427,7 +421,7 @@ class CourseService(
     }
 
     fun getRank(courseId: Long?): Int {
-        val userId = verifyUserId(null)
+        val userId = getCurrentUsername(null)
         return ListUtils.indexOf(getLeaderboard(courseId)) { rank: Rank -> rank.email == userId } + 1
     }
 
@@ -892,43 +886,26 @@ exit ${'$'}exit_code;
 
     fun sendMessage(contactDTO: ContactDTO) {
         val filePath =
-            workingDir.resolve("contact").resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+            workingDir.resolve("contact")
+            .resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
         Files.createDirectories(filePath.parent)
         if (!filePath.toFile().exists()) Files.createFile(filePath)
         Files.writeString(filePath, contactDTO.formatContent())
     }
 
     @Transactional
-    @Caching(
-        evict = [
-            CacheEvict(value = ["usernameForLogin"], key = "#username"),
-            CacheEvict(value = ["userRoles"], key = "#username"),
-            CacheEvict(value = ["usernameForLogin"], key = "#username"),
-            CacheEvict(value = ["getAllUserIdsFor"], key = "#username"),
-        ]
-    )
-    fun updateStudentRoles(username: String) {
-        logger.debug { "CourseService updating ${username} roles for ${getCourses().size} courses" }
-        getCourses().forEach { course ->
-            logger.debug { "syncing to ${course.slug}" }
-            roleService.updateStudentRoles(course, username)
-        }
-    }
-
-    @Transactional
-    @Caching(
-        evict = [
-            CacheEvict(value = ["userRoles"], allEntries = true),
-        ]
-    )
-    fun setRoleUsers(course: Course, usernames: List<String>, role: Role): Pair<List<String>, List<String>> {
+    fun updateCourseRegistration(
+        course: Course,
+        registrationIDs: List<String>,
+        role: Role
+    ): Pair<List<String>, List<String>> {
         val existingUsers = when (role) {
             Role.SUPERVISOR -> course.supervisors
             Role.ASSISTANT -> course.assistants
             Role.STUDENT -> course.registeredStudents
         }
 
-        val newUsersSet = usernames.toSet()
+        val newUsersSet = registrationIDs.toSet()
         val existingUsersSet = existingUsers.toSet()
 
         val removedUsers = existingUsersSet.minus(newUsersSet).toList()
@@ -955,9 +932,18 @@ exit ${'$'}exit_code;
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
     }
 
-    fun getTaskProgress(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskProgressDTO {
+    fun getTaskProgress(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): TaskProgressDTO {
+        // there is one special rule for this function:
+        // if only includeGrade is true and submissionLimit is 1, the BEST, latest submission will be included
+        // in all other cases, the <submissionLimit> most recent submissions are included in reverse chronological order
+        val onlyLatestGraded = submissionLimit == 1 && includeGrade && !includeTest && !includeRun
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        val userIds = roleService.getAllUserIdsFor(verifyUserId(userId))
+        val userIds = roleService.getRegistrationIDCandidates(getCurrentUsername(userId))
         logger.debug { "Searching for evaluations for $userId ($userIds)..." }
         // TODO: refactor once single user ID is implemented
         // this preserves existing behavior for now
@@ -986,7 +972,7 @@ exit ${'$'}exit_code;
                 }.toMap().toMutableMap(),
                 listOf()
             )
-        } else {
+        }
             return TaskProgressDTO(
                 userId,
                 taskSlug,
@@ -1001,24 +987,51 @@ exit ${'$'}exit_code;
                         info.instructionsFile
                     )
                 }.toMap().toMutableMap(),
-                evaluation.submissions.sortedBy { it.ordinalNum }.lastOrNull { it.points != null }?.let { listOf(it) }
-                    ?: listOf()
-            )
-        }
+                evaluation.submissions.sortedBy { it.ordinalNum }.reversed()
+                .filter {
+                    (it.command == Command.GRADE && includeGrade) ||
+                    (it.command == Command.TEST && includeTest) ||
+                    (it.command == Command.RUN && includeRun)
+                }
+                .let { submissions ->
+                    if (onlyLatestGraded) listOf(
+                        submissions.first { it.points == evaluation.bestScore }
+                    )
+                    else if (submissionLimit == 0) submissions
+                    else submissions.take(submissionLimit)
+                }
+        )
     }
 
-    private fun getTasksProgress(assignment: Assignment, userId: String): List<TaskProgressDTO> {
-        return assignment.tasks.mapNotNull { task ->
+    private fun getTasksProgress(
+        assignment: Assignment,
+        userId: String,
+        submissionLimit: Int,
+        includeGrade: Boolean,
+        includeTest: Boolean,
+        includeRun: Boolean
+    ): List<TaskProgressDTO> {
+        return assignment.tasks.map { task ->
             getTaskProgress(
                 assignment.course!!.slug!!,
                 assignment.slug!!,
                 task.slug!!,
-                userId
+                userId,
+                submissionLimit,
+                includeGrade,
+                includeTest,
+                includeRun
             )
         }
     }
 
-    fun getAssignmentProgress(courseSlug: String, assignmentSlug: String, userId: String): AssignmentProgressDTO {
+    fun getAssignmentProgress(
+        courseSlug: String, assignmentSlug: String, userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
         return AssignmentProgressDTO(
             userId, assignmentSlug,
@@ -1028,11 +1041,18 @@ exit ${'$'}exit_code;
                     info.title
                 )
             }.toMap().toMutableMap(),
-            getTasksProgress(assignment, userId)
+            getTasksProgress(assignment, userId, submissionLimit, includeGrade, includeTest, includeRun)
         )
     }
 
-    fun getCourseProgress(courseSlug: String, userId: String): CourseProgressDTO {
+    fun getCourseProgress(
+        courseSlug: String,
+        userId: String,
+        submissionLimit: Int = 1,
+        includeGrade: Boolean = true,
+        includeTest: Boolean = false,
+        includeRun: Boolean = false,
+    ): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(
             userId,
@@ -1051,7 +1071,13 @@ exit ${'$'}exit_code;
                             info.title
                         )
                     }.toMap().toMutableMap(),
-                    getTasksProgress(assignment, userId)
+                    getTasksProgress(
+                        assignment, userId,
+                        submissionLimit,
+                        includeGrade,
+                        includeTest,
+                        includeRun
+                    )
                 )
             }.toList()
         )

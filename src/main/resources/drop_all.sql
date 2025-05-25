@@ -1,4 +1,6 @@
--- to regenerate, run from project root:
+-- This can be used to drop all ACCESS data (without deleting Keycloak data)
+
+-- To regenerate, run from project root:
 -- grep -irE '^create' src/main/resources/db | awk -F':' '{print $2}' | sed -e 's/^create/drop/g' | awk '{print $1, $2, "if exists", $3, "cascade;"}'; echo "drop table if exists flyway_schema_history;"
 
 drop table if exists course_registered_students cascade;

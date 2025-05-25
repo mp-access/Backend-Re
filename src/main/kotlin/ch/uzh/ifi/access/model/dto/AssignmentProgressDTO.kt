@@ -9,4 +9,3 @@ class AssignmentProgressDTO(
     val information: MutableMap<String, AssignmentInformationDTO> = mutableMapOf(),
     val tasks: List<TaskProgressDTO>? = null
 )
-

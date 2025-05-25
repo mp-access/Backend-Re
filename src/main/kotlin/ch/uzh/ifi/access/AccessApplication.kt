@@ -15,4 +15,3 @@ class AccessApplication {
 fun main(args: Array<String>) {
     runApplication<AccessApplication>(*args)
 }
-

@@ -1,6 +1,5 @@
 package ch.uzh.ifi.access.model.dto
 
-import ch.uzh.ifi.access.projections.EvaluationSummary
 import ch.uzh.ifi.access.projections.SubmissionSummary
 import com.fasterxml.jackson.annotation.JsonInclude
 

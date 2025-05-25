@@ -105,6 +105,20 @@
           "instructionsFile" : "instructions_en.md"
         }
       }
+    }, {
+      "userId" : "student@uzh.ch",
+      "slug" : "for-testing",
+      "bestScore" : 0.0,
+      "maxPoints" : 4.0,
+      "remainingAttempts" : 6,
+      "maxAttempts" : 6,
+      "information" : {
+        "en" : {
+          "language" : "en",
+          "title" : "For Testing ACCESS",
+          "instructionsFile" : "instructions_en.md"
+        }
+      }
     } ]
   } ]
 }

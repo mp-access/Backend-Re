@@ -30,7 +30,7 @@ class Task {
     // tasks which are not enabled are not referenced by any assignment config
     // it could be that the assignments slug was changed
     var enabled = false
-    
+
     var maxPoints: Double? = null
 
     var maxAttempts: Int? = null

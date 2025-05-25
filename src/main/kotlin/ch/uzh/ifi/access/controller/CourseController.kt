@@ -21,7 +21,6 @@ import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.time.Duration
 import java.time.LocalDateTime
-import java.util.concurrent.Semaphore
 
 
 @RestController
@@ -30,13 +29,13 @@ class CourseRootController(
 ) {
     @PostMapping("/create")
     @PreAuthorize("hasRole('supervisor')")
-    fun createCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
+    fun createCourse(@RequestBody courseDTO: CourseDTO): String? {
         return courseService.createCourse(courseDTO).slug
     }
 
     @PostMapping("/edit")
     @PreAuthorize("hasRole('supervisor')")
-    fun editCourse(@RequestBody courseDTO: CourseDTO, authentication: Authentication): String? {
+    fun editCourse(@RequestBody courseDTO: CourseDTO): String? {
         return courseService.editCourse(courseDTO).slug
     }
 
@@ -104,40 +103,8 @@ class CourseController(
         return courseService.updateCourse(course!!).slug
     }
 
-    private val semaphore = Semaphore(1)
-    private fun updateRoles(authentication: Authentication) {
-        val username = authentication.name
-        try {
-            semaphore.acquire()
-            roleService.findUserByAllCriteria(username)?.let { user ->
-                val attributes = user.attributes ?: mutableMapOf()
-                if (attributes["roles_synced_at"] == null) {
-                    user.attributes = attributes
-                    roleService.getUserResourceById(user.id).update(user)
-                    val searchNames = buildList {
-                        add(user.username)
-                        user.email?.let { add(it) }
-                        attributes["swissEduIDLinkedAffiliationMail"]?.let { addAll(it) }
-                        attributes["swissEduIDAssociatedMail"]?.let { addAll(it) }
-                    }
-                    val roles = courseService.getUserRoles(searchNames)
-                    roleService.setFirstLoginRoles(user, roles)
-                    logger.debug { "Enrolled first-time user $username in their courses" }
-                    attributes["roles_synced_at"] = listOf(LocalDateTime.now().toString())
-                }
-            }
-        } catch (e: Exception) {
-            logger.error { "Error looking up user $username: ${e.message}" }
-            throw e
-        } finally {
-            semaphore.release()
-            logger.debug { "Released semaphore (${semaphore.queueLength} waiting, ${semaphore.availablePermits()} available) for user lookup: $username" }
-        }
-    }
-
     @GetMapping("")
-    fun getCourses(authentication: Authentication): List<CourseOverview> {
-        updateRoles(authentication)
+    fun getCourses(): List<CourseOverview> {
         return courseService.getCoursesOverview()
     }
 
@@ -305,59 +272,93 @@ class CourseController(
 
 
     //@Transactional
-    private fun assignRoles(slug: String, loginNames: List<String>, role: Role) {
+    private fun updateRoles(slug: String, registrationIDs: List<String>, role: Role) {
         val assessment = courseService.getCourseBySlug(slug)
-        // Saves the list of usernames in the database
-        val (remove, add) = courseService.setRoleUsers(assessment, loginNames, role)
+        // Saves the list of registrationIDs in the database
+        val (remove, add) = courseService.updateCourseRegistration(assessment, registrationIDs, role)
         // Grants the correct role to any existing users in usernames
         // This is one of two ways a keycloak user can receive/lose a role, the other way is on first login.
-        roleService.setRoleUsers(assessment, remove, add, role)
-        //return courseService.getAssessmentDetailsBySlug(slug)
+        roleService.updateRoleUsers(assessment, remove, add, role)
     }
 
     @PostMapping("/{course}/assistants")
-    //@PreAuthorize("hasAuthority('API_KEY') or hasRole('owner')")
-    fun registerAssistants(@PathVariable course: String, @RequestBody usernames: List<String>) {
-        return assignRoles(course, usernames, Role.ASSISTANT)
+    fun registerAssistants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
+        return updateRoles(course, registrationIDs, Role.ASSISTANT)
     }
 
     @PostMapping("/{course}/participants")
-    fun registerParticipants(@PathVariable course: String, @RequestBody participants: List<String>) {
-        return assignRoles(course, participants, Role.STUDENT)
+    fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
+        return updateRoles(course, registrationIDs, Role.STUDENT)
     }
 
     @GetMapping("/{course}/participants/{participant}")
-    fun getCourseProgress(@PathVariable course: String, @PathVariable participant: String): CourseProgressDTO? {
+    fun getCourseProgress(
+        @PathVariable course: String, @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,): CourseProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
+
         )
-        return courseService.getCourseProgress(course, user.username)
+        // TODO: reduce the number of parameters being passed around
+        return courseService.getCourseProgress(
+            course,
+            user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
     fun getAssignmentProgress(
         @PathVariable course: String,
         @PathVariable assignment: String,
-        @PathVariable participant: String
+        @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): AssignmentProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
+
         )
-        return courseService.getAssignmentProgress(course, assignment, user.username)
+        return courseService.getAssignmentProgress(
+            course, assignment, user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
     fun getTaskProgress(
         @PathVariable course: String, @PathVariable assignment: String,
-        @PathVariable task: String, @PathVariable participant: String
+        @PathVariable task: String, @PathVariable participant: String,
+        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
+        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): TaskProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"
+
         )
-        return courseService.getTaskProgress(course, assignment, task, user.username)
+        return courseService.getTaskProgress(
+            course, assignment, task, user.username,
+            submissionLimit,
+            includeGrade,
+            includeTest,
+            includeRun
+        )
     }
 
     @GetMapping("/{course}/summary")
