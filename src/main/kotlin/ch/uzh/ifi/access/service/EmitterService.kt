@@ -34,8 +34,11 @@ class EmitterService {
         val emitter = PerishableSseEmitter(id, ZonedDateTime.now(), Duration.ofMinutes(60 * 8).toMillis())
         logger.debug { "SSE emitter created ($id)" }
 
+        emitters[slug]?.entries?.removeIf { (key, _) -> key.startsWith("${slug}_$userId") }
+
         emitter.onCompletion {
             emitters[slug]?.remove(id)
+            logger.debug { "SSE emitter removed ($id)" }
         }
         emitter.onTimeout {
             logger.debug { "SSE connection timed out ($slug)" }
