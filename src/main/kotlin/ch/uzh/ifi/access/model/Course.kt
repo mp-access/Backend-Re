@@ -65,7 +65,7 @@ class Course {
     @ElementCollection
     var assistants: MutableSet<String> = mutableSetOf()
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     var registeredStudents: MutableSet<String> = mutableSetOf()
 
     val participantCount: Long

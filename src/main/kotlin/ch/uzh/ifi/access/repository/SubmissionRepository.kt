@@ -3,7 +3,9 @@ package ch.uzh.ifi.access.repository
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.constants.Command
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.security.access.prepost.PostFilter
 import java.time.LocalDateTime
 
@@ -20,4 +22,8 @@ interface SubmissionRepository : JpaRepository<Submission?, Long?> {
 
     @Query("SELECT DISTINCT s.userId FROM Submission s WHERE s.evaluation.task.assignment.course.id=:courseId AND s.createdAt > :start")
     fun countOnlineByCourse(courseId: Long?, start: LocalDateTime?): List<String>
+
+    @Modifying
+    @Query("UPDATE Submission s SET s.userId = :userId WHERE s.userId IN :name")
+    fun updateUserId(@Param("name") names: List<String>, @Param("userId") userId: String): Int
 }

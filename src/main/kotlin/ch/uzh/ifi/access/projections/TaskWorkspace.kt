@@ -11,7 +11,7 @@ import java.time.LocalDateTime
 interface TaskWorkspace : TaskOverview {
     val isTestable: Boolean
 
-    @get:Value("#{@courseService.getTaskFiles(target.id, target.userId)}")
+    @get:Value("#{@courseService.getTaskFiles(target.id)}")
     val files: List<TaskFile?>?
 
     @get:Value("#{@courseService.getSubmissions(target.id, target.userId)}")

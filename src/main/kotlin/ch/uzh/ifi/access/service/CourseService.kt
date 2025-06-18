@@ -17,7 +17,6 @@ import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
-import java.math.RoundingMode
 import java.nio.file.Path
 import java.time.LocalDateTime
 import java.util.stream.Stream
@@ -25,31 +24,16 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 @Service
-class CourseServiceForCaching(
-    private val roleService: RoleService,
-    private val courseRepository: CourseRepository,
+class UserIdUpdateService(
+    val evaluationRepository: EvaluationRepository,
+    val submissionRepository: SubmissionRepository
 ) {
-
-    @Cacheable("studentWithPoints", key = "{#courseSlug, #registrationID}")
-    fun getStudentWithPoints(courseSlug: String, registrationID: String): StudentDTO {
-        val user = roleService.findUserByAllCriteria(registrationID)
-        return if (user != null) {
-            // TODO!: make sure evaluations are saved under only a single user ID in the future!
-            // for now, retrieve all possible user IDs from keycloak and retrieve all matching evaluations
-            val registrationIDs = roleService.getRegistrationIDCandidates(user.username)
-            val coursePoints = courseRepository.getTotalPoints(courseSlug, registrationIDs.toTypedArray()) ?: 0.0
-            val studentDTO = StudentDTO(
-                user.firstName,
-                user.lastName,
-                user.email,
-                coursePoints.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toDouble(),
-                user.username,
-                registrationID
-            )
-            studentDTO
-        } else {
-            StudentDTO(registrationId = registrationID)
-        }
+    @Transactional
+    fun updateID(names: List<String>, userId: String): Pair<Int, Int> {
+        return Pair(
+            evaluationRepository.updateUserId(names, userId),
+            submissionRepository.updateUserId(names, userId)
+        )
     }
 
 }
@@ -62,12 +46,12 @@ class CourseService(
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
-    private val courseServiceForCaching: CourseServiceForCaching,
     private val evaluationRepository: EvaluationRepository,
     private val modelMapper: ModelMapper,
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
     private val dockerService: ExecutionService,
+    private val userIdUpdateService: UserIdUpdateService,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -76,11 +60,34 @@ class CourseService(
     fun initCache() {
         courseRepository.findAllByDeletedFalse().forEach {
             it.registeredStudents.map {
-                val user = roleService.findUserByAllCriteria(it)
-                if (user != null) {
-                    roleService.getRegistrationIDCandidates(user.username)
+                roleService.findUserByAllCriteria(it)?.let {
+                    roleService.getRegistrationIDCandidates(it.username)
+                    roleService.getUserId(it.username)
                 }
             }
+        }
+    }
+
+
+    fun renameIDs() {
+        var evaluationCount = 0
+        var submissionCount = 0
+        courseRepository.findAll().forEach {
+            logger.info { "Course ${it?.slug}: changing userIds for evaluations and submissions..." }
+            it?.registeredStudents?.map { registrationId ->
+                roleService.findUserByAllCriteria(registrationId)?.let { user ->
+                    //logger.info { "Changing userIds for evaluations and submissions of user ${user.username}" }
+                    val names = roleService.getRegistrationIDCandidates(user.username).toMutableList()
+                    val userId = roleService.getUserId(user.username)
+                    if (userId != null) {
+                        names.remove(userId)
+                        val res = userIdUpdateService.updateID(names, userId)
+                        evaluationCount += res.first
+                        submissionCount += res.second
+                    }
+                }
+            }
+            logger.info { "Course ${it?.slug}: changed the userId for $evaluationCount evaluations and $submissionCount submissions" }
         }
 
     }
@@ -102,20 +109,28 @@ class CourseService(
 
     fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            courseServiceForCaching.getStudentWithPoints(courseSlug, it)
-        }.groupBy { if (it.username != null) it.username else it.registrationId }.map { (username, students) ->
-            if (students.size == 1) {
-                students[0]
+        val users = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it) }
+        val registrationIDs = course.registeredStudents.associateWith { roleService.getRegistrationIDCandidates(it) }
+        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+        val hasPoints =
+            courseRepository.getParticipantsWithPoints(courseSlug, userIds.values.filterNotNull().toTypedArray())
+                .filter { it.userId != null && it.totalPoints != null }
+                .associate { it.userId to it.totalPoints }
+        val hasNoPoints = (userIds.values.filterNotNull() - hasPoints.keys).associateWith { 0.00 }
+        val points = hasPoints.plus(hasNoPoints)
+        return users.map { (registrationId, user) ->
+            if (user == null) {
+                StudentDTO(registrationId = registrationId)
             } else {
-                val student = students[0]
+                val otherIds = (registrationIDs[registrationId]?.minus(registrationId))?.joinToString(", ") ?: ""
                 StudentDTO(
-                    student.firstName,
-                    student.lastName,
-                    student.email,
-                    student.points,
-                    student.username,
-                    students.map { it.registrationId }.joinToString(", ")
+                    user.firstName,
+                    user.lastName,
+                    user.email,
+                    points[userIds[registrationId]],
+                    user.username,
+                    registrationId,
+                    otherIds
                 )
             }
         }
@@ -185,18 +200,25 @@ class CourseService(
             )
     }
 
-    fun getTask(courseSlug: String?, assignmentSlug: String?, taskSlug: String?, userId: String?): TaskWorkspace {
+    fun getTask(
+        courseSlug: String,
+        assignmentSlug: String,
+        taskSlug: String,
+        username: String,
+        userId: String
+    ): TaskWorkspace {
         val workspace =
             taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
                 ?: throw ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug"
                 )
+        // TODO: is this supposed to be username, or userId??
         workspace.setUserId(userId)
         return workspace
     }
 
-    fun getTaskFiles(taskId: Long?, userId: String?): List<TaskFile> {
+    fun getTaskFiles(taskId: Long?): List<TaskFile> {
         val permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
         return permittedFiles
     }
@@ -217,8 +239,8 @@ class CourseService(
         val restrictedLogs =
             submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
         return Stream.concat(includingLogs.stream(), restrictedLogs.stream())
-            .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
-                .reversed()).toList()
+            .sorted { obj1, obj2 -> obj2.id!!.compareTo(obj1.id!!) }
+            .toList()
     }
 
     fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
@@ -349,6 +371,12 @@ class CourseService(
             )
         }
         // retrieve existing evaluation or if there is none, create a new one
+        if (submissionDTO.userId == null) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Submission rejected - missing userId"
+            )
+        }
         val evaluation = getEvaluation(task.id, submissionDTO.userId) ?: task.createEvaluation(submissionDTO.userId)
         evaluationRepository.saveAndFlush(evaluation)
         // the controller prevents regular users from even submitting with restricted = false
@@ -489,6 +517,7 @@ class CourseService(
         courseSlug: String,
         assignmentSlug: String,
         taskSlug: String,
+        username: String,
         userId: String,
         submissionLimit: Int = 1,
         includeGrade: Boolean = true,
@@ -500,21 +529,11 @@ class CourseService(
         // in all other cases, the <submissionLimit> most recent submissions are included in reverse chronological order
         val onlyLatestGraded = submissionLimit == 1 && includeGrade && !includeTest && !includeRun
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        val userIds = roleService.getRegistrationIDCandidates(userId ?: roleService.getCurrentUsername())
-        logger.debug { "Searching for evaluations for $userId ($userIds)..." }
-        // TODO: refactor once single user ID is implemented
-        // this preserves existing behavior for now
-        var evaluation = getEvaluation(task, userId)
-        // if existing behavior didn't work, try other user IDs
-        if (evaluation == null) {
-            evaluation = userIds.map {
-                getEvaluation(task, it)
-            }.filterNotNull().firstOrNull()
-        }
-        logger.debug { "Evaluation: $evaluation (${evaluation?.userId}" }
+        val evaluation = getEvaluation(task, userId)
+        logger.debug { "Evaluation for username $username (uniqueId: $userId): $evaluation" }
         if (evaluation == null) {
             return TaskProgressDTO(
-                userId,
+                username,
                 taskSlug,
                 0.0,
                 task.maxPoints,
@@ -531,7 +550,7 @@ class CourseService(
             )
         }
         return TaskProgressDTO(
-            userId,
+            username,
             taskSlug,
             evaluation.bestScore,
             task.maxPoints,
@@ -563,6 +582,7 @@ class CourseService(
 
     private fun getTasksProgress(
         assignment: Assignment,
+        username: String,
         userId: String,
         submissionLimit: Int,
         includeGrade: Boolean,
@@ -574,6 +594,7 @@ class CourseService(
                 assignment.course!!.slug!!,
                 assignment.slug!!,
                 task.slug!!,
+                username,
                 userId,
                 submissionLimit,
                 includeGrade,
@@ -584,7 +605,10 @@ class CourseService(
     }
 
     fun getAssignmentProgress(
-        courseSlug: String, assignmentSlug: String, userId: String,
+        courseSlug: String,
+        assignmentSlug: String,
+        username: String,
+        userId: String,
         submissionLimit: Int = 1,
         includeGrade: Boolean = true,
         includeTest: Boolean = false,
@@ -592,19 +616,20 @@ class CourseService(
     ): AssignmentProgressDTO {
         val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
         return AssignmentProgressDTO(
-            userId, assignmentSlug,
+            username, assignmentSlug,
             assignment.information.map { (language, info) ->
                 language to AssignmentInformationDTO(
                     info.language,
                     info.title
                 )
             }.toMap().toMutableMap(),
-            getTasksProgress(assignment, userId, submissionLimit, includeGrade, includeTest, includeRun)
+            getTasksProgress(assignment, username, userId, submissionLimit, includeGrade, includeTest, includeRun)
         )
     }
 
     fun getCourseProgress(
         courseSlug: String,
+        username: String,
         userId: String,
         submissionLimit: Int = 1,
         includeGrade: Boolean = true,
@@ -613,7 +638,7 @@ class CourseService(
     ): CourseProgressDTO {
         val course: Course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(
-            userId,
+            username,
             course.information.map { (language, info) ->
                 language to CourseInformationDTO(
                     info.language, info.title, info.description, info.university, info.period
@@ -630,7 +655,9 @@ class CourseService(
                         )
                     }.toMap().toMutableMap(),
                     getTasksProgress(
-                        assignment, userId,
+                        assignment,
+                        username,
+                        userId,
                         submissionLimit,
                         includeGrade,
                         includeTest,

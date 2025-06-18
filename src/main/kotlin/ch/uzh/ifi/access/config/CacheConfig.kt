@@ -24,6 +24,7 @@ class CacheConfig {
             "RoleService.findUserByAllCriteria",
             "RoleService.getUserResourceById",
             "RoleService.getOnlineCount",
+            "RoleService.getUserId",
             "getMaxPoints",
             "assignmentMaxPoints",
         )
@@ -34,5 +35,6 @@ class CacheConfig {
 class CacheInitListener(val courseService: CourseService) : ApplicationListener<ApplicationReadyEvent> {
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         courseService.initCache()
+        //courseService.renameIDs()
     }
 }

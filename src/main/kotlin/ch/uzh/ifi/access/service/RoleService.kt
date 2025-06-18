@@ -44,8 +44,9 @@ class RoleService(
      * Note the following nomenclature:
      *  - registrationID: as given by external systems, stored in Course entity
      *  - username: the Keycloak username of a user
+     *  - userId: a permanent, unique ID to identify Evaluations and Submissions (swissEduPersonUniqueID if available)
      *  - user: Keycloak user, typically as a UserRepresentation
-     *  - user.id: the Keycloak internal UUID of a user
+     *  - user.id: the Keycloak internal UUID of a user (not to be confused with userId)
      *  - authentication.name: SpringSecurity username, same as Keycloak username
      *
      * We need to match whatever registrationID might have been used to register
@@ -166,6 +167,22 @@ class RoleService(
     fun getRegistrationIDCandidates(registrationID: String): List<String> {
         val user = proxy.findUserByAllCriteria(registrationID) ?: return emptyList()
         return getRegistrationIDCandidates(user)
+    }
+
+    @Cacheable("RoleService.getUserId", key = "#registrationID")
+    fun getUserId(registrationID: String): String? {
+        val user = proxy.findUserByAllCriteria(registrationID)
+        if (user != null) {
+            val uniqueId = user.attributes?.get("swissEduPersonUniqueID")?.first()
+            if (uniqueId == null) {
+                // user not logging in via eduID (e.g. test users)
+                return user.username
+            }
+            // user logged in via eduID
+            return uniqueId
+        }
+        // user does not exist
+        return null
     }
 
     /* Managing user roles */

@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
-import ch.uzh.ifi.access.service.CourseServiceForCaching
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
@@ -68,7 +67,6 @@ class WebhooksController(
 @EnableAsync
 class CourseController(
     private val courseService: CourseService,
-    private val courseServiceForCaching: CourseServiceForCaching,
     private val roleService: RoleService
 ) {
 
@@ -97,15 +95,19 @@ class CourseController(
         return courseService.getAssignment(course, assignment!!)
     }
 
-    @GetMapping("/{course}/assignments/{assignment}/tasks/{task}/users/{user}")
-    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
+    @GetMapping("/{course}/assignments/{assignment}/tasks/{task}/users/{username}")
+    @PreAuthorize("hasRole(#course+'-assistant') or (#username == authentication.name)")
     fun getTask(
-        @PathVariable course: String?,
-        @PathVariable assignment: String?,
-        @PathVariable task: String?,
-        @PathVariable user: String?
+        @PathVariable course: String,
+        @PathVariable assignment: String,
+        @PathVariable task: String,
+        @PathVariable username: String
     ): TaskWorkspace {
-        return courseService.getTask(course, assignment, task, user)
+        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "No participant $username"
+        )
+        return courseService.getTask(course, assignment, task, username, userId)
     }
 
     @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit")
@@ -117,7 +119,8 @@ class CourseController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
-        submission.userId = authentication.name
+        val userId = roleService.getUserId(authentication.name)
+        submission.userId = userId
         courseService.createSubmission(course, assignment, task!!, submission)
     }
 
@@ -160,22 +163,23 @@ class CourseController(
         return updateRoles(course, registrationIDs, Role.STUDENT)
     }
 
-    @GetMapping("/{course}/participants/{participant}")
+    @GetMapping("/{course}/participants/{username}")
     fun getCourseProgress(
-        @PathVariable course: String, @PathVariable participant: String,
+        @PathVariable course: String, @PathVariable username: String,
         @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
         @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): CourseProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "No participant $participant"
+            "No participant $username"
         )
         // TODO: reduce the number of parameters being passed around
         return courseService.getCourseProgress(
             course,
-            user.username,
+            username,
+            userId,
             submissionLimit,
             includeGrade,
             includeTest,
@@ -183,22 +187,25 @@ class CourseController(
         )
     }
 
-    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}")
+    @GetMapping("/{course}/participants/{username}/assignments/{assignment}")
     fun getAssignmentProgress(
         @PathVariable course: String,
         @PathVariable assignment: String,
-        @PathVariable participant: String,
+        @PathVariable username: String,
         @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
         @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): AssignmentProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "No participant $participant"
+            "No participant $username"
         )
         return courseService.getAssignmentProgress(
-            course, assignment, user.username,
+            course,
+            assignment,
+            username,
+            userId,
             submissionLimit,
             includeGrade,
             includeTest,
@@ -206,21 +213,25 @@ class CourseController(
         )
     }
 
-    @GetMapping("/{course}/participants/{participant}/assignments/{assignment}/tasks/{task}")
+    @GetMapping("/{course}/participants/{username}/assignments/{assignment}/tasks/{task}")
     fun getTaskProgress(
         @PathVariable course: String, @PathVariable assignment: String,
-        @PathVariable task: String, @PathVariable participant: String,
+        @PathVariable task: String, @PathVariable username: String,
         @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
         @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
     ): TaskProgressDTO? {
-        val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
+        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
-            "No participant $participant"
+            "No participant $username"
         )
         return courseService.getTaskProgress(
-            course, assignment, task, user.username,
+            course,
+            assignment,
+            task,
+            username,
+            userId,
             submissionLimit,
             includeGrade,
             includeTest,

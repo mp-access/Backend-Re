@@ -9,5 +9,6 @@ class StudentDTO(
     var email: String? = null,
     var points: Double? = null,
     var username: String? = null,
-    var registrationId: String? = null
+    var registrationId: String? = null,
+    var otherId: String? = null
 )
