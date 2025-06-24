@@ -558,7 +558,7 @@ class CourseService(
             CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
     fun createSubmission(courseSlug: String, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
-        val gracePeriodDuration = 2L
+        val submissionLockDuration = 2L
 
         val task = if (assignmentSlug == null) {
             getExampleBySlug(courseSlug, taskSlug)
@@ -572,7 +572,7 @@ class CourseService(
         val isAdmin =
             userRoles.contains("$courseSlug-assistant") ||
             userRoles.contains("$courseSlug-supervisor")
-        
+
         if (assignmentSlug == null && !isAdmin) {
             if (task.start == null || task.end == null)
                 throw ResponseStatusException(
@@ -585,14 +585,14 @@ class CourseService(
             val lastSubmissionDate =
                 getSubmissions(task.id, submissionDTO.userId).sortedByDescending { it.createdAt }
                     .firstOrNull()?.createdAt
-            if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(gracePeriodDuration)))
+            if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
                 throw ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "You must wait for 2 hours before submitting a solution again"
                 )
 
             // Checking if example has ended and is now on the grace period
-            val afterPublishPeriod = task.end!!.plusHours(gracePeriodDuration)
+            val afterPublishPeriod = task.end!!.plusHours(submissionLockDuration)
             if (now.isAfter(task.end) && now.isBefore((afterPublishPeriod)))
                 throw ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
