@@ -155,7 +155,7 @@ class CourseController(
     ) {
         submission.userId = authentication.name
         // Is there a better way than passing null to assignmentSlug?
-        courseService.createSubmission(course, null, example!!, submission)
+        courseService.createSubmission(course, null, example, submission)
     }
 
 
@@ -297,7 +297,8 @@ class CourseController(
         @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
         @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
         @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,): CourseProgressDTO? {
+        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
+    ): CourseProgressDTO? {
         val user = roleService.findUserByAllCriteria(participant) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No participant $participant"

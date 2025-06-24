@@ -205,6 +205,12 @@ class CourseService(
                 "Duration must be a positive value"
             )
 
+        if (example.start != null)
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Example already published"
+            )
+
         val now = LocalDateTime.now()
         example.start = now
         example.end = now.plusSeconds(duration.toLong())
@@ -552,10 +558,46 @@ class CourseService(
             CacheEvict(value = ["calculateAvgTaskPoints"], key = "#taskSlug")]
     )
     fun createSubmission(courseSlug: String, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
+        val submissionLockDuration = 2L
+
         val task = if (assignmentSlug == null) {
             getExampleBySlug(courseSlug, taskSlug)
         } else {
             getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
+        }
+
+
+        // If the user is admin, dont check
+        val userRoles = getUserRoles(listOf(submissionDTO.userId!!))
+        val isAdmin =
+            userRoles.contains("$courseSlug-assistant") ||
+            userRoles.contains("$courseSlug-supervisor")
+
+        if (assignmentSlug == null && !isAdmin) {
+            if (task.start == null || task.end == null)
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Example not published yet"
+                )
+            val now = LocalDateTime.now()
+
+            // There should be an interval between each submission
+            val lastSubmissionDate =
+                getSubmissions(task.id, submissionDTO.userId).sortedByDescending { it.createdAt }
+                    .firstOrNull()?.createdAt
+            if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You must wait for 2 hours before submitting a solution again"
+                )
+
+            // Checking if example has ended and is now on the grace period
+            val afterPublishPeriod = task.end!!.plusHours(submissionLockDuration)
+            if (now.isAfter(task.end) && now.isBefore((afterPublishPeriod)))
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Example submissions disabled until 2 hours after the example publish"
+                )
         }
 
         submissionDTO.command?.let {
@@ -639,7 +681,7 @@ cp "$path" "/submission/${'$'}file_dir"
 """
                     }
                     val command = (
-                            """
+                    """
 # copy submitted files to tmpfs
 /bin/cp -R /submission/* /workspace/;
 # run command (the cwd is set to /workspace already)
@@ -658,7 +700,7 @@ fi
 $persistentFileCopyCommands
 exit ${'$'}exit_code; 
 """
-                            )
+                    )
                     val container = containerCmd
                         .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
                         .withCmd("/bin/bash", "-c", command)
@@ -887,7 +929,7 @@ exit ${'$'}exit_code;
     fun sendMessage(contactDTO: ContactDTO) {
         val filePath =
             workingDir.resolve("contact")
-            .resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .resolve(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
         Files.createDirectories(filePath.parent)
         if (!filePath.toFile().exists()) Files.createFile(filePath)
         Files.writeString(filePath, contactDTO.formatContent())
@@ -932,7 +974,8 @@ exit ${'$'}exit_code;
         return evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
     }
 
-    fun getTaskProgress(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String,
+    fun getTaskProgress(
+        courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String,
         submissionLimit: Int = 1,
         includeGrade: Boolean = true,
         includeTest: Boolean = false,
@@ -973,21 +1016,21 @@ exit ${'$'}exit_code;
                 listOf()
             )
         }
-            return TaskProgressDTO(
-                userId,
-                taskSlug,
-                evaluation.bestScore,
-                task.maxPoints,
-                evaluation.remainingAttempts,
-                task.maxAttempts,
-                task.information.map { (language, info) ->
-                    language to TaskInformationDTO(
-                        info.language,
-                        info.title,
-                        info.instructionsFile
-                    )
-                }.toMap().toMutableMap(),
-                evaluation.submissions.sortedBy { it.ordinalNum }.reversed()
+        return TaskProgressDTO(
+            userId,
+            taskSlug,
+            evaluation.bestScore,
+            task.maxPoints,
+            evaluation.remainingAttempts,
+            task.maxAttempts,
+            task.information.map { (language, info) ->
+                language to TaskInformationDTO(
+                    info.language,
+                    info.title,
+                    info.instructionsFile
+                )
+            }.toMap().toMutableMap(),
+            evaluation.submissions.sortedBy { it.ordinalNum }.reversed()
                 .filter {
                     (it.command == Command.GRADE && includeGrade) ||
                     (it.command == Command.TEST && includeTest) ||

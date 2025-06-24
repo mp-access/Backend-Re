@@ -5,6 +5,7 @@ import ch.uzh.ifi.access.model.TaskInformation
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
+import java.time.LocalDateTime
 
 @Projection(types = [Task::class])
 interface TaskOverview {
@@ -17,6 +18,8 @@ interface TaskOverview {
     val information: Map<String?, TaskInformation?>?
     val maxPoints: Double?
     val maxAttempts: Int?
+    val start: LocalDateTime?
+    val end: LocalDateTime?
     fun setUserId(userId: String?)
 
     @get:Value(
@@ -48,4 +51,13 @@ interface TaskOverview {
 
     @get:Value("#{@courseService.getRemainingAttempts(target.id, target.userId, target.maxAttempts)}")
     val remainingAttempts: Int?
+
+    @get:Value("#{target.runCommand != null}")
+    val runCommandAvailable: Boolean?
+
+    @get:Value("#{target.testCommand != null}")
+    val testCommandAvailable: Boolean?
+
+    @get:Value("#{target.gradeCommand != null}")
+    val gradeCommandAvailable: Boolean?
 }
