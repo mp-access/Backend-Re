@@ -51,4 +51,13 @@ interface TaskOverview {
 
     @get:Value("#{@courseService.getRemainingAttempts(target.id, target.userId, target.maxAttempts)}")
     val remainingAttempts: Int?
+
+    @get:Value("#{target.runCommand != null}")
+    val runCommandAvailable: Boolean?
+
+    @get:Value("#{target.testCommand != null}")
+    val testCommandAvailable: Boolean?
+
+    @get:Value("#{target.gradeCommand != null}")
+    val gradeCommandAvailable: Boolean?
 }
