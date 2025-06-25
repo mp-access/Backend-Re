@@ -10,16 +10,25 @@ import org.keycloak.admin.client.resource.UsersResource
 import org.keycloak.representations.idm.RoleRepresentation
 import org.keycloak.representations.idm.RoleRepresentation.Composites
 import org.keycloak.representations.idm.UserRepresentation
+import org.springframework.cache.CacheManager
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
+import org.springframework.context.annotation.Scope
+import org.springframework.context.annotation.ScopedProxyMode
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 
 @Service
+@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class RoleService(
     private val accessRealm: RealmResource,
+    private val cacheManager: CacheManager,
+    private val proxy: RoleService,
 ) {
 
     /* How users and roles are managed in ACCESS:
@@ -35,8 +44,9 @@ class RoleService(
      * Note the following nomenclature:
      *  - registrationID: as given by external systems, stored in Course entity
      *  - username: the Keycloak username of a user
+     *  - userId: a permanent, unique ID to identify Evaluations and Submissions (swissEduPersonUniqueID if available)
      *  - user: Keycloak user, typically as a UserRepresentation
-     *  - user.id: the Keycloak internal UUID of a user
+     *  - user.id: the Keycloak internal UUID of a user (not to be confused with userId)
      *  - authentication.name: SpringSecurity username, same as Keycloak username
      *
      * We need to match whatever registrationID might have been used to register
@@ -67,6 +77,7 @@ class RoleService(
      *
      */
 
+
     private val logger = KotlinLogging.logger {}
 
     companion object {
@@ -78,12 +89,17 @@ class RoleService(
         )
     }
 
+    fun getCurrentUsername(): String {
+        return SecurityContextHolder.getContext().authentication.name
+    }
+
     fun UserRepresentation.toResource(): UserResource {
-        return getUserResourceById(this.id)
+        return proxy.getUserResourceById(this.id)
     }
 
     /* Searching and finding users */
 
+    @Cacheable("RoleService.getUserResourceById", key = "#userId")
     fun getUserResourceById(userId: String): UserResource {
         return accessRealm.users().get(userId)
     }
@@ -92,13 +108,20 @@ class RoleService(
         return accessRealm.roles().get(roleName)
     }
 
+    @Cacheable("RoleService.findUserByAllCriteria", key = "#registrationID")
     fun findUserByAllCriteria(registrationID: String): UserRepresentation? {
         val usersResource = accessRealm.users()
         // @formatter:off
-        return findUserByUsername(usersResource, registrationID) ?:
-               findUserByEmail(usersResource, registrationID) ?:
-               findUserByAttributes(usersResource, registrationID)
+        val result = findUserByUsername(usersResource, registrationID) ?:
+                     findUserByEmail(usersResource, registrationID) ?:
+                     findUserByAttributes(usersResource, registrationID)
         // @formatter:on
+        if (result == null) {
+            logger.debug { "Could not find user $registrationID" }
+        } else {
+            logger.debug { "Found user ${result.username} ($registrationID)" }
+        }
+        return result
     }
 
     private fun findUserByUsername(users: UsersResource, registrationID: String): UserRepresentation? {
@@ -142,8 +165,24 @@ class RoleService(
 
     @Cacheable("RoleService.getRegistrationIDCandidates", key = "#registrationID")
     fun getRegistrationIDCandidates(registrationID: String): List<String> {
-        val user = findUserByAllCriteria(registrationID) ?: return emptyList()
+        val user = proxy.findUserByAllCriteria(registrationID) ?: return emptyList()
         return getRegistrationIDCandidates(user)
+    }
+
+    @Cacheable("RoleService.getUserId", key = "#registrationID")
+    fun getUserId(registrationID: String): String? {
+        val user = proxy.findUserByAllCriteria(registrationID)
+        if (user != null) {
+            val uniqueId = user.attributes?.get("swissEduPersonUniqueID")?.first()
+            if (uniqueId == null) {
+                // user not logging in via eduID (e.g. test users)
+                return user.username
+            }
+            // user logged in via eduID
+            return uniqueId
+        }
+        // user does not exist
+        return null
     }
 
     /* Managing user roles */
@@ -153,12 +192,17 @@ class RoleService(
     fun initializeUserRoles(username: String, courseService: CourseService) {
         try {
             semaphore.acquire()
-            val user = findUserByAllCriteria(username)
+            val user = proxy.findUserByAllCriteria(username)
             if (user == null) {
                 logger.error { "Trying to initialize roles for $username: no matching username in Keycloak" }
             } else {
                 // get all possible names that this user might be identified as
                 val searchNames = getRegistrationIDCandidates(user)
+                // evict the registrationIDs from the cache
+                searchNames.forEach {
+                    cacheManager.getCache("RoleService.findUserByAllCriteria")?.evict(it);
+                    cacheManager.getCache("RoleService.getRegistrationIDCandidates")?.evict(it);
+                }
                 // check all courses if the user has been registered under one of the possible identifiers
                 val roles = courseService.getUserRoles(searchNames)
                 logger.info { "Initializing roles for $username: $roles" }
@@ -185,7 +229,7 @@ class RoleService(
         val realmRoleRepresentation = getRoleByName(roleName).toRepresentation()
         logger.debug { "removing users from $course $roleName matching registrationIDs : $toRemove" }
         toRemove.forEach { registrationID ->
-            val user = findUserByAllCriteria(registrationID)
+            val user = proxy.findUserByAllCriteria(registrationID)
             if (user == null) {
                 logger.warn { "User with registrationID $registrationID not found" }
             } else {
@@ -199,7 +243,7 @@ class RoleService(
         }
         logger.debug { "adding users to $course $roleName matching registrationIDs : $toAdd" }
         toAdd.forEach { registrationID ->
-            val user = findUserByAllCriteria(registrationID)
+            val user = proxy.findUserByAllCriteria(registrationID)
             if (user == null) {
                 logger.warn { "User with registrationID $registrationID not found" }
             } else {
@@ -245,13 +289,14 @@ class RoleService(
     }
 
     fun setCourseSupervisor(courseSlug: String?): String {
-        val registrationID = SecurityContextHolder.getContext().authentication.name
+        val registrationID = getCurrentUsername()
         val roleResource = getRoleByName(Role.SUPERVISOR.withCourse(courseSlug))
-        val user = findUserByAllCriteria(registrationID)
+        val user = proxy.findUserByAllCriteria(registrationID)
         user?.toResource()?.roles()?.realmLevel()?.add(listOf(roleResource.toRepresentation()))
         return registrationID
     }
 
+    @Cacheable("RoleService.getOnlineCount", key = "#courseSlug")
     fun getOnlineCount(courseSlug: String): Int {
         val clientRepresentation = accessRealm.clients().findByClientId("access-client")[0]
         val resource = accessRealm.clients().get(clientRepresentation.id)
@@ -264,6 +309,12 @@ class RoleService(
             matchesRole && recentActivity
         }
         return sessions.size
+    }
+
+    @CacheEvict("RoleService.getOnlineCount", key = "#courseSlug")
+    @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
+    private fun evictOnlineCount() {
+        // this just ensures that the online count is cached for only 1 minute
     }
 
 }

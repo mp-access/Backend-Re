@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.performance
 
 import ch.uzh.ifi.access.AccessTestExecutionCondition
+import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.hamcrest.Matchers.*
@@ -51,6 +52,23 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
                 .contentType("application/json")
                 .header("X-API-Key", "1234")
                 .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.[?(@.email =~ /philip.*?/i)].email", `is`(not(empty<Any>()))))
+    }
+
+    @Test
+    @Order(1)
+    //@Timeout(value = 1, unit = TimeUnit.SECONDS)
+    @AccessUser(
+        username = "assistant@uzh.ch",
+        authorities = ["assistant", "info1-hs24-assistant", "info1-hs24"]
+    )
+    fun `Can retrieve participants with points`() {
+        mvc.perform(
+            get("/courses/info1-hs24/points")
+                .contentType("application/json")
         )
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))

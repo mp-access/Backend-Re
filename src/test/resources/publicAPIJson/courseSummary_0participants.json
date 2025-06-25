@@ -188,5 +188,5 @@
   "overrideStart" : "2023-01-01T13:00:00",
   "overrideEnd" : "2028-01-01T13:00:00",
   "assistants" : [ ],
-  "studentsCount" : 0
+  "participantCount" : 0
 }
