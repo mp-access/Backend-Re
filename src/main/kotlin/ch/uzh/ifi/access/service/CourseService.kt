@@ -204,7 +204,7 @@ class CourseService(
             )
     }
 
-    fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int) {
+    fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -228,6 +228,8 @@ class CourseService(
         example.end = now.plusSeconds(duration.toLong())
 
         exampleRepository.saveAndFlush(example);
+
+        return example
     }
 
     fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
@@ -262,7 +264,7 @@ class CourseService(
         return example
     }
 
-    fun terminateExampleBySlug(courseSlug: String, exampleSlug: String) {
+    fun terminateExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
@@ -284,6 +286,8 @@ class CourseService(
 
         example.end = now
         exampleRepository.saveAndFlush(example);
+
+        return example
     }
 
     // TODO: clean up these confusing method names
@@ -662,7 +666,7 @@ class CourseService(
     }
 
     fun getTaskProgress(
-        courseSlug: String, assignmentSlug: String, taskSlug: String,username: String,
+        courseSlug: String, assignmentSlug: String, taskSlug: String, username: String,
         userId: String,
         submissionLimit: Int = 1,
         includeGrade: Boolean = true,
