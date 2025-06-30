@@ -18,8 +18,6 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import java.time.Duration
-import java.time.LocalDateTime
 
 
 @RestController
@@ -185,10 +183,10 @@ class CourseController(
             )
         }
 
-        courseService.publishExampleBySlug(course, example, body.duration)
+        val updatedExample = courseService.publishExampleBySlug(course, example, body.duration)
 
         emitterService.sendMessage(course, "redirect", "/courses/$course/examples/$example")
-        emitterService.sendMessage(course, "timer-update", "${body.duration}/${body.duration}")
+        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
     }
 
     // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
@@ -201,15 +199,12 @@ class CourseController(
     ) {
         val updatedExample = courseService.extendExampleDeadlineBySlug(course, example, body.duration)
 
-        val totalDuration = Duration.between(updatedExample.start!!, updatedExample.end!!).toSeconds()
-        val secondsLeft = Duration.between(LocalDateTime.now(), updatedExample.end!!).toSeconds()
-
         emitterService.sendMessage(
             course,
-            "timer-extend",
+            "message",
             "Submission time extended by the lecturer by ${body.duration} seconds."
         )
-        emitterService.sendMessage(course, "timer-update", "$secondsLeft/$totalDuration")
+        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
     }
 
     // Invoked by the teacher when want to terminate the active example
@@ -219,9 +214,13 @@ class CourseController(
         @PathVariable course: String,
         @PathVariable example: String
     ) {
-        courseService.terminateExampleBySlug(course, example)
-
-        emitterService.sendMessage(course, "terminate", "Example terminated by teacher.")
+        val updatedExample = courseService.terminateExampleBySlug(course, example)
+        emitterService.sendMessage(
+            course,
+            "message",
+            "The example has been terminated by the lecturer."
+        )
+        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
     }
 
     // A text event endpoint to publish events to clients
