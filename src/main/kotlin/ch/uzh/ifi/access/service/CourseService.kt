@@ -482,7 +482,6 @@ class CourseService(
             getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         }
 
-
         // If the user is admin, dont check
         val userRoles = getUserRoles(listOf(submissionDTO.userId!!))
         val isAdmin =
@@ -495,25 +494,27 @@ class CourseService(
                     HttpStatus.BAD_REQUEST,
                     "Example not published yet"
                 )
-            val now = LocalDateTime.now()
+            if (submissionDTO.command == Command.GRADE) {
+                val now = LocalDateTime.now()
 
-            // There should be an interval between each submission
-            val lastSubmissionDate =
-                getSubmissions(task.id, submissionDTO.userId).sortedByDescending { it.createdAt }
-                    .firstOrNull()?.createdAt
-            if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "You must wait for 2 hours before submitting a solution again"
-                )
+                // There should be an interval between each submission
+                val lastSubmissionDate =
+                    getSubmissions(task.id, submissionDTO.userId).sortedByDescending { it.createdAt }
+                        .firstOrNull()?.createdAt
+                if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
+                    throw ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "You must wait for 2 hours before submitting a solution again"
+                    )
 
-            // Checking if example has ended and is now on the grace period
-            val afterPublishPeriod = task.end!!.plusHours(submissionLockDuration)
-            if (now.isAfter(task.end) && now.isBefore((afterPublishPeriod)))
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Example submissions disabled until 2 hours after the example publish"
-                )
+                // Checking if example has ended and is now on the grace period
+                val afterPublishPeriod = task.end!!.plusHours(submissionLockDuration)
+                if (now.isAfter(task.end) && now.isBefore((afterPublishPeriod)))
+                    throw ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Example submissions disabled until 2 hours after the example publish"
+                    )
+            }
         }
 
         submissionDTO.command?.let {

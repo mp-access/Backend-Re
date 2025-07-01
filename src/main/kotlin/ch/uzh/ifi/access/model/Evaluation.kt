@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import lombok.Getter
@@ -59,31 +60,55 @@ class Evaluation {
     fun updateRemainingAttempts() {
         task?.attemptWindow.let {
             submissions
-                .filter { it.isGraded && it.valid }
+                .filter { it.isGraded && it.valid && it.command == Command.GRADE }
                 .map {
                     it.createdAt
                 }.firstOrNull {
                     it?.isBefore(
                         LocalDateTime.now()
                     ) ?: false
-                }?.let { createdAt ->
-                    task?.let {
-                        val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
-                            it.attemptWindow
-                        )
-                        it.maxAttempts?.let { maxAttempts ->
-                            remainingAttempts?.let { remainingAttempts ->
-                                if (maxAttempts - remainingAttempts <= refills) this.remainingAttempts =
-                                    maxAttempts else {
-                                    this.remainingAttempts = remainingAttempts + refills.toInt()
-                                    it.attemptWindow?.let { attemptWindow ->
-                                        nextAttemptAt = createdAt.plus(attemptWindow.multipliedBy(refills + 1))
+                }.let { createdAt ->
+                    if (task!!.assignment == null) {
+                        //  Example
+                        when (task!!.status) {
+                            TaskStatus.Active -> {
+                                nextAttemptAt = if (createdAt != null) {
+                                    maxOf(createdAt, task!!.end!!).plus(task!!.attemptWindow)
+                                } else {
+                                    task!!.end!!.plus(task!!.attemptWindow)
+                                }
+                                remainingAttempts = if (nextAttemptAt!!.isAfter(LocalDateTime.now())) 0 else 1
+                            }
+
+                            TaskStatus.Interactive -> {
+                                nextAttemptAt = if (createdAt == null) null else task!!.end!!.plus(task!!.attemptWindow)
+                                remainingAttempts = if (createdAt == null) 1 else 0
+                            }
+
+                            else -> {
+                                remainingAttempts = 0
+                            }
+                        }
+                    } else if (createdAt != null) {
+                        //  Assignment and has a submission
+                        task?.let {
+                            val refills = Duration.between(createdAt, LocalDateTime.now()).dividedBy(
+                                it.attemptWindow
+                            )
+                            it.maxAttempts?.let { maxAttempts ->
+                                remainingAttempts?.let { remainingAttempts ->
+                                    if (maxAttempts - remainingAttempts <= refills) {
+                                        this.remainingAttempts = maxAttempts
+                                    } else {
+                                        this.remainingAttempts = remainingAttempts + refills.toInt()
+                                        it.attemptWindow?.let { attemptWindow ->
+                                            nextAttemptAt = createdAt.plus(attemptWindow.multipliedBy(refills + 1))
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-
                 }
         }
     }
