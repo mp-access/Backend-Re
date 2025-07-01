@@ -34,8 +34,6 @@ class EmitterService {
         val emitter = PerishableSseEmitter(id, ZonedDateTime.now(), Duration.ofMinutes(60 * 8).toMillis())
         logger.debug { "SSE emitter created ($id)" }
 
-        emitters[slug]?.entries?.removeIf { (key, _) -> key.startsWith("${slug}_$userId") }
-
         emitter.onCompletion {
             emitters[slug]?.remove(id)
             logger.debug { "SSE emitter removed ($id)" }
@@ -62,8 +60,13 @@ class EmitterService {
     }
 
     fun sendMessage(slug: String, name: String, message: String) {
+
         emitters[slug]?.forEach {
-            it.value.send(SseEmitter.event().name(name).data(message))
+            try {
+                it.value.send(SseEmitter.event().name(name).data(message))
+            } catch (e: Exception) {
+                emitters[slug]?.remove(it.key)
+            }
         }
     }
 
