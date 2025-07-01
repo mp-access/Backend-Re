@@ -34,7 +34,7 @@ class Evaluation {
     @Transient
     var nextAttemptAt: LocalDateTime? = null
     val isActive: Boolean
-        get() = task!!.assignment!!.isActive
+        get() = task!!.assignment?.isActive ?: task!!.start?.isBefore(LocalDateTime.now()) ?: false
 
     fun countSubmissionsByType(command: Command): Long {
         return submissions.stream().filter { submission: Submission -> submission.command == command }.count()
