@@ -36,6 +36,7 @@ class ExecutionServiceTests(
         val results = pair.second!!
         assertEquals(0.0, results.points)
         assertThat(10 < results.hints.size)
+        assertThat(10 < results.tests.size)
     }
 
 }
