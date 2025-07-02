@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.config
 
-import ch.uzh.ifi.access.service.CourseService
+import ch.uzh.ifi.access.service.CacheInitService
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.EnableCaching
@@ -17,7 +17,6 @@ class CacheConfig {
     @Bean
     fun cacheManager(): CacheManager {
         return ConcurrentMapCacheManager(
-            "calculateAvgTaskPoints",
             "getStudent",
             "studentWithPoints",
             "RoleService.getRegistrationIDCandidates",
@@ -25,16 +24,21 @@ class CacheConfig {
             "RoleService.getUserResourceById",
             "RoleService.getOnlineCount",
             "RoleService.getUserId",
-            "getMaxPoints",
-            "assignmentMaxPoints",
+            "PointsService.calculateTaskPoints",
+            "PointsService.calculateAssignmentPoints",
+            "PointsService.getMaxPoints",
+            "PointsService.calculateAvgTaskPoints",
+            "PointsService.calculateAssignmentMaxPoints",
+            "EvaluationService.getEvaluation",
+            "EvaluationService.getEvaluationSummary",
         )
     }
 }
 
 @Component
-class CacheInitListener(val courseService: CourseService) : ApplicationListener<ApplicationReadyEvent> {
+class CacheInitListener(val cacheInitService: CacheInitService) : ApplicationListener<ApplicationReadyEvent> {
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
-        courseService.initCache()
+        cacheInitService.initCache()
         //courseService.renameIDs()
     }
 }

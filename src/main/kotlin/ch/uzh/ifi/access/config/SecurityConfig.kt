@@ -1,6 +1,5 @@
 package ch.uzh.ifi.access.config
 
-import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
@@ -146,7 +145,6 @@ class SecurityConfig(private val env: Environment) {
     @Component
     class AuthenticationSuccessListener(
         val roleService: RoleService,
-        val courseService: CourseService,
     ) : ApplicationListener<AuthenticationSuccessEvent> {
 
         override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
@@ -156,7 +154,7 @@ class SecurityConfig(private val env: Environment) {
                 (event.authentication as JwtAuthenticationToken).token.getClaimAsString("roles_initialized_at")
             if (initialized == null) {
                 val username = event.authentication.name
-                roleService.initializeUserRoles(username, courseService)
+                roleService.initializeUserRoles(username)
             }
         }
 

@@ -12,7 +12,7 @@ interface AssignmentSummary {
     val start: LocalDateTime?
     val end: LocalDateTime?
 
-    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks)}")
+    @get:Value("#{@pointsService.calculateAssignmentMaxPoints(target.tasks)}")
     val maxPoints: Double?
 
     @get:Value("#{@courseService.enabledTasksOnly(target.tasks)}")

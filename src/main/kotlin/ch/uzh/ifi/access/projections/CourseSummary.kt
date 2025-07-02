@@ -14,7 +14,7 @@ interface CourseSummary {
     val overrideEnd: LocalDateTime?
     val information: Map<String?, CourseInformationPublic?>?
 
-    @get:Value("#{@courseService.getMaxPoints(target.slug)}")
+    @get:Value("#{@pointsService.getMaxPoints(target.slug)}")
     val maxPoints: Double?
     val participantCount: Long?
 

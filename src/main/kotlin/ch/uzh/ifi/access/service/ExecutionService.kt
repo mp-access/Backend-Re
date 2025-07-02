@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.Util
 import ch.uzh.ifi.access.Util.bytesToString
 import ch.uzh.ifi.access.model.*
+import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.repository.TaskFileRepository
 import com.fasterxml.jackson.databind.json.JsonMapper
@@ -32,7 +33,32 @@ class ExecutionService(
 ) {
     private val logger = KotlinLogging.logger {}
 
-    fun executeSubmission(course: Course, submission: Submission, task: Task, evaluation: Evaluation): Submission {
+    fun executeTemplate(task: Task): Pair<Submission, Results> {
+        val course = task.assignment!!.course!!
+        val submission = Submission()
+        submission.command = Command.GRADE
+        val visible = getVisibleFiles(task.id)
+        submission.files = getVisibleFiles(task.id).map { it ->
+            val file = SubmissionFile()
+            file.content = it.template
+            file.taskFile = it
+            file.submission = submission
+            file
+        }.toMutableList()
+        val evaluation = Evaluation()
+        evaluation.remainingAttempts = 1
+        evaluation.task = task
+        submission.evaluation = evaluation
+        return executeSubmission(course, submission, task, evaluation)
+    }
+
+    fun executeSubmission(
+        course: Course,
+        submission: Submission,
+        task: Task,
+        evaluation: Evaluation
+    ): Pair<Submission, Results> {
+        var results = Results()
         val image = task.dockerImage!!
         // inspect the image to check whether it's local, and pull it if necessary
         try {
@@ -42,8 +68,9 @@ class ExecutionService(
                 .exec(PullImageResultCallback())
                 .awaitCompletion()
         }
+        val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
         dockerClient.createContainerCmd(image).use { containerCmd ->
-            val submissionDir = workingDir.resolve("submissions").resolve(submission.id.toString())
+            val submissionDir = workingDir.resolve("submissions").resolve(folderId)
             // add submission files (supplied by the frontend) to the container
             submission.files.forEach { file -> writeSubmissionFile(submissionDir, file) }
             // add visible but non-editable files (these are not part of the submission files, but part of the task)
@@ -157,7 +184,7 @@ class ExecutionService(
                 }
             }
             if (submission.isGraded) {
-                val results = when (statusCode) {
+                results = when (statusCode) {
                     // out of memory
                     137 -> {
                         logger.debug { "Submission $submissionDir exit code is 137 (out of memory)" }
@@ -236,7 +263,7 @@ class ExecutionService(
             }
             FileUtils.deleteQuietly(submissionDir.toFile())
         }
-        return submission
+        return Pair(submission, results)
     }
 
     private fun writeFileData(filePath: Path, data: String?, binaryData: ByteArray?) {
@@ -274,6 +301,12 @@ class ExecutionService(
     fun getGradingFiles(taskId: Long?): List<TaskFile> {
         return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
             .filter { file: TaskFile -> file.grading }
+            .toList()
+    }
+
+    fun getVisibleFiles(taskId: Long?): List<TaskFile> {
+        return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
+            .filter { file: TaskFile -> file.visible }
             .toList()
     }
 
