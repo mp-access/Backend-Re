@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import jakarta.persistence.*
 import org.hibernate.annotations.Check
 import org.hibernate.annotations.JdbcTypeCode
@@ -64,6 +65,9 @@ class Task {
     @Column(name = "end_date")
     var end: LocalDateTime? = null
 
+    @Transient
+    var status: TaskStatus? = null
+
     @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
     var files: MutableList<TaskFile> = ArrayList()
 
@@ -121,6 +125,28 @@ class Task {
 
         if (hasCourse == hasAssignment) {
             throw IllegalStateException("A task must have either a course or an assignment reference, but not both or neither.")
+        }
+    }
+
+    @PostLoad
+    fun updateStatus() {
+        val now = LocalDateTime.now()
+        if (assignment != null) {
+            status = if (assignment!!.start == null || assignment!!.start!!.isAfter(now)) {
+                TaskStatus.Planned
+            } else if (assignment!!.end!!.isAfter(now)) {
+                TaskStatus.Active
+            } else {
+                TaskStatus.Closed
+            }
+        } else {
+            status = if (start == null || start!!.isAfter(now)) {
+                TaskStatus.Planned
+            } else if (end!!.isAfter(now)) {
+                TaskStatus.Interactive
+            } else {
+                TaskStatus.Active
+            }
         }
     }
 }

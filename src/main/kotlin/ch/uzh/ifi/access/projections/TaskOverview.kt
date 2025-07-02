@@ -22,25 +22,7 @@ interface TaskOverview {
     val end: LocalDateTime?
     fun setUserId(userId: String?)
 
-    @get:Value(
-        """
-      #{
-        target.assignment != null
-          ? (target.assignment.start == null or target.assignment.start.isAfter(T(java.time.LocalDateTime).now())
-              ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Planned
-              : target.assignment.end.isAfter(T(java.time.LocalDateTime).now())
-                ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Active
-                : T(ch.uzh.ifi.access.model.constants.TaskStatus).Closed
-          )
-          : (target.start == null or target.start.isAfter(T(java.time.LocalDateTime).now())
-              ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Planned
-              : target.end.isAfter(T(java.time.LocalDateTime).now())
-                ? T(ch.uzh.ifi.access.model.constants.TaskStatus).Interactive
-                : T(ch.uzh.ifi.access.model.constants.TaskStatus).Active
-          )
-      }
-      """
-    )
+    @get:Value("#{target.status}")
     val status: TaskStatus?
 
     @get:Value("#{@courseService.calculateAvgTaskPoints(target.slug)}")
