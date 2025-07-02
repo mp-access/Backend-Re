@@ -50,14 +50,14 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
             WHERE e.id IN (
                 SELECT MAX(id)
                 FROM evaluation
-                WHERE user_id = ANY(:userIds)
+                WHERE user_id = :userId
                 GROUP BY task_id
             )
             AND c.slug = :courseSlug
-            AND e.user_id = ANY(:userIds)
+            AND e.user_id = :userId
         """
     )
-    fun getTotalPoints(courseSlug: String, userIds: Array<String>): Double?
+    fun getTotalPoints(courseSlug: String, userId: String): Double?
 
     @Query(
         nativeQuery = true, value = """

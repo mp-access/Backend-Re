@@ -2,7 +2,9 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
+import ch.uzh.ifi.access.repository.CourseRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.transaction.Transactional
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.RoleResource
 import org.keycloak.admin.client.resource.UserResource
@@ -26,6 +28,7 @@ import java.util.concurrent.TimeUnit
 @Service
 @Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class RoleService(
+    private val courseRepository: CourseRepository,
     private val accessRealm: RealmResource,
     private val cacheManager: CacheManager,
     private val proxy: RoleService,
@@ -169,6 +172,10 @@ class RoleService(
         return getRegistrationIDCandidates(user)
     }
 
+    fun getUserId(): String? {
+        return getUserId(getCurrentUsername())
+    }
+
     @Cacheable("RoleService.getUserId", key = "#registrationID")
     fun getUserId(registrationID: String): String? {
         val user = proxy.findUserByAllCriteria(registrationID)
@@ -189,7 +196,21 @@ class RoleService(
 
     private val semaphore = Semaphore(1)
 
-    fun initializeUserRoles(username: String, courseService: CourseService) {
+    @Transactional
+    fun getUserRoles(usernames: List<String>): List<String> {
+        return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
+            val slug = course.slug
+            usernames.flatMap { username ->
+                listOfNotNull(
+                    if (course.supervisors.contains(username)) "$slug-supervisor" else null,
+                    if (course.assistants.contains(username)) "$slug-assistant" else null,
+                    if (course.registeredStudents.contains(username)) "$slug-student" else null,
+                )
+            }
+        }
+    }
+
+    fun initializeUserRoles(username: String) {
         try {
             semaphore.acquire()
             val user = proxy.findUserByAllCriteria(username)
@@ -204,7 +225,7 @@ class RoleService(
                     cacheManager.getCache("RoleService.getRegistrationIDCandidates")?.evict(it);
                 }
                 // check all courses if the user has been registered under one of the possible identifiers
-                val roles = courseService.getUserRoles(searchNames)
+                val roles = proxy.getUserRoles(searchNames)
                 logger.info { "Initializing roles for $username: $roles" }
                 // add the corresponding Keycloak roles
                 user.toResource().roles().realmLevel().add(roles.map {

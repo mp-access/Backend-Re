@@ -117,6 +117,13 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             "$" + taskJsonPathTemplate.lines()
                 .filter { !it.contains("assignments") }
                 .joinToString(" "))
+        val res = mvc.perform(
+            get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
+                .contentType("application/json")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+        ).andReturn()
+
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
                 .contentType("application/json")

@@ -21,7 +21,7 @@ interface AssignmentOverview {
     val isPastDue: Boolean
     val isActive: Boolean
 
-    @get:Value("#{@courseService.calculateAssignmentMaxPoints(target.tasks}")
+    @get:Value("#{@pointsService.calculateAssignmentMaxPoints(target.tasks}")
     val maxPoints: Double?
 
     @get:Value("#{@courseService.calculateAssignmentPoints(target.tasks)}")
