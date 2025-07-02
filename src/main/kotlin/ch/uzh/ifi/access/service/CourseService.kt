@@ -179,6 +179,7 @@ class CourseService(
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
     private val cacheManager: CacheManager,
+    private val exampleRepository: ExampleRepository,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -530,7 +531,7 @@ class CourseService(
         }
 
         // If the user is admin, dont check
-        val userRoles = getUserRoles(listOf(submissionDTO.userId!!))
+        val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
         val isAdmin =
             userRoles.contains("$courseSlug-assistant") ||
             userRoles.contains("$courseSlug-supervisor")
