@@ -9,7 +9,6 @@ import java.time.LocalDateTime
 
 @Projection(types = [Task::class])
 interface TaskWorkspace : TaskOverview {
-    val isTestable: Boolean
 
     @get:Value("#{@courseService.getTaskFiles(target.id)}")
     val files: List<TaskFile?>?

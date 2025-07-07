@@ -114,9 +114,6 @@ class Task {
         return formCommand(type) != null
     }
 
-    val isTestable: Boolean
-        get() = hasCommand(Command.TEST)
-
     @PrePersist
     @PreUpdate
     fun validateAssignmentOrCourseReference() {
