@@ -29,7 +29,7 @@ class CourseConfigImporter(
             course.assignments.add(directory.asText())
         }
 
-        config["examples"].forEach { directory ->
+        config["examples"]?.forEach { directory ->
             course.examples.add(directory.asText())
         }
 
