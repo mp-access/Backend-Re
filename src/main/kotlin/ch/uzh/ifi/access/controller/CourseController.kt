@@ -154,6 +154,31 @@ class CourseController(
         return courseService.getExample(course, example, user)
     }
 
+    @GetMapping("/{course}/examples/{example}/information")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getGeneralInformation(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        authentication: Authentication
+    ): ExampleInformationDTO {
+        val participantsOnline = roleService.getOnlineCount(course)
+        val totalParticipants = courseService.getCourseBySlug(course).participantCount
+        val numberOfStudentsWhoSubmitted = courseService.countStudentsWhoSubmittedExample(course, example)
+        return ExampleInformationDTO(
+            participantsOnline,
+            totalParticipants,
+            numberOfStudentsWhoSubmitted,
+            /*TODO: Replace following mock code with actual test pass rate and test names*/
+            passRatePerTestCase = mapOf(
+                "First Test" to 0.85,
+                "Second Test" to 0.5,
+                "Some Other Test" to 0.7,
+                "One More Test" to 0.1,
+                "Edge Case" to 0.2
+            )
+        )
+    }
+
     // TODO: Change this to returning TaskOverview, as we don't need more information. However, when changing it, an error occurs in the courses/{course} endpoint.
     @GetMapping("/{course}/examples")
     @PreAuthorize("hasRole(#course)")
