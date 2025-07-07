@@ -323,6 +323,7 @@ class CourseService(
         return example
     }
 
+    // TODO: Move this to ExampleService once that exists
     fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {
         val students = getStudents(courseSlug)
         var submissionCount = 0
