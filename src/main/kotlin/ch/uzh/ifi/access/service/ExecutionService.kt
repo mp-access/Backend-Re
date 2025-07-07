@@ -34,7 +34,7 @@ class ExecutionService(
     private val logger = KotlinLogging.logger {}
 
     fun executeTemplate(task: Task): Pair<Submission, Results> {
-        val course = task.assignment!!.course!!
+        val course = task.assignment?.course ?: task.course!!
         val submission = Submission()
         submission.command = Command.GRADE
         val visible = getVisibleFiles(task.id)
@@ -145,7 +145,6 @@ class ExecutionService(
                         .withTmpFs(tmpfs)
                         .withMemory(memoryLimit)
                         .withBinds(Bind.parse("$submissionDir:/submission"))
-                        .withAutoRemove(true)
                 ).exec()
             // Set up a scheduler to kill the container forcefully after the specified task timeout (or 180 seconds at
             // most). This is necessary if the submission is in an endless loop or similar lock-up.
@@ -168,6 +167,7 @@ class ExecutionService(
                 .exec(WaitContainerResultCallback())
                 .awaitStatusCode()
             // we can get rid of the scheduler now, because the container is dead for sure
+            dockerClient.removeContainerCmd(container.id).exec()
             scheduler.shutdown()
             logger.debug { "Submission $submissionDir finished with statusCode $statusCode" }
             // time to collect the execution results

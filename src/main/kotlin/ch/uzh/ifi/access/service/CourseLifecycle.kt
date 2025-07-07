@@ -28,7 +28,8 @@ class CourseLifecycle(
     private val modelMapper: ModelMapper,
     private val dockerClient: DockerClient,
     private val cci: CourseConfigImporter,
-    private val fileService: FileService
+    private val fileService: FileService,
+    private val executionService: ExecutionService,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -226,9 +227,10 @@ class CourseLifecycle(
                 example.persistentResultFilePaths.add(path)
             }
         }
-        return courseRepository.save(course)
+        val storedCourse = courseRepository.save(course)
+        val updatedCourse = runExamplesOnceToRetrieveTestNames(storedCourse)
+        return courseRepository.save(updatedCourse)
     }
-
 
     private fun createOrUpdateTaskFile(task: Task, parentPath: Path, path: String): TaskFile {
         val rootedFilePath = if (path.startsWith("/")) path else "/$path"
@@ -302,6 +304,16 @@ class CourseLifecycle(
         course.deleted = true
         course.slug = "DELETED_${course.slug}_${UUID.randomUUID()}" // TODO: not exactly elegant
         return courseRepository.saveAndFlush(course)
+    }
+
+    fun runExamplesOnceToRetrieveTestNames(course: Course) : Course {
+        course.examples.forEach { example ->
+            if (example.start == null) {
+                val result = executionService.executeTemplate(example)
+                example.testNames = result.second.tests
+            }
+        }
+        return course
     }
 }
 
