@@ -323,6 +323,20 @@ class CourseService(
         return example
     }
 
+    fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {
+        val students = getStudents(courseSlug)
+        var submissionCount = 0
+        for (student in students) {
+            val studentId = student.registrationId
+            val exampleId = getExampleBySlug(courseSlug, exampleSlug).id
+            val submissions = getSubmissions(exampleId, studentId)
+            if (submissions.isNotEmpty()) {
+                submissionCount++
+            }
+        }
+        return submissionCount
+    }
+
     fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
