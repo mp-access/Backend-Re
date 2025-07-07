@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
+import kotlin.collections.ArrayList
 
 @Entity
 @Check(constraints = "((assignment_id IS NOT NULL AND course_id IS NULL) OR (assignment_id IS NULL AND course_id IS NOT NULL))")
@@ -64,6 +65,10 @@ class Task {
 
     @Column(name = "end_date")
     var end: LocalDateTime? = null
+
+    @Column(name = "test_names")
+    @JdbcTypeCode(SqlTypes.JSON)
+    var testNames: MutableList<String> = ArrayList()
 
     @Transient
     var status: TaskStatus? = null
