@@ -438,7 +438,7 @@ class CourseService(
                 } else {
                     val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
                     logger.error { "LLM service call failed with status $statusCode: $errorBody" }
-                    throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "LLM service returned error: $statusCode - $errorBody")
+                    throw ResponseStatusException(HttpStatus.BAD_REQUEST, "LLM service returned error: $statusCode - $errorBody")
                 }
             }
         }
