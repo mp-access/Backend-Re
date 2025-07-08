@@ -20,6 +20,7 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -30,6 +31,7 @@ class ExecutionService(
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
     private val jsonMapper: JsonMapper,
+    private val courseService: CourseService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -69,6 +71,24 @@ class ExecutionService(
                 .awaitCompletion()
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
+
+        // calculate the embedding in parallel with running the code.
+        val embeddingFuture: CompletableFuture<List<Double>?> = if (isExample(task) && (submission.command == Command.GRADE)) {
+            CompletableFuture.supplyAsync {
+                // Assumption: A submission for an example always consists of only one file, which is the student implementation (to remain language-agnostic
+                    // No testing file for examples / no multi-file examples.
+                if (submission.files.size == 1) {
+                    val implementation = submission.files[0].content ?: ""
+                    courseService.getImplementationEmbedding(implementation)
+                } else {
+                    logger.debug { "More than one file found in the task directory of the submission. It is not clear which file contains the student code." }
+                    null
+                }
+            }
+        } else {
+            CompletableFuture.completedFuture(null)
+        }
+
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
             // add submission files (supplied by the frontend) to the container
@@ -263,6 +283,14 @@ class ExecutionService(
             }
             FileUtils.deleteQuietly(submissionDir.toFile())
         }
+        try {
+            val embedding = embeddingFuture.join()
+            if (embedding != null) {
+                submission.embedding = embedding
+            }
+        } catch (e: Exception) {
+            logger.debug { "Failed to get embedding after : ${e.message}" }
+        }
         return Pair(submission, results)
     }
 
@@ -314,6 +342,10 @@ class ExecutionService(
         return taskFileRepository.findByTask_IdAndEnabledTrue(taskId)
             .filter { file: TaskFile -> file.visible && !file.editable }
             .toList()
+    }
+
+    fun isExample(task: Task): Boolean {
+        return task.course != null
     }
 
     private fun readLogsFile(path: Path): String {

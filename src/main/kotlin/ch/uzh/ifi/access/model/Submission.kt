@@ -7,6 +7,8 @@ import lombok.Getter
 import lombok.Setter
 import org.apache.commons.lang3.StringUtils
 import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 
 @Getter
@@ -45,6 +47,10 @@ class Submission {
 
     @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
     var persistentResultFiles: MutableList<ResultFile> = ArrayList()
+
+    @Column(name = "embedding")
+    @JdbcTypeCode(SqlTypes.JSON)
+    var embedding: List<Double> = ArrayList()
 
     @JsonIgnore
     @ManyToOne
