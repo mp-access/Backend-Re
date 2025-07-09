@@ -426,20 +426,18 @@ class CourseService(
         val httpPost = HttpPost("$llmServiceUrl/get_embedding/")
         httpPost.entity = StringEntity(jsonRequestBody, ContentType.APPLICATION_JSON)
 
-        httpClient.use { client ->
-            return client.execute(httpPost) { response ->
-                val statusCode = response.code
-                if (statusCode == HttpStatus.OK.value()) {
-                    response.entity?.let { entity ->
-                        val responseJson = String(entity.content.readAllBytes())
-                        val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
-                        return@execute embeddingResponse.embedding
-                    }
-                } else {
-                    val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
-                    logger.error { "LLM service call failed with status $statusCode: $errorBody" }
-                    throw ResponseStatusException(HttpStatus.BAD_REQUEST, "LLM service returned error: $statusCode - $errorBody")
+        return httpClient.execute(httpPost) { response ->
+            val statusCode = response.code
+            if (statusCode == HttpStatus.OK.value()) {
+                response.entity?.let { entity ->
+                    val responseJson = String(entity.content.readAllBytes())
+                    val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
+                    return@execute embeddingResponse.embedding
                 }
+            } else {
+                val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
+                logger.error { "LLM service call failed with status $statusCode: $errorBody" }
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "LLM service returned error: $statusCode - $errorBody")
             }
         }
     }
