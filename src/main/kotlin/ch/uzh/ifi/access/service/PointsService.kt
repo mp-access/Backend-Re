@@ -38,8 +38,6 @@ class PointsService(
     @Caching(
         evict = [
             CacheEvict("PointsService.calculateTaskPoints", key = "#taskId + '-' + #userId"),
-            CacheEvict("EvaluationService.getEvaluation", key = "#taskId + '-' + #userId"),
-            CacheEvict("EvaluationService.getEvaluationSummary", key = "#taskId + '-' + #userId")
         ]
     )
     fun evictTaskPoints(taskId: Long, userId: String) {

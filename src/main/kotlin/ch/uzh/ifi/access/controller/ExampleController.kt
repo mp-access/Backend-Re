@@ -47,18 +47,13 @@ class ExampleController(
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = exampleService.getCourseBySlug(course).participantCount
         val numberOfStudentsWhoSubmitted = exampleService.countStudentsWhoSubmittedExample(course, example)
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
+
         return ExampleInformationDTO(
             participantsOnline,
             totalParticipants,
             numberOfStudentsWhoSubmitted,
-            /*TODO: Replace following mock code with actual test pass rate and test names*/
-            passRatePerTestCase = mapOf(
-                "First Test" to 0.85,
-                "Second Test" to 0.5,
-                "Some Other Test" to 0.7,
-                "One More Test" to 0.1,
-                "Edge Case" to 0.2
-            )
+            passRatePerTestCase
         )
     }
 

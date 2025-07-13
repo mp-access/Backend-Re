@@ -4,7 +4,6 @@ import ch.uzh.ifi.access.model.Evaluation
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.projections.EvaluationSummary
 import ch.uzh.ifi.access.repository.EvaluationRepository
-import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 
 
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Service
 class EvaluationService(
     private val evaluationRepository: EvaluationRepository,
 ) {
-    @Cacheable("EvaluationService.getEvaluation", key = "#taskId + '-' + #userId")
     fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
         val res = evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
         // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)
@@ -21,7 +19,6 @@ class EvaluationService(
         return res
     }
 
-    @Cacheable("EvaluationService.getEvaluationSummary", key = "#task.id + '-' + #userId")
     fun getEvaluationSummary(task: Task, userId: String): EvaluationSummary? {
         val res = evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
         // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)

@@ -64,6 +64,7 @@ class CourseService(
         .setDefaultRequestConfig(requestConfig)
         .build()
 
+    @Cacheable("CourseService.getStudents", key = "#courseSlug")
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
         return course.registeredStudents.map {

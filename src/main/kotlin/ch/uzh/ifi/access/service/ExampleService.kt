@@ -3,7 +3,6 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
-import ch.uzh.ifi.access.model.dto.StudentDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.CourseRepository
@@ -20,7 +19,7 @@ class ExampleService(
     private val courseRepository: CourseRepository,
     private val submissionService: SubmissionService,
     private val roleService: RoleService,
-    private val proxy: CourseService,
+    private val courseService: CourseService,
     private val exampleRepository: ExampleRepository,
 ) {
 
@@ -145,7 +144,7 @@ class ExampleService(
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
         val isAdmin =
             userRoles.contains("$courseSlug-assistant") ||
-            userRoles.contains("$courseSlug-supervisor")
+                    userRoles.contains("$courseSlug-supervisor")
 
         if (!isAdmin) {
             if (example.start == null || example.end == null)
@@ -182,11 +181,11 @@ class ExampleService(
     }
 
     fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {
-        val students = getStudents(courseSlug)
+        val students = courseService.getStudents(courseSlug)
+        val exampleId = getExampleBySlug(courseSlug, exampleSlug).id
         var submissionCount = 0
         for (student in students) {
             val studentId = student.registrationId
-            val exampleId = getExampleBySlug(courseSlug, exampleSlug).id
             val submissions = submissionService.getSubmissions(exampleId, studentId)
             if (submissions.isNotEmpty()) {
                 submissionCount++
@@ -195,25 +194,44 @@ class ExampleService(
         return submissionCount
     }
 
+    fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+        val students = courseService.getStudents(courseSlug)
+
+        val testCount = example.testNames.size
+        val testSums = DoubleArray(testCount) { 0.0 }
+        var submissionCount = 0
+
+        for (student in students) {
+            val studentId = student.registrationId
+            val lastGradeSubmissions = submissionService.getSubmissions(example.id, studentId)
+                .filter { it.command == Command.GRADE }
+                .sortedByDescending { it.createdAt }
+                .firstOrNull()
+
+            if (lastGradeSubmissions != null && lastGradeSubmissions.testScores.size == testCount) {
+                submissionCount++
+                val scores = lastGradeSubmissions.testScores
+
+                for (i in scores.indices) {
+                    testSums[i] += scores[i].toDouble()
+                }
+            }
+        }
+
+        val passRatePerTestCase = if (submissionCount > 0) {
+            testSums.map { it / submissionCount }
+        } else {
+            List(testCount) { 0.0 }
+        }
+
+        return example.testNames.zip(passRatePerTestCase).toMap()
+    }
+
     fun getCourseBySlug(courseSlug: String): Course {
         return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
             "No course found with the URL $courseSlug"
         )
-    }
-
-    private fun getStudents(courseSlug: String): List<StudentDTO> {
-        val course = getCourseBySlug(courseSlug)
-        return course.registeredStudents.map {
-            val user = roleService.findUserByAllCriteria(it)
-            if (user != null) {
-                val studentDTO = proxy.getStudent(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
-                studentDTO
-            } else {
-                StudentDTO(registrationId = it)
-            }
-        }
     }
 }

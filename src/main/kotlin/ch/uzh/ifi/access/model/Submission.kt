@@ -48,6 +48,10 @@ class Submission {
     @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
     var persistentResultFiles: MutableList<ResultFile> = ArrayList()
 
+    @Column(name = "test_scores")
+    @JdbcTypeCode(SqlTypes.JSON)
+    var testScores: List<Double> = ArrayList()
+
     @Column(name = "embedding")
     @JdbcTypeCode(SqlTypes.JSON)
     var embedding: List<Double> = ArrayList()
