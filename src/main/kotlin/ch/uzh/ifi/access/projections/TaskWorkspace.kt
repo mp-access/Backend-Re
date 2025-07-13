@@ -13,7 +13,7 @@ interface TaskWorkspace : TaskOverview {
     @get:Value("#{@courseService.getTaskFiles(target.id)}")
     val files: List<TaskFile?>?
 
-    @get:Value("#{@courseService.getSubmissions(target.id, target.userId)}")
+    @get:Value("#{@submissionService.getSubmissions(target.id, target.userId)}")
     val submissions: List<Submission?>?
 
     @get:Value("#{@courseService.getNextAttemptAt(target.id, target.userId)}")
