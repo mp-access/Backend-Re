@@ -277,7 +277,10 @@ class ExecutionService(
                 if (results.points != null) {
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
-                    submission.testScores = results.testScores
+                    submission.testsPassed = results.hints.map { hint ->
+                        if (hint == null) 1 else 0
+                    }
+                    /*submission.testScores = results.testScores*/
                     // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
                     submission.points = minOf(results.points!!, submission.maxPoints!!)
                     evaluation.update(submission.points)

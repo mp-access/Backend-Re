@@ -144,7 +144,7 @@ class ExampleService(
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
         val isAdmin =
             userRoles.contains("$courseSlug-assistant") ||
-                    userRoles.contains("$courseSlug-supervisor")
+            userRoles.contains("$courseSlug-supervisor")
 
         if (!isAdmin) {
             if (example.start == null || example.end == null)
@@ -199,7 +199,7 @@ class ExampleService(
         val students = courseService.getStudents(courseSlug)
 
         val testCount = example.testNames.size
-        val testSums = DoubleArray(testCount) { 0.0 }
+        val totalTestsPassed = IntArray(size = testCount) { 0 }
         var submissionCount = 0
 
         for (student in students) {
@@ -209,18 +209,17 @@ class ExampleService(
                 .sortedByDescending { it.createdAt }
                 .firstOrNull()
 
-            if (lastGradeSubmissions != null && lastGradeSubmissions.testScores.size == testCount) {
+            if (lastGradeSubmissions != null && lastGradeSubmissions.testsPassed.size == testCount) {
                 submissionCount++
-                val scores = lastGradeSubmissions.testScores
 
-                for (i in scores.indices) {
-                    testSums[i] += scores[i].toDouble()
+                for (i in totalTestsPassed.indices) {
+                    totalTestsPassed[i] += lastGradeSubmissions.testsPassed[i]
                 }
             }
         }
 
         val passRatePerTestCase = if (submissionCount > 0) {
-            testSums.map { it / submissionCount }
+            totalTestsPassed.map { it.toDouble() / submissionCount }
         } else {
             List(testCount) { 0.0 }
         }
