@@ -334,8 +334,7 @@ class RoleService(
 
     @CacheEvict("RoleService.getOnlineCount", key = "#courseSlug")
     @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
-    private fun evictOnlineCount() {
+    fun evictOnlineCount() {
         // this just ensures that the online count is cached for only 1 minute
     }
-
 }

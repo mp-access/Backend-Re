@@ -1,12 +1,12 @@
 package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
-import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.EmitterService
 import ch.uzh.ifi.access.service.RoleService
+import ch.uzh.ifi.access.service.SubmissionService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -75,6 +75,7 @@ class CourseController(
     private val courseService: CourseService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
+    private val submissionService: SubmissionService
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -90,7 +91,6 @@ class CourseController(
     }
 
     @GetMapping("/{course}")
-    //@PreAuthorize("hasRole(#course) or hasRole(#course+'-supervisor')")
     @PreAuthorize("hasRole(#course)")
     fun getCourseWorkspace(@PathVariable course: String?): CourseWorkspace {
         return courseService.getCourseWorkspaceBySlug(course!!)
@@ -127,125 +127,8 @@ class CourseController(
     ) {
         val userId = roleService.getUserId(authentication.name)
         submission.userId = userId
-        courseService.createSubmission(course, assignment, task!!, submission)
-    }
 
-    @PostMapping("/{course}/examples/{example}/submit")
-    @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
-    fun evaluateExampleSubmission(
-        @PathVariable course: String,
-        @PathVariable example: String,
-        @RequestBody submission: SubmissionDTO,
-        authentication: Authentication
-    ) {
-        submission.userId = authentication.name
-        // Is there a better way than passing null to assignmentSlug?
-        courseService.createSubmission(course, null, example, submission)
-    }
-
-
-    @GetMapping("/{course}/examples/{example}/users/{user}")
-    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
-    fun getExample(
-        @PathVariable course: String,
-        @PathVariable example: String,
-        @PathVariable user: String
-    ): TaskWorkspace {
-        return courseService.getExample(course, example, user)
-    }
-
-    @GetMapping("/{course}/examples/{example}/information")
-    @PreAuthorize("hasRole(#course+'-assistant')")
-    fun getGeneralInformation(
-        @PathVariable course: String,
-        @PathVariable example: String,
-        authentication: Authentication
-    ): ExampleInformationDTO {
-        val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfStudentsWhoSubmitted = courseService.countStudentsWhoSubmittedExample(course, example)
-        return ExampleInformationDTO(
-            participantsOnline,
-            totalParticipants,
-            numberOfStudentsWhoSubmitted,
-            /*TODO: Replace following mock code with actual test pass rate and test names*/
-            passRatePerTestCase = mapOf(
-                "First Test" to 0.85,
-                "Second Test" to 0.5,
-                "Some Other Test" to 0.7,
-                "One More Test" to 0.1,
-                "Edge Case" to 0.2
-            )
-        )
-    }
-
-    // TODO: Change this to returning TaskOverview, as we don't need more information. However, when changing it, an error occurs in the courses/{course} endpoint.
-    @GetMapping("/{course}/examples")
-    @PreAuthorize("hasRole(#course)")
-    fun getExamples(
-        @PathVariable course: String,
-        authentication: Authentication
-    ): List<TaskWorkspace> {
-        return courseService.getExamples(course)
-    }
-
-    // Invoked by the teacher when publishing an example to inform the students
-    @PostMapping("/{course}/examples/{example}/publish")
-    @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun publishExample(
-        @PathVariable course: String,
-        @PathVariable example: String,
-        @RequestBody body: ExampleDurationDTO,
-    ) {
-        val activeExample = courseService.getExamples(course).firstOrNull {
-            it.status == TaskStatus.Interactive
-        }
-
-        if (activeExample != null) {
-            throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "An interactive example already exists."
-            )
-        }
-
-        val updatedExample = courseService.publishExampleBySlug(course, example, body.duration)
-
-        emitterService.sendMessage(course, "redirect", "/courses/$course/examples/$example")
-        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
-    }
-
-    // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds
-    @PutMapping("/{course}/examples/{example}/extend")
-    @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun extendExampleDeadline(
-        @PathVariable course: String,
-        @PathVariable example: String,
-        @RequestBody body: ExampleDurationDTO,
-    ) {
-        val updatedExample = courseService.extendExampleDeadlineBySlug(course, example, body.duration)
-
-        emitterService.sendMessage(
-            course,
-            "message",
-            "Submission time extended by the lecturer by ${body.duration} seconds."
-        )
-        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
-    }
-
-    // Invoked by the teacher when want to terminate the active example
-    @PutMapping("/{course}/examples/{example}/terminate")
-    @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun terminateExample(
-        @PathVariable course: String,
-        @PathVariable example: String
-    ) {
-        val updatedExample = courseService.terminateExampleBySlug(course, example)
-        emitterService.sendMessage(
-            course,
-            "message",
-            "The example has been terminated by the lecturer."
-        )
-        emitterService.sendMessage(course, "timer-update", "${updatedExample.start}/${updatedExample.end}")
+        submissionService.createTaskSubmission(course, assignment, task!!, submission)
     }
 
     // A text event endpoint to publish events to clients

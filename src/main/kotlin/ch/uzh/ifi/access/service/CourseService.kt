@@ -5,13 +5,22 @@ import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
-import ch.uzh.ifi.access.repository.*
+import ch.uzh.ifi.access.repository.AssignmentRepository
+import ch.uzh.ifi.access.repository.CourseRepository
+import ch.uzh.ifi.access.repository.TaskFileRepository
+import ch.uzh.ifi.access.repository.TaskRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
+import org.apache.hc.client5.http.classic.methods.HttpPost
+import org.apache.hc.client5.http.config.RequestConfig
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
+import org.apache.hc.client5.http.impl.classic.HttpClients
+import org.apache.hc.core5.http.ContentType
+import org.apache.hc.core5.http.io.entity.StringEntity
 import org.keycloak.representations.idm.UserRepresentation
-import org.modelmapper.ModelMapper
-import org.springframework.cache.CacheManager
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
@@ -22,153 +31,9 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Path
 import java.time.LocalDateTime
-import java.util.stream.Stream
+import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.hc.client5.http.classic.methods.HttpPost
-import org.apache.hc.client5.http.config.RequestConfig
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
-import org.apache.hc.client5.http.impl.classic.HttpClients
-import org.apache.hc.core5.http.ContentType
-import org.apache.hc.core5.http.io.entity.StringEntity
-import org.springframework.beans.factory.annotation.Value
-import java.util.concurrent.TimeUnit
-
-@Service
-class UserIdUpdateService(
-    val evaluationRepository: EvaluationRepository,
-    val submissionRepository: SubmissionRepository
-) {
-    @Transactional
-    fun updateID(names: List<String>, userId: String): Pair<Int, Int> {
-        return Pair(
-            evaluationRepository.updateUserId(names, userId),
-            submissionRepository.updateUserId(names, userId)
-        )
-    }
-
-}
-
-@Service
-class CacheInitService(
-    private val courseRepository: CourseRepository,
-    private val userIdUpdateService: UserIdUpdateService,
-    private val assignmentRepository: AssignmentRepository,
-    private val taskRepository: TaskRepository,
-    private val exampleRepository: ExampleRepository,
-    private val taskFileRepository: TaskFileRepository,
-    private val submissionRepository: SubmissionRepository,
-    private val evaluationRepository: EvaluationRepository,
-    private val modelMapper: ModelMapper,
-    private val courseLifecycle: CourseLifecycle,
-    private val roleService: RoleService,
-) {
-
-    private val logger = KotlinLogging.logger {}
-
-    @Transactional
-    fun initCache() {
-        courseRepository.findAllByDeletedFalse().forEach {
-            it.registeredStudents.map {
-                roleService.findUserByAllCriteria(it)?.let {
-                    roleService.getRegistrationIDCandidates(it.username)
-                    roleService.getUserId(it.username)
-                }
-            }
-        }
-    }
-
-    fun renameIDs() {
-        var evaluationCount = 0
-        var submissionCount = 0
-        courseRepository.findAll().forEach {
-            logger.info { "Course ${it?.slug}: changing userIds for evaluations and submissions..." }
-            it?.registeredStudents?.map { registrationId ->
-                roleService.findUserByAllCriteria(registrationId)?.let { user ->
-                    //logger.info { "Changing userIds for evaluations and submissions of user ${user.username}" }
-                    val names = roleService.getRegistrationIDCandidates(user.username).toMutableList()
-                    val userId = roleService.getUserId(user.username)
-                    if (userId != null) {
-                        names.remove(userId)
-                        val res = userIdUpdateService.updateID(names, userId)
-                        evaluationCount += res.first
-                        submissionCount += res.second
-                    }
-                }
-            }
-            logger.info { "Course ${it?.slug}: changed the userId for $evaluationCount evaluations and $submissionCount submissions" }
-        }
-
-    }
-
-}
-
-@Service
-class EvaluationService(
-    private val evaluationRepository: EvaluationRepository,
-    private val cacheManager: CacheManager,
-) {
-    @Cacheable("EvaluationService.getEvaluation", key = "#taskId + '-' + #userId")
-    fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
-        val res = evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
-        // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)
-        res?.submissions?.forEach { it.files }
-        res?.submissions?.forEach { it.persistentResultFiles }
-        return res
-    }
-
-    @Cacheable("EvaluationService.getEvaluationSummary", key = "#task.id + '-' + #userId")
-    fun getEvaluationSummary(task: Task, userId: String): EvaluationSummary? {
-        val res = evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
-        // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)
-        res?.submissions?.forEach { it.files }
-        res?.submissions?.forEach { it.persistentResultFiles }
-        return res
-    }
-
-}
-
-@Service
-class PointsService(
-    private val evaluationService: EvaluationService,
-    private val assignmentRepository: AssignmentRepository,
-    private val cacheManager: CacheManager,
-) {
-    @Cacheable(value = ["PointsService.calculateAvgTaskPoints"], key = "#taskSlug")
-    fun calculateAvgTaskPoints(taskSlug: String?): Double {
-        return 0.0
-        // TODO: re-enable this using a native query
-        //return evaluationRepository.findByTask_SlugAndBestScoreNotNull(taskSlug).map {
-        //    it.bestScore!! }.average().takeIf { it.isFinite() } ?: 0.0
-    }
-
-    @Cacheable(value = ["PointsService.calculateTaskPoints"], key = "#taskId + '-' + #userId")
-    fun calculateTaskPoints(taskId: Long?, userId: String): Double {
-        return evaluationService.getEvaluation(taskId, userId)?.bestScore ?: 0.0
-    }
-
-    @Cacheable("PointsService.calculateAssignmentMaxPoints")
-    fun calculateAssignmentMaxPoints(tasks: List<Task>): Double {
-        return tasks.stream().filter { it.enabled }.mapToDouble { it.maxPoints!! }.sum()
-    }
-
-    @Cacheable("PointsService.getMaxPoints", key = "#courseSlug")
-    fun getMaxPoints(courseSlug: String?): Double {
-        return assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug).sumOf { it.maxPoints!! }
-    }
-
-    @Caching(
-        evict = [
-            CacheEvict("PointsService.calculateTaskPoints", key = "#taskId + '-' + #userId"),
-            CacheEvict("EvaluationService.getEvaluation", key = "#taskId + '-' + #userId"),
-            CacheEvict("EvaluationService.getEvaluationSummary", key = "#taskId + '-' + #userId")
-        ]
-    )
-    fun evictTaskPoints(taskId: Long, userId: String) {
-    }
-
-}
 
 // TODO: decide properly which parameters should be nullable
 @Service
@@ -178,17 +43,11 @@ class CourseService(
     private val assignmentRepository: AssignmentRepository,
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
-    private val submissionRepository: SubmissionRepository,
-    private val evaluationRepository: EvaluationRepository,
-    private val modelMapper: ModelMapper,
     private val courseLifecycle: CourseLifecycle,
     private val roleService: RoleService,
-    private val dockerService: ExecutionService,
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
-    private val cacheManager: CacheManager,
-    private val exampleRepository: ExampleRepository,
     private val objectMapper: ObjectMapper,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
 ) {
@@ -205,6 +64,7 @@ class CourseService(
         .setDefaultRequestConfig(requestConfig)
         .build()
 
+    @Cacheable("CourseService.getStudents", key = "#courseSlug")
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
         return course.registeredStudents.map {
@@ -267,17 +127,11 @@ class CourseService(
         return taskRepository.findById(taskId).get()
     }
 
-    fun getTaskFileById(fileId: Long): TaskFile {
-        return taskFileRepository.findById(fileId).get()
-    }
-
     fun getCoursesOverview(): List<CourseOverview> {
-        //return courseRepository.findCoursesBy()
         return courseRepository.findCoursesByAndDeletedFalse()
     }
 
     fun getCourses(): List<Course> {
-        //return courseRepository.findCoursesBy()
         return courseRepository.findAllByDeletedFalse()
     }
 
@@ -290,131 +144,6 @@ class CourseService(
 
     fun enabledTasksOnly(tasks: List<Task>): List<Task> {
         return tasks.filter { it.enabled }
-    }
-
-    // TODO: make this return TaskOverview
-    fun getExamples(courseSlug: String): List<TaskWorkspace> {
-        return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
-    }
-
-    fun getExample(courseSlug: String, exampleSlug: String, userId: String): TaskWorkspace {
-        val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
-            )
-
-        workspace.setUserId(userId)
-        return workspace
-    }
-
-    fun getExampleBySlug(courseSlug: String, exampleSlug: String): Task {
-        return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
-            )
-    }
-
-    fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
-        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
-            )
-
-        if (duration <= 0)
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Duration must be a positive value"
-            )
-
-        if (example.start != null)
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Example already published"
-            )
-
-        val now = LocalDateTime.now()
-        example.start = now
-        example.end = now.plusSeconds(duration.toLong())
-
-        exampleRepository.saveAndFlush(example);
-
-        return example
-    }
-
-    // TODO: Move this to ExampleService once that exists
-    fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {
-        val students = getStudents(courseSlug)
-        var submissionCount = 0
-        for (student in students) {
-            val studentId = student.registrationId
-            val exampleId = getExampleBySlug(courseSlug, exampleSlug).id
-            val submissions = getSubmissions(exampleId, studentId)
-            if (submissions.isNotEmpty()) {
-                submissionCount++
-            }
-        }
-        return submissionCount
-    }
-
-    fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
-        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
-            )
-
-        if (duration <= 0)
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Duration must be a positive value"
-            )
-
-        val now = LocalDateTime.now()
-        if (example.start == null || example.start!!.isAfter(now)) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "$exampleSlug has not been published"
-            )
-        } else if (example.end!!.isBefore(now)) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "$exampleSlug is past due"
-            )
-        }
-
-        example.end = example.end!!.plusSeconds(duration.toLong())
-        exampleRepository.saveAndFlush(example);
-
-        return example
-    }
-
-    fun terminateExampleBySlug(courseSlug: String, exampleSlug: String): Task {
-        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
-            )
-
-        val now = LocalDateTime.now()
-        if (example.start == null || example.start!!.isAfter(now)) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "$exampleSlug has not been published"
-            )
-        } else if (example.end!!.isBefore(now)) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "$exampleSlug is past due"
-            )
-        }
-
-        example.end = now
-        exampleRepository.saveAndFlush(example);
-
-        return example
     }
 
     // TODO: Also move to the exampleService (Requires moving some imports / variables as well)
@@ -437,7 +166,10 @@ class CourseService(
             } else {
                 val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
                 logger.error { "LLM service call failed with status $statusCode: $errorBody" }
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, "LLM service returned error: $statusCode - $errorBody")
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "LLM service returned error: $statusCode - $errorBody"
+                )
             }
         }
     }
@@ -486,27 +218,6 @@ class CourseService(
         return permittedFiles
     }
 
-    fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
-        // run and test submissions include the execution logs
-        val includingLogs = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        includingLogs.forEach { submission ->
-            submission.logs?.let { output ->
-                if (submission.command == Command.GRADE) {
-                    submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
-                } else {
-                    submission.output = output
-                }
-            }
-        }
-        // graded submissions do not include the logs unless the user has the assistant role
-        val restrictedLogs =
-            submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
-        return Stream.concat(includingLogs.stream(), restrictedLogs.stream())
-            .sorted { obj1, obj2 -> obj2.id!!.compareTo(obj1.id!!) }
-            .toList()
-    }
-
-
     fun getRemainingAttempts(taskId: Long?, maxAttempts: Int): Int {
         return evaluationService.getEvaluation(taskId, roleService.getUserId())?.remainingAttempts
             ?: maxAttempts
@@ -528,7 +239,6 @@ class CourseService(
         newEvent.description = "Assignment $ordinalNum is $type."
         return newEvent
     }
-
 
     fun calculateTaskPoints(taskId: Long?): Double {
         val userId = roleService.getUserId() ?: return 0.0
@@ -564,114 +274,6 @@ class CourseService(
         ) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
         )
-    }
-
-    private fun createSubmissionFile(submission: Submission, fileDTO: SubmissionFileDTO) {
-        val newSubmissionFile = SubmissionFile()
-        newSubmissionFile.submission = submission
-        newSubmissionFile.content = fileDTO.content
-        newSubmissionFile.taskFile = getTaskFileById(fileDTO.taskFileId!!)
-        submission.files.add(newSubmissionFile)
-        submissionRepository.saveAndFlush(submission)
-    }
-
-
-    @Caching(
-        evict = [
-            CacheEvict("getStudent", key = "#courseSlug + '-' + #submissionDTO.userId"),
-            CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
-        ]
-    )
-    fun createSubmission(courseSlug: String, assignmentSlug: String?, taskSlug: String, submissionDTO: SubmissionDTO) {
-        val submissionLockDuration = 2L
-
-        val task = if (assignmentSlug == null) {
-            getExampleBySlug(courseSlug, taskSlug)
-        } else {
-            getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        }
-
-        // If the user is admin, dont check
-        val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
-        val isAdmin =
-            userRoles.contains("$courseSlug-assistant") ||
-            userRoles.contains("$courseSlug-supervisor")
-
-        if (assignmentSlug == null && !isAdmin) {
-            if (task.start == null || task.end == null)
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Example not published yet"
-                )
-            if (submissionDTO.command == Command.GRADE) {
-                val now = LocalDateTime.now()
-
-                // There should be an interval between each submission
-                val lastSubmissionDate =
-                    getSubmissions(task.id, submissionDTO.userId).sortedByDescending { it.createdAt }
-                        .firstOrNull()?.createdAt
-                if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
-                    throw ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "You must wait for 2 hours before submitting a solution again"
-                    )
-
-                // Checking if example has ended and is now on the grace period
-                val afterPublishPeriod = task.end!!.plusHours(submissionLockDuration)
-                if (now.isAfter(task.end) && now.isBefore((afterPublishPeriod)))
-                    throw ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Example submissions disabled until 2 hours after the example publish"
-                    )
-            }
-        }
-
-        submissionDTO.command?.let {
-            if (!task.hasCommand(it)) throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Submission rejected - task does not support ${submissionDTO.command} command"
-            )
-        }
-        // retrieve existing evaluation or if there is none, create a new one
-        if (submissionDTO.userId == null) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Submission rejected - missing userId"
-            )
-        }
-        pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-        val evaluation =
-            evaluationService.getEvaluation(task.id, submissionDTO.userId)
-                ?: task.createEvaluation(submissionDTO.userId)
-        evaluationRepository.saveAndFlush(evaluation)
-        // the controller prevents regular users from even submitting with restricted = false
-        // meaning for regular users, restricted is always true
-        if (submissionDTO.restricted && submissionDTO.command == Command.GRADE) {
-            if (evaluation.remainingAttempts == null || evaluation.remainingAttempts!! <= 0)
-                throw ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Submission rejected - no remaining attempts"
-                )
-        }
-        // at this point, all restrictions have passed and we can create the submission
-        val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
-        submissionRepository.saveAndFlush(submission)
-        submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
-            .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
-        // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
-        submission.valid = !submission.isGraded
-        val course = getCourseBySlug(courseSlug)
-        // execute the submission
-        try {
-            dockerService.executeSubmission(course, submission, task, evaluation)
-        } catch (e: Exception) {
-            submission.output =
-                "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
-        } finally {
-            submissionRepository.save(submission)
-            evaluationRepository.save(evaluation)
-            pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-        }
     }
 
     fun createCourse(course: CourseDTO): Course {
@@ -926,5 +528,4 @@ class CourseService(
             }.toList()
         )
     }
-
 }
