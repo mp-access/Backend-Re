@@ -15,7 +15,8 @@ import java.util.concurrent.TimeUnit
 
 @Service
 class EmitterService {
-    private val emitters = ConcurrentHashMap<String, ConcurrentHashMap<String, PerishableSseEmitter>>()
+    private val emitters =
+        ConcurrentHashMap<EmitterType, ConcurrentHashMap<String, ConcurrentHashMap<String, PerishableSseEmitter>>>()
     private val logger = KotlinLogging.logger {}
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
 
@@ -29,13 +30,12 @@ class EmitterService {
 
      This is done because the server cannot detect if a client disconnected.
     */
-    fun registerEmitter(slug: String, userId: String): PerishableSseEmitter {
+    fun registerEmitter(type: EmitterType, slug: String, userId: String): PerishableSseEmitter {
         val id = "${slug}_${userId}_${UUID.randomUUID()}"
         val emitter = PerishableSseEmitter(id, ZonedDateTime.now(), Duration.ofMinutes(60 * 8).toMillis())
         logger.debug { "SSE emitter created ($id)" }
-
         emitter.onCompletion {
-            emitters[slug]?.remove(id)
+            emitters[type]?.get(slug)?.remove(id)
             logger.debug { "SSE emitter removed ($id)" }
         }
         emitter.onTimeout {
@@ -47,7 +47,8 @@ class EmitterService {
             emitter.complete()
         }
 
-        emitters.computeIfAbsent(slug) { ConcurrentHashMap<String, PerishableSseEmitter>() }[id] = emitter
+        emitters.computeIfAbsent(type) { ConcurrentHashMap() }
+            .computeIfAbsent(slug) { ConcurrentHashMap() }[id] = emitter
         scheduler.schedule({
             try {
                 emitter.send(SseEmitter.event().name("emitter-id").data(id))
@@ -59,34 +60,48 @@ class EmitterService {
         return emitter
     }
 
-    fun sendMessage(slug: String, name: String, message: String) {
+    fun sendPayload(type: EmitterType, slug: String, name: String, message: Any) {
+        if (EmitterType.SUPERVISOR == type || EmitterType.EVERYONE == type) {
+            emitters[EmitterType.SUPERVISOR]?.get(slug)?.forEach {
+                try {
+                    it.value.send(SseEmitter.event().name(name).data(message))
+                } catch (e: Exception) {
+                    emitters[EmitterType.SUPERVISOR]?.get(slug)?.remove(it.key)
+                }
+            }
+        }
 
-        emitters[slug]?.forEach {
-            try {
-                it.value.send(SseEmitter.event().name(name).data(message))
-            } catch (e: Exception) {
-                emitters[slug]?.remove(it.key)
+        if (EmitterType.STUDENT == type || EmitterType.EVERYONE == type) {
+            emitters[EmitterType.STUDENT]?.get(slug)?.forEach {
+                try {
+                    it.value.send(SseEmitter.event().name(name).data(message))
+                } catch (e: Exception) {
+                    emitters[EmitterType.STUDENT]?.get(slug)?.remove(it.key)
+                }
             }
         }
     }
 
-    fun keepAliveEmitter(slug: String, emitterId: String) {
-        emitters[slug]?.get(emitterId)?.lastHeartbeat = ZonedDateTime.now()
+
+    fun keepAliveEmitter(type: EmitterType, slug: String, emitterId: String) {
+        emitters[type]?.get(slug)?.get(emitterId)?.lastHeartbeat = ZonedDateTime.now()
     }
 
     @Scheduled(fixedRate = 30 * 1000)
     fun cleanupEmitters() {
-        emitters.forEach { (slug, values) ->
-            values.forEach { (id, emitter) ->
-                val age = Duration.between(emitter.lastHeartbeat, ZonedDateTime.now()).abs().seconds
-                if (age > 15) {
-                    logger.debug { "Emitter ${emitter.id} died of old age $age" }
-                    try {
-                        emitter.complete()
-                    } catch (_: IllegalStateException) {
+        emitters.forEach { (type, slugMap) ->
+            slugMap.forEach { (slug, emitterMap) ->
+                emitterMap.forEach { (id, emitter) ->
+                    val age = Duration.between(emitter.lastHeartbeat, ZonedDateTime.now()).abs().seconds
+                    if (age > 15) {
+                        logger.debug { "Emitter ${emitter.id} died of old age $age" }
+                        try {
+                            emitter.complete()
+                        } catch (_: IllegalStateException) {
 
+                        }
+                        emitters[type]?.get(slug)?.remove(id)
                     }
-                    emitters[slug]?.remove(id)
                 }
             }
         }
