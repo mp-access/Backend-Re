@@ -158,5 +158,22 @@ class ExampleController(
         )
     }
 
+    // Invoked by the teacher when publishing an example to inform the students
+    @PostMapping("/{example}/user/{userId}/inspect")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
+    fun getSubmissionInspectionPath(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @PathVariable userId: String,
+    ) {
+
+        val encodedUserId = Base64.getEncoder().encodeToString(userId.toByteArray())
+        emitterService.sendPayload(
+            EmitterType.SUPERVISOR,
+            course,
+            "inspect",
+            "/courses/$course/examples/$example/public-dashboard/inspect/users/$encodedUserId"
+
+        )
     }
 }
