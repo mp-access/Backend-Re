@@ -317,6 +317,15 @@ class RoleService(
         return registrationID
     }
 
+    fun isSupervisor(courseSlug: String): Boolean {
+        val registrationID = getCurrentUsername()
+        val user = proxy.findUserByAllCriteria(registrationID)
+            ?: throw Exception("User with registrationID $registrationID not found")
+
+        val roles = user.toResource().roles().realmLevel().listEffective()
+        return roles.any { it.name == "${courseSlug}-supervisor" }
+    }
+
     @Cacheable("RoleService.getOnlineCount", key = "#courseSlug")
     fun getOnlineCount(courseSlug: String): Int {
         val clientRepresentation = accessRealm.clients().findByClientId("access-client")[0]

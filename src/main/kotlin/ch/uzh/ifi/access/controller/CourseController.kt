@@ -3,10 +3,7 @@ package ch.uzh.ifi.access.controller
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
-import ch.uzh.ifi.access.service.CourseService
-import ch.uzh.ifi.access.service.EmitterService
-import ch.uzh.ifi.access.service.RoleService
-import ch.uzh.ifi.access.service.SubmissionService
+import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -135,7 +132,8 @@ class CourseController(
     @GetMapping("/{course}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun subscribe(@PathVariable course: String, authentication: Authentication): ResponseEntity<SseEmitter> {
         val headers = HttpHeaders()
-        val emitter = emitterService.registerEmitter(course, authentication.name)
+        val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
+        val emitter = emitterService.registerEmitter(emitterType, course, authentication.name)
         headers.add("Cache-Control", "no-transform") // needed to work with webpack-dev-server
         return ResponseEntity<SseEmitter>(emitter, headers, HttpStatus.OK)
     }
@@ -143,7 +141,8 @@ class CourseController(
     // Sent by the client to keep the emitter alive
     @GetMapping("/{course}/heartbeat/{emitterId}")
     fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String) {
-        emitterService.keepAliveEmitter(course, emitterId)
+        val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
+        emitterService.keepAliveEmitter(emitterType, course, emitterId)
     }
 
     @GetMapping("/{courseSlug}/points")
