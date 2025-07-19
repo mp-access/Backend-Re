@@ -76,15 +76,10 @@ class ExecutionService(
         val embeddingFuture: CompletableFuture<List<Double>?> =
             if (isExample(task) && (submission.command == Command.GRADE)) {
                 CompletableFuture.supplyAsync {
-                    // Assumption: A submission for an example always consists of only one file, which is the student implementation (to remain language-agnostic
-                    // No testing file for examples / no multi-file examples.
-                    if (submission.files.size == 1) {
-                        val implementation = submission.files[0].content ?: ""
-                        courseService.getImplementationEmbedding(implementation)
-                    } else {
-                        logger.debug { "More than one file found in the task directory of the submission. It is not clear which file contains the student code." }
-                        null
-                    }
+                    val concatenatedSubmissionContent = submission.files
+                        .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                        .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+                    courseService.getImplementationEmbedding(concatenatedSubmissionContent)
                 }
             } else {
                 CompletableFuture.completedFuture(null)
