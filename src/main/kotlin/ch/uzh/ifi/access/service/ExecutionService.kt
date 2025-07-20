@@ -5,7 +5,10 @@ import ch.uzh.ifi.access.Util.bytesToString
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dao.Results
+import ch.uzh.ifi.access.model.dto.EmbeddingDTO
+import ch.uzh.ifi.access.model.dto.ImplementationDTO
 import ch.uzh.ifi.access.repository.TaskFileRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.PullImageResultCallback
@@ -15,7 +18,16 @@ import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.io.FileUtils
+import org.apache.hc.client5.http.classic.methods.HttpPost
+import org.apache.hc.client5.http.config.RequestConfig
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
+import org.apache.hc.client5.http.impl.classic.HttpClients
+import org.apache.hc.core5.http.ContentType
+import org.apache.hc.core5.http.io.entity.StringEntity
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
@@ -31,9 +43,20 @@ class ExecutionService(
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
     private val jsonMapper: JsonMapper,
-    private val courseService: CourseService,
+    private val objectMapper: ObjectMapper,
+    @Value("\${llm.service.url}") private val llmServiceUrl: String
 ) {
     private val logger = KotlinLogging.logger {}
+
+    private val requestConfig: RequestConfig = RequestConfig.custom()
+        .setConnectionRequestTimeout(5, TimeUnit.SECONDS)
+        .setResponseTimeout(5, TimeUnit.SECONDS)
+        .build()
+
+    // Initialize HttpClient with the configured timeouts
+    private val httpClient: CloseableHttpClient = HttpClients.custom()
+        .setDefaultRequestConfig(requestConfig)
+        .build()
 
     fun executeTemplate(task: Task): Pair<Submission, Results> {
         val course = task.assignment?.course ?: task.course!!
@@ -79,7 +102,7 @@ class ExecutionService(
                     val concatenatedSubmissionContent = submission.files
                         .filter { submissionFile -> submissionFile.taskFile?.editable == true }
                         .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-                    courseService.getImplementationEmbedding(concatenatedSubmissionContent)
+                    getImplementationEmbedding(concatenatedSubmissionContent)
                 }
             } else {
                 CompletableFuture.completedFuture(null)
@@ -361,5 +384,30 @@ class ExecutionService(
         }.joinToString(separator = "\n").replace("\u0000", "") // null characters mess up transport
     }
 
+    fun getImplementationEmbedding(implementation: String): List<Double> {
+        logger.info { "Requesting embedding for code snippet from LLM service." }
+        val requestBody = ImplementationDTO(implementation)
+        val jsonRequestBody = objectMapper.writeValueAsString(requestBody)
 
+        val httpPost = HttpPost("$llmServiceUrl/get_embedding/")
+        httpPost.entity = StringEntity(jsonRequestBody, ContentType.APPLICATION_JSON)
+
+        return httpClient.execute(httpPost) { response ->
+            val statusCode = response.code
+            if (statusCode == HttpStatus.OK.value()) {
+                response.entity?.let { entity ->
+                    val responseJson = String(entity.content.readAllBytes())
+                    val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
+                    return@execute embeddingResponse.embedding
+                }
+            } else {
+                val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
+                logger.error { "LLM service call failed with status $statusCode: $errorBody" }
+                throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "LLM service returned error: $statusCode - $errorBody"
+                )
+            }
+        }
+    }
 }
