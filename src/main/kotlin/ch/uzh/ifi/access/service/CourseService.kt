@@ -9,18 +9,10 @@ import ch.uzh.ifi.access.repository.AssignmentRepository
 import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.TaskFileRepository
 import ch.uzh.ifi.access.repository.TaskRepository
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
-import org.apache.hc.client5.http.classic.methods.HttpPost
-import org.apache.hc.client5.http.config.RequestConfig
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
-import org.apache.hc.client5.http.impl.classic.HttpClients
-import org.apache.hc.core5.http.ContentType
-import org.apache.hc.core5.http.io.entity.StringEntity
 import org.keycloak.representations.idm.UserRepresentation
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
@@ -31,7 +23,6 @@ import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Path
 import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -48,21 +39,10 @@ class CourseService(
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
-    private val objectMapper: ObjectMapper,
-    @Value("\${llm.service.url}") private val llmServiceUrl: String
 ) {
 
     private val logger = KotlinLogging.logger {}
 
-    private val requestConfig: RequestConfig = RequestConfig.custom()
-        .setConnectionRequestTimeout(5, TimeUnit.SECONDS)
-        .setResponseTimeout(5, TimeUnit.SECONDS)
-        .build()
-
-    // Initialize HttpClient with the configured timeouts
-    private val httpClient: CloseableHttpClient = HttpClients.custom()
-        .setDefaultRequestConfig(requestConfig)
-        .build()
 
     @Cacheable("CourseService.getStudents", key = "#courseSlug")
     fun getStudents(courseSlug: String): List<StudentDTO> {
@@ -144,34 +124,6 @@ class CourseService(
 
     fun enabledTasksOnly(tasks: List<Task>): List<Task> {
         return tasks.filter { it.enabled }
-    }
-
-    // TODO: Also move to the exampleService (Requires moving some imports / variables as well)
-    fun getImplementationEmbedding(implementation: String): List<Double> {
-        logger.info { "Requesting embedding for code snippet from LLM service." }
-        val requestBody = ImplementationDTO(implementation)
-        val jsonRequestBody = objectMapper.writeValueAsString(requestBody)
-
-        val httpPost = HttpPost("$llmServiceUrl/get_embedding/")
-        httpPost.entity = StringEntity(jsonRequestBody, ContentType.APPLICATION_JSON)
-
-        return httpClient.execute(httpPost) { response ->
-            val statusCode = response.code
-            if (statusCode == HttpStatus.OK.value()) {
-                response.entity?.let { entity ->
-                    val responseJson = String(entity.content.readAllBytes())
-                    val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
-                    return@execute embeddingResponse.embedding
-                }
-            } else {
-                val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
-                logger.error { "LLM service call failed with status $statusCode: $errorBody" }
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "LLM service returned error: $statusCode - $errorBody"
-                )
-            }
-        }
     }
 
     // TODO: clean up these confusing method names
@@ -263,7 +215,7 @@ class CourseService(
     }
 
     fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {
-        return memberIds.map { courseRepository.getTeamMemberName(it) }.filterNotNull().toSet()
+        return memberIds.mapNotNull { courseRepository.getTeamMemberName(it) }.toSet()
     }
 
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
