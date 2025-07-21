@@ -16,7 +16,6 @@ import java.time.LocalDateTime
 
 @Service
 class ExampleService(
-    private val courseRepository: CourseRepository,
     private val submissionService: SubmissionService,
     private val roleService: RoleService,
     private val courseService: CourseService,
@@ -205,7 +204,7 @@ class ExampleService(
         for (student in students) {
             val studentId = student.registrationId
             val lastGradeSubmissions = submissionService.getSubmissions(example.id, studentId)
-                .filter { it.command == Command.GRADE && submittedWhenExampleWasInteractive(it, example) }
+                .filter { it.command == Command.GRADE && (submittedWhenExampleWasInteractive(it, example)) }
                 .sortedByDescending { it.createdAt }
                 .firstOrNull()
 
@@ -228,6 +227,6 @@ class ExampleService(
     }
 
     fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
-         return (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
+        return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
 }
