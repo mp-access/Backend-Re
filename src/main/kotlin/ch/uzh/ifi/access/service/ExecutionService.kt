@@ -97,7 +97,7 @@ class ExecutionService(
 
         // calculate the embedding in parallel with running the code.
         val embeddingFuture: CompletableFuture<List<Double>?> =
-            if (isExample(task) && (submission.command == Command.GRADE)) {
+            if (isExample(task) && (submission.command == Command.GRADE) && (submission.createdAt!! >= task.start && submission.createdAt!! <= task.end)) {
                 CompletableFuture.supplyAsync {
                     val concatenatedSubmissionContent = submission.files
                         .filter { submissionFile -> submissionFile.taskFile?.editable == true }
