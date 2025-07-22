@@ -60,23 +60,23 @@ class EmitterService {
         return emitter
     }
 
-    fun sendPayload(type: EmitterType, slug: String, name: String, message: Any) {
+    fun sendPayload(type: EmitterType, courseSlug: String, name: String, message: Any) {
         if (EmitterType.SUPERVISOR == type || EmitterType.EVERYONE == type) {
-            emitters[EmitterType.SUPERVISOR]?.get(slug)?.forEach {
+            emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.forEach {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                 } catch (e: Exception) {
-                    emitters[EmitterType.SUPERVISOR]?.get(slug)?.remove(it.key)
+                    emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.remove(it.key)
                 }
             }
         }
 
         if (EmitterType.STUDENT == type || EmitterType.EVERYONE == type) {
-            emitters[EmitterType.STUDENT]?.get(slug)?.forEach {
+            emitters[EmitterType.STUDENT]?.get(courseSlug)?.forEach {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                 } catch (e: Exception) {
-                    emitters[EmitterType.STUDENT]?.get(slug)?.remove(it.key)
+                    emitters[EmitterType.STUDENT]?.get(courseSlug)?.remove(it.key)
                 }
             }
         }

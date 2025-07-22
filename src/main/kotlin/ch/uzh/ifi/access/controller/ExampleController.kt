@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.ExampleDurationDTO
 import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
+import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -66,12 +67,11 @@ class ExampleController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
-        // Is there a better way than passing null to assignmentSlug?
         val newSubmission = exampleService.createExampleSubmission(course, example, submission)
 
         emitterService.sendPayload(
             EmitterType.SUPERVISOR,
-            example,
+            course,
             "student-submission",
             SubmissionSseDTO(
                 newSubmission.id!!,
