@@ -49,8 +49,8 @@ class ExecutionService(
     private val logger = KotlinLogging.logger {}
 
     private val requestConfig: RequestConfig = RequestConfig.custom()
-        .setConnectionRequestTimeout(5, TimeUnit.SECONDS)
-        .setResponseTimeout(5, TimeUnit.SECONDS)
+        .setConnectionRequestTimeout(30, TimeUnit.SECONDS)
+        .setResponseTimeout(30, TimeUnit.SECONDS)
         .build()
 
     // Initialize HttpClient with the configured timeouts
@@ -97,7 +97,7 @@ class ExecutionService(
 
         // calculate the embedding in parallel with running the code.
         val embeddingFuture: CompletableFuture<List<Double>?> =
-            if (isExample(task) && (submission.command == Command.GRADE)) {
+            if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task)) {
                 CompletableFuture.supplyAsync {
                     val concatenatedSubmissionContent = submission.files
                         .filter { submissionFile -> submissionFile.taskFile?.editable == true }
@@ -409,5 +409,9 @@ class ExecutionService(
                 )
             }
         }
+    }
+
+    fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
+        return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
 }

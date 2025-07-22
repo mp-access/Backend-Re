@@ -1,6 +1,6 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.model.Course
+import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
@@ -16,7 +16,6 @@ import java.time.LocalDateTime
 
 @Service
 class ExampleService(
-    private val courseRepository: CourseRepository,
     private val submissionService: SubmissionService,
     private val roleService: RoleService,
     private val courseService: CourseService,
@@ -207,7 +206,7 @@ class ExampleService(
         for (student in students) {
             val studentId = student.registrationId
             val lastGradeSubmissions = submissionService.getSubmissions(example.id, studentId)
-                .filter { it.command == Command.GRADE }
+                .filter { it.command == Command.GRADE && (submittedWhenExampleWasInteractive(it, example)) }
                 .sortedByDescending { it.createdAt }
                 .firstOrNull()
 
@@ -229,10 +228,7 @@ class ExampleService(
         return example.testNames.zip(passRatePerTestCase).toMap()
     }
 
-    fun getCourseBySlug(courseSlug: String): Course {
-        return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No course found with the URL $courseSlug"
-        )
+    fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
+        return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
 }
