@@ -135,7 +135,7 @@ class ExampleService(
         return example
     }
 
-    fun createExampleSubmission(courseSlug: String, taskSlug: String, submissionDTO: SubmissionDTO) {
+    fun createExampleSubmission(courseSlug: String, taskSlug: String, submissionDTO: SubmissionDTO): Submission {
         val submissionLockDuration = 2L
 
         val example = getExampleBySlug(courseSlug, taskSlug)
@@ -177,7 +177,9 @@ class ExampleService(
             }
         }
 
-        submissionService.createSubmission(courseSlug, taskSlug, example, submissionDTO)
+        val newSubmission = submissionService.createSubmission(courseSlug, taskSlug, example, submissionDTO)
+
+        return newSubmission
     }
 
     fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {

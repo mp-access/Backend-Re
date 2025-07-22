@@ -69,7 +69,21 @@ class ExampleController(
     ) {
         submission.userId = authentication.name
         // Is there a better way than passing null to assignmentSlug?
-        exampleService.createExampleSubmission(course, example, submission)
+        val newSubmission = exampleService.createExampleSubmission(course, example, submission)
+
+        emitterService.sendPayload(
+            EmitterType.SUPERVISOR,
+            example,
+            "student-submission",
+            SubmissionSseDTO(
+                newSubmission.id!!,
+                newSubmission.userId,
+                newSubmission.createdAt,
+                newSubmission.points!!,
+                newSubmission.testsPassed,
+                newSubmission.files[0].content
+            )
+        )
     }
 
     @GetMapping("/{example}/users/{user}")

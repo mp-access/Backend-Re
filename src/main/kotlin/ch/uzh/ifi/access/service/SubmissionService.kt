@@ -50,7 +50,7 @@ class SubmissionService(
         assignmentSlug: String,
         taskSlug: String,
         submissionDTO: SubmissionDTO
-    ) {
+    ): Submission {
         return createSubmission(
             courseSlug,
             taskSlug,
@@ -66,7 +66,7 @@ class SubmissionService(
         ]
     )
     // It only accepts assignment tasks, not examples
-    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO) {
+    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
@@ -113,6 +113,8 @@ class SubmissionService(
             evaluationRepository.save(evaluation)
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
         }
+
+        return submission
     }
 
     private fun createSubmissionFile(submission: Submission, fileDTO: SubmissionFileDTO) {
