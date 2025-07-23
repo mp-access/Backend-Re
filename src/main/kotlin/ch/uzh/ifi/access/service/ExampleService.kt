@@ -34,7 +34,7 @@ class ExampleService(
         val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
+                "No example found with the Slug $exampleSlug"
             )
 
         workspace.setUserId(userId)
@@ -45,7 +45,7 @@ class ExampleService(
         return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
+                "No example found with the Slug $exampleSlug"
             )
     }
 
@@ -53,7 +53,7 @@ class ExampleService(
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "No example found with the URL $exampleSlug"
+                "No example found with the Slug $exampleSlug"
             )
 
         if (duration <= 0)
@@ -135,10 +135,10 @@ class ExampleService(
         return example
     }
 
-    fun createExampleSubmission(courseSlug: String, taskSlug: String, submissionDTO: SubmissionDTO): Submission {
+    fun createExampleSubmission(courseSlug: String, exampleSlug: String, submissionDTO: SubmissionDTO): Submission {
         val submissionLockDuration = 2L
 
-        val example = getExampleBySlug(courseSlug, taskSlug)
+        val example = getExampleBySlug(courseSlug, exampleSlug)
 
         // If the user is admin, dont check
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
@@ -177,51 +177,48 @@ class ExampleService(
             }
         }
 
-        val newSubmission = submissionService.createSubmission(courseSlug, taskSlug, example, submissionDTO)
+        val newSubmission = submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO)
 
         return newSubmission
     }
 
-    fun countStudentsWhoSubmittedExample(courseSlug: String, exampleSlug: String): Int {
+    fun getSubmissions(courseSlug: String, exampleSlug: String): List<Submission> {
+        val exmaple = getExampleBySlug(courseSlug, exampleSlug)
         val students = courseService.getStudents(courseSlug)
-        val exampleId = getExampleBySlug(courseSlug, exampleSlug).id
-        var submissionCount = 0
+
+        val studentSubmissions = mutableListOf<Submission>()
+        if (exmaple.start == null || exmaple.end == null)
+            return studentSubmissions
+
         for (student in students) {
             val studentId = student.registrationId
-            val submissions = submissionService.getSubmissions(exampleId, studentId)
+            val submissions = submissionService.getSubmissions(exmaple.id, studentId).filter {
+                it.command == Command.GRADE &&
+                !it.createdAt!!.isBefore(exmaple.start) &&
+                !it.createdAt!!.isAfter(exmaple.end)
+            }
             if (submissions.isNotEmpty()) {
-                submissionCount++
+                studentSubmissions.add(submissions[0])
             }
         }
-        return submissionCount
+        return studentSubmissions
     }
 
     fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
         val example = getExampleBySlug(courseSlug, exampleSlug)
-        val students = courseService.getStudents(courseSlug)
+        val submissions = getSubmissions(courseSlug, exampleSlug)
 
         val testCount = example.testNames.size
         val totalTestsPassed = IntArray(size = testCount) { 0 }
-        var submissionCount = 0
 
-        for (student in students) {
-            val studentId = student.registrationId
-            val lastGradeSubmissions = submissionService.getSubmissions(example.id, studentId)
-                .filter { it.command == Command.GRADE }
-                .sortedByDescending { it.createdAt }
-                .firstOrNull()
-
-            if (lastGradeSubmissions != null && lastGradeSubmissions.testsPassed.size == testCount) {
-                submissionCount++
-
-                for (i in totalTestsPassed.indices) {
-                    totalTestsPassed[i] += lastGradeSubmissions.testsPassed[i]
-                }
+        for (submission in submissions) {
+            for (i in totalTestsPassed.indices) {
+                totalTestsPassed[i] += submission.testsPassed[i]
             }
         }
 
-        val passRatePerTestCase = if (submissionCount > 0) {
-            totalTestsPassed.map { it.toDouble() / submissionCount }
+        val passRatePerTestCase = if (submissions.isNotEmpty()) {
+            totalTestsPassed.map { it.toDouble() / submissions.size }
         } else {
             List(testCount) { 0.0 }
         }
