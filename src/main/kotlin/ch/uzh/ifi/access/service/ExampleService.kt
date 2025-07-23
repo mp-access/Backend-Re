@@ -5,7 +5,6 @@ import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
-import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
@@ -223,9 +222,5 @@ class ExampleService(
         }
 
         return example.testNames.zip(passRatePerTestCase).toMap()
-    }
-
-    fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
-        return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
 }
