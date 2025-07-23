@@ -6,10 +6,7 @@ import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
-import ch.uzh.ifi.access.service.EmitterService
-import ch.uzh.ifi.access.service.EmitterType
-import ch.uzh.ifi.access.service.ExampleService
-import ch.uzh.ifi.access.service.RoleService
+import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
@@ -27,6 +24,7 @@ class ExampleController(
     private val exampleService: ExampleService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
+    private val courseService: CourseService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -48,7 +46,7 @@ class ExampleController(
         authentication: Authentication
     ): ExampleInformationDTO {
         val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = exampleService.getCourseBySlug(course).participantCount
+        val totalParticipants = courseService.getCourseBySlug(course).participantCount
         val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
 
@@ -90,12 +88,11 @@ class ExampleController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
-        // Is there a better way than passing null to assignmentSlug?
         val newSubmission = exampleService.createExampleSubmission(course, example, submission)
 
         emitterService.sendPayload(
             EmitterType.SUPERVISOR,
-            example,
+            course,
             "student-submission",
             SubmissionSseDTO(
                 newSubmission.id!!,
