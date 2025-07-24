@@ -103,6 +103,24 @@ class ExampleController(
                 newSubmission.files[0].content
             )
         )
+
+        val participantsOnline = roleService.getOnlineCount(course)
+        val totalParticipants = courseService.getCourseBySlug(course).participantCount
+        val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
+
+
+        emitterService.sendPayload(
+            EmitterType.SUPERVISOR,
+            course,
+            "example-information",
+            ExampleInformationDTO(
+                participantsOnline,
+                totalParticipants,
+                numberOfStudentsWhoSubmitted,
+                passRatePerTestCase
+            )
+        )
     }
 
     @GetMapping("/{example}/users/{user}")
