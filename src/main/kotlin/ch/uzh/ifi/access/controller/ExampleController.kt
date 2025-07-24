@@ -47,7 +47,7 @@ class ExampleController(
     ): ExampleInformationDTO {
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfStudentsWhoSubmitted = exampleService.countStudentsWhoSubmittedExample(course, example)
+        val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
 
         return ExampleInformationDTO(
@@ -56,6 +56,27 @@ class ExampleController(
             numberOfStudentsWhoSubmitted,
             passRatePerTestCase
         )
+    }
+
+    @GetMapping("/{example}/submissions")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getExampleSubmissions(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        authentication: Authentication
+    ): List<SubmissionSseDTO> {
+        val submissions = exampleService.getSubmissions(course, example).map {
+            SubmissionSseDTO(
+                it.id!!,
+                it.userId,
+                it.createdAt,
+                it.points!!,
+                it.testsPassed,
+                it.files[0].content
+            )
+        }
+
+        return submissions
     }
 
     @PostMapping("/{example}/submit")
