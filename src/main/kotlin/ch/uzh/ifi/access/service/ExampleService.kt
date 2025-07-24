@@ -73,7 +73,7 @@ class ExampleService(
         example.start = now
         example.end = now.plusSeconds(duration.toLong())
 
-        exampleRepository.saveAndFlush(example);
+        exampleRepository.saveAndFlush(example)
 
         return example
     }
@@ -105,7 +105,7 @@ class ExampleService(
         }
 
         example.end = example.end!!.plusSeconds(duration.toLong())
-        exampleRepository.saveAndFlush(example);
+        exampleRepository.saveAndFlush(example)
 
         return example
     }
@@ -131,7 +131,7 @@ class ExampleService(
         }
 
         example.end = now
-        exampleRepository.saveAndFlush(example);
+        exampleRepository.saveAndFlush(example)
 
         return example
     }
@@ -240,9 +240,9 @@ class ExampleService(
             evaluationRepository.deleteAll(evaluations.toList())
 
         // Reset example stats
-        example.start = null;
-        example.end = null;
-        exampleRepository.saveAndFlush(example);
+        example.start = null
+        example.end = null
+        exampleRepository.saveAndFlush(example)
 
         return example
     }
