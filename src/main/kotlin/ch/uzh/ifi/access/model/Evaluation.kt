@@ -28,7 +28,7 @@ class Evaluation {
     @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 
-    @OneToMany(mappedBy = "evaluation", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "evaluation", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy(clause = "CREATED_AT DESC")
     var submissions: MutableList<Submission> = ArrayList()
 
