@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
@@ -40,6 +41,13 @@ class SubmissionService(
         // graded submissions do not include the logs unless the user has the assistant role
         val restrictedLogs =
             submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
+        restrictedLogs.forEach { submission ->
+            submission.output.let { output ->
+                if (submission.evaluation!!.task!!.status === TaskStatus.Interactive) {
+                    submission.output = ""
+                }
+            }
+        }
         return Stream.concat(includingLogs.stream(), restrictedLogs.stream())
             .sorted { obj1, obj2 -> obj2.id!!.compareTo(obj1.id!!) }
             .toList()
