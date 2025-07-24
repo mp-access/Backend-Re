@@ -5,8 +5,10 @@ import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.transaction.Transactional
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -19,6 +21,7 @@ class ExampleService(
     private val roleService: RoleService,
     private val courseService: CourseService,
     private val exampleRepository: ExampleRepository,
+    private val evaluationRepository: EvaluationRepository
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -222,5 +225,25 @@ class ExampleService(
         }
 
         return example.testNames.zip(passRatePerTestCase).toMap()
+    }
+
+    @Transactional
+    fun resetExampleBySlug(courseSlug: String, exampleSlug: String): Task {
+        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
+            ?: throw ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "No example found with the URL $exampleSlug"
+            )
+
+        val evaluations = evaluationRepository.findAllByTask_Id(example.id)
+        if (!evaluations.isNullOrEmpty())
+            evaluationRepository.deleteAll(evaluations.toList())
+
+        // Reset example stats
+        example.start = null;
+        example.end = null;
+        exampleRepository.saveAndFlush(example);
+
+        return example
     }
 }

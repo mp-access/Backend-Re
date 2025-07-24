@@ -42,10 +42,10 @@ class Submission {
     @Column(columnDefinition = "text")
     var output: String? = null
 
-    @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL], orphanRemoval = true)
     var files: MutableList<SubmissionFile> = ArrayList()
 
-    @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "submission", cascade = [CascadeType.ALL], orphanRemoval = true)
     var persistentResultFiles: MutableList<ResultFile> = ArrayList()
 
     @Column(name = "tests_passed")

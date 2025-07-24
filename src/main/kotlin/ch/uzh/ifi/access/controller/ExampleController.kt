@@ -70,7 +70,7 @@ class ExampleController(
                 it.id!!,
                 it.userId,
                 it.createdAt,
-                it.points!!,
+                it.points,
                 it.testsPassed,
                 it.files[0].content
             )
@@ -98,7 +98,7 @@ class ExampleController(
                 newSubmission.id!!,
                 newSubmission.userId,
                 newSubmission.createdAt,
-                newSubmission.points!!,
+                newSubmission.points,
                 newSubmission.testsPassed,
                 newSubmission.files[0].content
             )
@@ -207,6 +207,22 @@ class ExampleController(
             "inspect",
             "/courses/$course/examples/$example/public-dashboard/inspect/users/$encodedUserId"
 
+        )
+    }
+
+    @DeleteMapping("/{example}/reset")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
+    fun resetExample(
+        @PathVariable course: String,
+        @PathVariable example: String
+    ) {
+        exampleService.resetExampleBySlug(course, example)
+
+        emitterService.sendPayload(
+            EmitterType.EVERYONE,
+            course,
+            "example-reset",
+            "The example has been terminated by the lecturer."
         )
     }
 }

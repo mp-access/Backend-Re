@@ -8,7 +8,7 @@ class SubmissionSseDTO(
     var submissionId: Long = 0,
     var studentId: String? = null,
     var date: LocalDateTime? = null,
-    var points: Double = 0.0,
+    var points: Double? = null,
     var testsPassed: List<Int> = emptyList(),
     var content: String? = null,
 )
