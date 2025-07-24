@@ -240,7 +240,7 @@ class ExampleController(
             EmitterType.EVERYONE,
             course,
             "example-reset",
-            "The example has been terminated by the lecturer."
+            "The example has been reset by the lecturer."
         )
     }
 }
