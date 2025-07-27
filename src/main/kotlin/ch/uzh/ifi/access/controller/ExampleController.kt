@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.ExampleDurationDTO
 import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
@@ -89,38 +90,40 @@ class ExampleController(
     ) {
         submission.userId = authentication.name
         val newSubmission = exampleService.createExampleSubmission(course, example, submission)
-
-        emitterService.sendPayload(
-            EmitterType.SUPERVISOR,
-            course,
-            "student-submission",
-            SubmissionSseDTO(
-                newSubmission.id!!,
-                newSubmission.userId,
-                newSubmission.createdAt,
-                newSubmission.points,
-                newSubmission.testsPassed,
-                newSubmission.files[0].content
+        if (newSubmission.command == Command.GRADE) {
+            emitterService.sendPayload(
+                EmitterType.SUPERVISOR,
+                course,
+                "student-submission",
+                SubmissionSseDTO(
+                    newSubmission.id!!,
+                    newSubmission.userId,
+                    newSubmission.createdAt,
+                    newSubmission.points,
+                    newSubmission.testsPassed,
+                    newSubmission.files[0].content
+                )
             )
-        )
 
-        val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
+            val participantsOnline = roleService.getOnlineCount(course)
+            val totalParticipants = courseService.getCourseBySlug(course).participantCount
+            val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
+            val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
 
 
-        emitterService.sendPayload(
-            EmitterType.SUPERVISOR,
-            course,
-            "example-information",
-            ExampleInformationDTO(
-                participantsOnline,
-                totalParticipants,
-                numberOfStudentsWhoSubmitted,
-                passRatePerTestCase
+            emitterService.sendPayload(
+                EmitterType.SUPERVISOR,
+                course,
+                "example-information",
+                ExampleInformationDTO(
+                    participantsOnline,
+                    totalParticipants,
+                    numberOfStudentsWhoSubmitted,
+                    passRatePerTestCase
+                )
             )
-        )
+        }
+
     }
 
     @GetMapping("/{example}/users/{user}")
