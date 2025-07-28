@@ -96,7 +96,7 @@ class ExecutionService(
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
 
         // calculate the embedding in parallel with running the code.
-        val embeddingFuture: CompletableFuture<List<Double>?> =
+        val embeddingFuture: CompletableFuture<DoubleArray?> =
             if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task)) {
                 CompletableFuture.supplyAsync {
                     val concatenatedSubmissionContent = submission.files
@@ -384,7 +384,7 @@ class ExecutionService(
         }.joinToString(separator = "\n").replace("\u0000", "") // null characters mess up transport
     }
 
-    fun getImplementationEmbedding(implementation: String): List<Double> {
+    fun getImplementationEmbedding(implementation: String): DoubleArray {
         logger.info { "Requesting embedding for code snippet from LLM service." }
         val requestBody = ImplementationDTO(implementation)
         val jsonRequestBody = objectMapper.writeValueAsString(requestBody)
@@ -398,7 +398,7 @@ class ExecutionService(
                 response.entity?.let { entity ->
                     val responseJson = String(entity.content.readAllBytes())
                     val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
-                    return@execute embeddingResponse.embedding
+                    return@execute embeddingResponse.embedding.toDoubleArray()
                 }
             } else {
                 val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"

@@ -52,9 +52,8 @@ class Submission {
     @JdbcTypeCode(SqlTypes.JSON)
     var testsPassed: List<Int> = ArrayList()
 
-    @Column(name = "embedding")
-    @JdbcTypeCode(SqlTypes.JSON)
-    var embedding: List<Double> = ArrayList()
+    @Column(name = "embedding", columnDefinition = "DOUBLE PRECISION[]")
+    var embedding: DoubleArray = doubleArrayOf()
 
     @JsonIgnore
     @ManyToOne
