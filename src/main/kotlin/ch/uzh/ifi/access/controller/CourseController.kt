@@ -139,7 +139,7 @@ class CourseController(
     }
 
     // Sent by the client to keep the emitter alive
-    @GetMapping("/{course}/heartbeat/{emitterId}")
+    @PutMapping("/{course}/heartbeat/{emitterId}")
     fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String) {
         val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
         emitterService.keepAliveEmitter(emitterType, course, emitterId)
