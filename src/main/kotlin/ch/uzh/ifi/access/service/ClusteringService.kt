@@ -10,7 +10,7 @@ import kotlin.random.Random
 @Service
 class ClusteringService {
 
-    fun performSpectralClusteringWithSmile(
+    fun performSpectralClustering(
         embeddingsMap: Map<Long, DoubleArray>,
         numClusters: Int
     ): CategorizationDTO {

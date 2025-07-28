@@ -49,8 +49,8 @@ class ExecutionService(
     private val logger = KotlinLogging.logger {}
 
     private val requestConfig: RequestConfig = RequestConfig.custom()
-        .setConnectionRequestTimeout(30, TimeUnit.SECONDS)
-        .setResponseTimeout(30, TimeUnit.SECONDS)
+        .setConnectionRequestTimeout(60, TimeUnit.SECONDS)
+        .setResponseTimeout(60, TimeUnit.SECONDS)
         .build()
 
     // Initialize HttpClient with the configured timeouts

@@ -260,6 +260,6 @@ class ExampleController(
             .associate { submission ->
                 submission.getId() to submission.getEmbedding()
             }
-        return clusteringService.performSpectralClusteringWithSmile(submissionEmbeddingMap, numberOfClusters)
+        return clusteringService.performSpectralClustering(submissionEmbeddingMap, numberOfClusters)
     }
 }
