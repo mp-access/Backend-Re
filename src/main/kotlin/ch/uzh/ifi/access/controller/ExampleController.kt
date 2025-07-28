@@ -2,11 +2,9 @@ package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
-import ch.uzh.ifi.access.model.dto.ExampleDurationDTO
-import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
+import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
@@ -26,6 +24,8 @@ class ExampleController(
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val courseService: CourseService,
+    private val clusteringService: ClusteringService,
+    private val submissionRepository: SubmissionRepository
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -245,5 +245,21 @@ class ExampleController(
             "example-reset",
             "The example has been reset by the lecturer."
         )
+    }
+
+    @PostMapping("/{example}/categorize")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getCategories(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @RequestBody body: SubmissionListDTO
+    ): CategorizationDTO {
+        val numberOfClusters = 5
+        require(numberOfClusters <= body.submissionIds.size) { "For categorization to work, at least $numberOfClusters submissions are required" }
+        val submissionEmbeddingMap: Map<Long, DoubleArray> = submissionRepository.findByIdIn(body.submissionIds)
+            .associate { submission ->
+                submission.getId() to submission.getEmbedding()
+            }
+        return clusteringService.performSpectralClustering(submissionEmbeddingMap, numberOfClusters)
     }
 }

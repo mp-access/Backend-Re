@@ -13,7 +13,6 @@ plugins {
     kotlin("plugin.spring") version "1.9.0"
     kotlin("plugin.jpa") version "1.9.0"
     kotlin("plugin.allopen") version "1.9.0"
-
 }
 
 allOpen {
@@ -67,6 +66,10 @@ dependencies {
     implementation("org.apache.tika:tika-core:2.8.0")
     implementation("org.flywaydb:flyway-core")
     implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
+    implementation("com.github.haifengl:smile-core:3.0.0")
+    implementation("org.bytedeco:arpack-ng-platform:3.9.1-1.5.12")
+    implementation("org.bytedeco:openblas-platform:0.3.30-1.5.12")
+    implementation("org.bytedeco:javacpp-platform:1.5.12")
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude("org.mockito", "mockito-core")
