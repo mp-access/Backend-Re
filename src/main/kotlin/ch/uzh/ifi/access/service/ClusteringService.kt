@@ -33,9 +33,7 @@ class ClusteringService {
     // the default approach for calculating an appropriate sigma-value for spectral clustering is computing the median/average distance between all data points
     // if we have many embeddings, this becomes costly. Because of that, we only use 10% of the data points (if 10% exceeds 20 data points).
     private fun calculateAppropriateSigma(orderedEmbeddings: Array<DoubleArray>): Double {
-
         val numDataPoints = orderedEmbeddings.size
-
         val pointsToConsider: Array<DoubleArray>
 
         if (numDataPoints < 20) { // Case 1: If the number of data points is smaller than 20, use all data points.
@@ -52,18 +50,16 @@ class ClusteringService {
             val random = Random(123456789)
             val shuffledIndices = orderedEmbeddings.indices.toList().shuffled(random)
             val sampleIndices = shuffledIndices.take(numSamplePoints)
-
             pointsToConsider = Array(numSamplePoints) { i ->
                 orderedEmbeddings[sampleIndices[i]]
             }
         }
 
         val distances = mutableListOf<Double>()
-        val euclideanDistanceMeasure = EuclideanDistance()
-
+        val euclideanDistance = EuclideanDistance()
         for (i in pointsToConsider.indices) {
             for (j in i + 1 until pointsToConsider.size) {
-                distances.add(euclideanDistanceMeasure.compute(pointsToConsider[i], pointsToConsider[j]))
+                distances.add(euclideanDistance.compute(pointsToConsider[i], pointsToConsider[j]))
             }
         }
         return distances.median()
@@ -72,6 +68,7 @@ class ClusteringService {
     private fun List<Double>.median(): Double {
         val sortedList = this.sorted()
         val mid = sortedList.size / 2
+
         return if (sortedList.size % 2 == 0) {
             (sortedList[mid - 1] + sortedList[mid]) / 2.0
         } else {
