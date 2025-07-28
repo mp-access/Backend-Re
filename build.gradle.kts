@@ -13,7 +13,6 @@ plugins {
     kotlin("plugin.spring") version "1.9.0"
     kotlin("plugin.jpa") version "1.9.0"
     kotlin("plugin.allopen") version "1.9.0"
-    kotlin("plugin.serialization") version "1.9.0"
 }
 
 allOpen {
@@ -82,7 +81,6 @@ dependencies {
     testImplementation("com.ninja-squad:springmockk:4.0.2")
     testImplementation("org.junit.platform:junit-platform-suite:1.10.0")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 }
 /*
 test {
@@ -137,7 +135,6 @@ tasks.withType<Test> {
     filter {
         includeTestsMatching("ch.uzh.ifi.access.AllTests")
         includeTestsMatching("ch.uzh.ifi.access.PerformanceTests")
-        includeTestsMatching("ch.uzh.ifi.access.*")
     }
     testLogging {
         events("passed", "skipped", "failed")

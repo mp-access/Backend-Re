@@ -16,18 +16,17 @@ class ClusteringService {
     ): CategorizationDTO {
         val orderedEmbeddingsMap = embeddingsMap.entries.sortedBy { it.key }
         val orderedSubmissionIds = orderedEmbeddingsMap.map { it.key }
-        val orderedEmbeddings: Array<DoubleArray> = orderedEmbeddingsMap.map { it.value }.toTypedArray()
+        val orderedEmbeddings = orderedEmbeddingsMap.map { it.value }.toTypedArray()
 
         val sigma = calculateAppropriateSigma(orderedEmbeddings)
         val clustering = SpectralClustering.fit(orderedEmbeddings, numClusters, sigma)
-        val labels: IntArray = clustering.y
+        val labels = clustering.y
 
         val categorizationDTO = CategorizationDTO()
         labels.forEachIndexed { index, label ->
             val clusterName = "cat${label + 1}"
             categorizationDTO.categories.getOrPut(clusterName) { mutableListOf() }.add(orderedSubmissionIds[index])
         }
-
         return categorizationDTO
     }
 
@@ -41,7 +40,6 @@ class ClusteringService {
 
         if (numDataPoints < 20) { // Case 1: If the number of data points is smaller than 20, use all data points.
             pointsToConsider = orderedEmbeddings
-            println("Calculating sigma using all ${pointsToConsider.size} data points (total < 20).")
         } else {
             // Case 2: Use 10% of all data points.
             var numSamplePoints = (numDataPoints * 0.10).roundToInt()
@@ -51,7 +49,7 @@ class ClusteringService {
                 numSamplePoints = 20
             }
 
-            val random = Random.Default
+            val random = Random(123456789)
             val shuffledIndices = orderedEmbeddings.indices.toList().shuffled(random)
             val sampleIndices = shuffledIndices.take(numSamplePoints)
 
