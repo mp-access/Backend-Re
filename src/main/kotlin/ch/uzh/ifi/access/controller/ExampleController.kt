@@ -2,11 +2,9 @@ package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
-import ch.uzh.ifi.access.model.dto.ExampleDurationDTO
-import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
+import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.http.HttpStatus
@@ -15,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
 import java.util.*
 
 
@@ -26,6 +25,8 @@ class ExampleController(
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val courseService: CourseService,
+    private val clusteringService: ClusteringService,
+    private val submissionRepository: SubmissionRepository
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -245,5 +246,62 @@ class ExampleController(
             "example-reset",
             "The example has been reset by the lecturer."
         )
+    }
+
+    /* @PostMapping("/{example}/categorize")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getCategories(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @RequestBody body: SubmissionListDTO
+    ): CategorizationDTO {
+        logger.info { "Entered endpoint function ${LocalDateTime.now()}." }
+        val numberOfClusters = 5
+        require(numberOfClusters <= body.submissionIds.size) { "For categorization to work, at least $numberOfClusters submissions are required" }
+
+        val submissionEmbeddingMap: Map<Long, DoubleArray> = submissionRepository.findByIdIn(body.submissionIds)
+            .associate { submission ->
+                submission.id!! to submission.embedding.toDoubleArray()
+            }
+
+        logger.info { "Start categorization ${LocalDateTime.now()}." }
+        return clusteringService.performSpectralClusteringWithSmile(submissionEmbeddingMap, numberOfClusters)
+    } */
+
+    @PostMapping("/{example}/categorize")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getCategories(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @RequestBody body: SubmissionListDTO
+    ): CategorizationDTO {
+        logger.info { "Entered endpoint function ${LocalDateTime.now()}." }
+        val numberOfClusters = 5
+        require(numberOfClusters <= body.submissionIds.size) { "For categorization to work, at least $numberOfClusters submissions are required" }
+
+        logger.info { "Before fetch ${LocalDateTime.now()}." }
+        val dbFetchStart = System.nanoTime()
+        val submissionsRaw = submissionRepository.findByIdIn(body.submissionIds)
+        val dbFetchEnd = System.nanoTime()
+        logger.info { "After fetch ${LocalDateTime.now()}." }
+        logger.info { "Database fetch (findByIdIn) took ${(dbFetchEnd - dbFetchStart) / 1_000_000} ms for ${submissionsRaw.size} submissions." }
+
+        logger.info { "Before mapping ${LocalDateTime.now()}." }
+        val mappingStart = System.nanoTime()
+        val submissionEmbeddingMap: Map<Long, DoubleArray> = submissionsRaw
+            .associate { submissionProjection ->
+                submissionProjection.getId() to submissionProjection.getEmbedding().toDoubleArray()
+            }
+        val mappingEnd = System.nanoTime()
+        logger.info { "After mapping ${LocalDateTime.now()}." }
+        logger.info { "Mapping to DoubleArray took ${(mappingEnd - mappingStart) / 1_000_000} ms for ${submissionEmbeddingMap.size} embeddings." }
+
+        logger.info { "Start categorization (before clustering service) ${LocalDateTime.now()}." }
+        val clusteringStart = System.nanoTime()
+        val result = clusteringService.performSpectralClusteringWithSmile(submissionEmbeddingMap, numberOfClusters)
+        val clusteringEnd = System.nanoTime()
+        logger.info { "Clustering service took ${(clusteringEnd - clusteringStart) / 1_000_000} ms." }
+
+        return result
     }
 }
