@@ -184,19 +184,19 @@ class ExampleService(
     }
 
     fun getSubmissions(courseSlug: String, exampleSlug: String): List<Submission> {
-        val exmaple = getExampleBySlug(courseSlug, exampleSlug)
+        val example = getExampleBySlug(courseSlug, exampleSlug)
         val students = courseService.getStudents(courseSlug)
 
         val studentSubmissions = mutableListOf<Submission>()
-        if (exmaple.start == null || exmaple.end == null)
+        if (example.start == null || example.end == null)
             return studentSubmissions
 
         for (student in students) {
             val studentId = student.registrationId
-            val submissions = submissionService.getSubmissions(exmaple.id, studentId).filter {
+            val submissions = submissionService.getSubmissions(example.id, studentId).filter {
                 it.command == Command.GRADE &&
-                !it.createdAt!!.isBefore(exmaple.start) &&
-                !it.createdAt!!.isAfter(exmaple.end)
+                !it.createdAt!!.isBefore(example.start) &&
+                !it.createdAt!!.isAfter(example.end)
             }
             if (submissions.isNotEmpty()) {
                 studentSubmissions.add(submissions[0])
