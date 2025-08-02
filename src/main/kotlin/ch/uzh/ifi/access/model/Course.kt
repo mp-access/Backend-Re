@@ -33,12 +33,16 @@ class Course {
     var repositoryPassword: String? = null
 
     @Column(nullable = true)
+    var repositoryBranch: String? = null
+
+    @Column(nullable = true)
     var webhookSecret: String? = null
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var defaultVisibility: Visibility? = null
 
+    // mind that overrideVisibility, overrideStart, and overrideEnd are optional/nullable
     @Enumerated(EnumType.STRING)
     var overrideVisibility: Visibility? = null
 

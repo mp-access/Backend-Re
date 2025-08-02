@@ -1,10 +1,25 @@
 package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
-import ch.uzh.ifi.access.model.dto.*
-import ch.uzh.ifi.access.projections.*
-import ch.uzh.ifi.access.service.*
+import ch.uzh.ifi.access.model.constants.Visibility
+import ch.uzh.ifi.access.model.dto.AssignmentProgressDTO
+import ch.uzh.ifi.access.model.dto.CourseDTO
+import ch.uzh.ifi.access.model.dto.CourseProgressDTO
+import ch.uzh.ifi.access.model.dto.StudentDTO
+import ch.uzh.ifi.access.model.dto.SubmissionDTO
+import ch.uzh.ifi.access.model.dto.TaskProgressDTO
+import ch.uzh.ifi.access.projections.AssignmentWorkspace
+import ch.uzh.ifi.access.projections.CourseOverview
+import ch.uzh.ifi.access.projections.CourseSummary
+import ch.uzh.ifi.access.projections.CourseWorkspace
+import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.service.CourseService
+import ch.uzh.ifi.access.service.EmitterService
+import ch.uzh.ifi.access.service.EmitterType
+import ch.uzh.ifi.access.service.RoleService
+import ch.uzh.ifi.access.service.SubmissionService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -15,6 +30,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.time.LocalDateTime
 
 
 @RestController
@@ -45,7 +61,7 @@ class WebhooksController(
     @PostMapping("/courses/{course}/update/gitlab")
     fun hookGitlab(
         @PathVariable("course") course: String,
-        @RequestHeader("X-Gitlab-Token") secret: String
+        @RequestHeader("X-Gitlab-Token") secret: String,
     ) {
         logger.debug { "webhook (secret) triggered for $course" }
         courseService.webhookUpdateWithSecret(course, secret)
@@ -55,7 +71,7 @@ class WebhooksController(
     fun hookGithub(
         @PathVariable("course") course: String,
         @RequestHeader("X-Hub-Signature-256") signature: String,
-        @RequestBody body: String
+        @RequestBody body: String,
     ) {
         logger.debug { "webhook (hmac) triggered for $course" }
         val sig = signature.substringAfter("sha256=")
@@ -72,7 +88,7 @@ class CourseController(
     private val courseService: CourseService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
-    private val submissionService: SubmissionService
+    private val submissionService: SubmissionService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -83,8 +99,23 @@ class CourseController(
     }
 
     @GetMapping("")
-    fun getCourses(): List<CourseOverview> {
-        return courseService.getCoursesOverview()
+    fun getCourses(request: HttpServletRequest): List<CourseOverview> {
+        val courses = courseService.getCoursesOverview()
+        val now = LocalDateTime.now()
+        return courses.filter { course ->
+            val visibility = if (course.overrideVisibility!=null &&
+                course.overrideStart!! < now &&
+                (course.overrideEnd==null || course.overrideEnd!! > now)
+            ) {
+                course.overrideVisibility
+            } else {
+                course.defaultVisibility
+            }
+            visibility==Visibility.PUBLIC ||
+                    (visibility==Visibility.REGISTERED &&
+                            request.isUserInRole(course.slug))
+        }
+
     }
 
     @GetMapping("/{course}")
@@ -104,7 +135,7 @@ class CourseController(
         @PathVariable course: String,
         @PathVariable assignment: String,
         @PathVariable task: String,
-        @PathVariable username: String
+        @PathVariable username: String,
     ): TaskWorkspace {
         val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
@@ -120,7 +151,7 @@ class CourseController(
         @PathVariable assignment: String,
         @PathVariable task: String?,
         @RequestBody submission: SubmissionDTO,
-        authentication: Authentication
+        authentication: Authentication,
     ) {
         val userId = roleService.getUserId(authentication.name)
         submission.userId = userId
@@ -160,7 +191,7 @@ class CourseController(
     @GetMapping("/{courseSlug}/participants")
     fun getParticipants(@PathVariable courseSlug: String): List<StudentDTO> {
         return courseService.getStudents(courseSlug)
-            .filter { it.email != null && it.firstName != null && it.lastName != null }
+            .filter { it.email!=null && it.firstName!=null && it.lastName!=null }
     }
 
 

@@ -4,7 +4,11 @@ import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.hamcrest.Matchers.*
-import org.junit.jupiter.api.*
+import org.junit.jupiter.api.MethodOrderer
+import org.junit.jupiter.api.Order
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.TestMethodOrder
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
@@ -51,7 +55,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         points: org.hamcrest.Matcher<Any>,
         edit: String,
         user: String = "student@uzh.ch",
-        task: String = "variable_assignment"
+        task: String = "variable_assignment",
     ): ResultActions {
         val prefix = when (task) {
             "carpark" -> "03_classes/carpark_multiple_inheritance"
@@ -81,7 +85,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         val taskWorkspace: Map<String, Any> =
             ObjectMapper().readValue(responseContent, Map::class.java) as Map<String, Any>
         val fileMap = (taskWorkspace.get("files")!! as ArrayList<LinkedHashMap<String, Any>>).filter {
-            it.get("editable") as Boolean == true
+            it.get("editable") as Boolean==true
         }.map {
             it.get("id") as Int to prefix + it.get("path")
         }.toMap()
@@ -239,6 +243,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     )
     @Order(0)
     fun `The points of the best, not the latest submission counts`() {
+        // TODO: flaky test? is there a race condition in caching/repos when submissions are made in short succession?
         submissionTest("run", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
         submissionTest("grade", `is`(0.0), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
         submissionTest("test", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
@@ -285,18 +290,18 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     )
     @Order(1)
     fun `Other task metadata correct`() {
-        mvc.perform(
+        val it = mvc.perform(
             get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/not_email@uzh.ch")
                 .contentType("application/json")
                 .with(csrf())
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.active", `is`(true)))
+            .andExpect(jsonPath("$.status", `is`("Active")))
             .andExpect(jsonPath("$.name", `is`("Task 1")))
             .andExpect(jsonPath("$.slug", `is`("variable-assignment")))
             .andExpect(jsonPath("$.ordinalNum", `is`(1)))
-            .andExpect(jsonPath("$.testable", `is`(true)))
+            .andExpect(jsonPath("$.testCommandAvailable", `is`(true)))
             .andExpect(jsonPath("$.deadline", `is`("2028-01-01T13:00:00")))
     }
 

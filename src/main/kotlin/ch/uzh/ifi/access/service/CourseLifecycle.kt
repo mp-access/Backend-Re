@@ -45,6 +45,7 @@ class CourseLifecycle(
         course.repository = courseDTO.repository
         course.repositoryUser = courseDTO.repositoryUser
         course.repositoryPassword = courseDTO.repositoryPassword
+        course.repositoryBranch = courseDTO.repositoryBranch
         course.webhookSecret = courseDTO.webhookSecret
         return createFromDirectory(coursePath, course)
     }
@@ -262,20 +263,31 @@ class CourseLifecycle(
 
     private fun cloneRepository(course: Course): Path {
         logger.debug { "Cloning ${course.slug} from ${course.repository}" }
-        return cloneRepository(course.repository!!, course.repositoryUser, course.repositoryPassword)
+        return cloneRepository(
+            course.repository!!,
+            course.repositoryUser,
+            course.repositoryPassword,
+            course.repositoryBranch
+        )
     }
 
     private fun cloneRepository(courseDTO: CourseDTO): Path {
         logger.debug { "Cloning ${courseDTO.slug} from ${courseDTO.repository}" }
-        return cloneRepository(courseDTO.repository!!, courseDTO.repositoryUser, courseDTO.repositoryPassword)
+        return cloneRepository(
+            courseDTO.repository!!,
+            courseDTO.repositoryUser,
+            courseDTO.repositoryPassword,
+            courseDTO.repositoryBranch
+        )
 
     }
 
-    private fun cloneRepository(url: String, user: String?, password: String?): Path {
+    private fun cloneRepository(url: String, user: String?, password: String?, branch: String?): Path {
         val coursePath = workingDir.resolve("courses").resolve("course_" + Instant.now().toEpochMilli())
         return try {
             val git = Git.cloneRepository()
                 .setURI(url)
+                .setBranch(branch)
                 .setDirectory(coursePath.toFile())
             if (user != null && password != null) {
                 git

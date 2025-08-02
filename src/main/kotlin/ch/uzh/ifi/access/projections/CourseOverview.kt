@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.projections
 
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.CourseInformation
+import ch.uzh.ifi.access.model.constants.Visibility
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.rest.core.config.Projection
 import java.time.LocalDateTime
@@ -12,6 +13,8 @@ interface CourseOverview {
     val slug: String?
     val logo: String?
     val information: Map<String?, CourseInformation?>?
+    val defaultVisibility: Visibility
+    val overrideVisibility: Visibility?
     val overrideStart: LocalDateTime?
     val overrideEnd: LocalDateTime?
 
