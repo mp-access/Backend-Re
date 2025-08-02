@@ -67,6 +67,7 @@ class SecurityConfig(private val env: Environment) {
                     "/courses/{course}/summary",
                     "/courses/{course}/participants/**",
                     "/courses/{course}/assistants/**",
+                    "/courses/{course}/supervisors/**",
                     "/webhooks/**"
                 )
             }
@@ -81,6 +82,7 @@ class SecurityConfig(private val env: Environment) {
                     .requestMatchers(
                         "/courses/{course}/participants/**",
                         "/courses/{course}/assistants/**",
+                        "/courses/{course}/supervisors/**",
                         "/courses/{course}/summary",
                         "/pruneSubmissions"
                     ).access { _, context ->

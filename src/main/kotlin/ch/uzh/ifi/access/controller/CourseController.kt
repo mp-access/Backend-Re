@@ -2,22 +2,9 @@ package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.constants.Visibility
-import ch.uzh.ifi.access.model.dto.AssignmentProgressDTO
-import ch.uzh.ifi.access.model.dto.CourseDTO
-import ch.uzh.ifi.access.model.dto.CourseProgressDTO
-import ch.uzh.ifi.access.model.dto.StudentDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.model.dto.TaskProgressDTO
-import ch.uzh.ifi.access.projections.AssignmentWorkspace
-import ch.uzh.ifi.access.projections.CourseOverview
-import ch.uzh.ifi.access.projections.CourseSummary
-import ch.uzh.ifi.access.projections.CourseWorkspace
-import ch.uzh.ifi.access.projections.TaskWorkspace
-import ch.uzh.ifi.access.service.CourseService
-import ch.uzh.ifi.access.service.EmitterService
-import ch.uzh.ifi.access.service.EmitterType
-import ch.uzh.ifi.access.service.RoleService
-import ch.uzh.ifi.access.service.SubmissionService
+import ch.uzh.ifi.access.model.dto.*
+import ch.uzh.ifi.access.projections.*
+import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
@@ -103,17 +90,17 @@ class CourseController(
         val courses = courseService.getCoursesOverview()
         val now = LocalDateTime.now()
         return courses.filter { course ->
-            val visibility = if (course.overrideVisibility!=null &&
+            val visibility = if (course.overrideVisibility != null &&
                 course.overrideStart!! < now &&
-                (course.overrideEnd==null || course.overrideEnd!! > now)
+                (course.overrideEnd == null || course.overrideEnd!! > now)
             ) {
                 course.overrideVisibility
             } else {
                 course.defaultVisibility
             }
-            visibility==Visibility.PUBLIC ||
-                    (visibility==Visibility.REGISTERED &&
-                            request.isUserInRole(course.slug))
+            visibility == Visibility.PUBLIC ||
+            (visibility == Visibility.REGISTERED &&
+            request.isUserInRole(course.slug))
         }
 
     }
@@ -191,7 +178,7 @@ class CourseController(
     @GetMapping("/{courseSlug}/participants")
     fun getParticipants(@PathVariable courseSlug: String): List<StudentDTO> {
         return courseService.getStudents(courseSlug)
-            .filter { it.email!=null && it.firstName!=null && it.lastName!=null }
+            .filter { it.email != null && it.firstName != null && it.lastName != null }
     }
 
 
@@ -203,6 +190,11 @@ class CourseController(
         // Grants the correct role to any existing users in usernames
         // This is one of two ways a keycloak user can receive/lose a role, the other way is on first login.
         roleService.updateRoleUsers(assessment, remove, add, role)
+    }
+
+    @PostMapping("/{course}/supervisors")
+    fun registerSupervisors(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
+        return updateRoles(course, registrationIDs, Role.SUPERVISOR)
     }
 
     @PostMapping("/{course}/assistants")
