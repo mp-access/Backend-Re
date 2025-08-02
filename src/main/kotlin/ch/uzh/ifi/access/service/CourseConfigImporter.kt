@@ -29,10 +29,14 @@ class CourseConfigImporter(
             course.assignments.add(directory.asText())
         }
 
+        // TODO: override can be null - deal with it
+        // if overrideVisibility is not null, overrideStart and overrideEnd may not be null either
         course.defaultVisibility = config["visibility"].get("default").asText()
-        course.overrideVisibility = config["visibility"].get("override").asText()
-        course.overrideStart = LocalDateTime.parse(config["visibility"].get("override_start").asText())
-        course.overrideEnd = LocalDateTime.parse(config["visibility"].get("override_end").asText())
+        course.overrideVisibility = config["visibility"].get("override")?.asText()
+        val overrideStart = config["visibility"].get("override_start")?.asText()
+        val overrideEnd = config["visibility"].get("override_end")?.asText()
+        course.overrideStart = overrideStart?.let { LocalDateTime.parse(it) }
+        course.overrideEnd = overrideEnd?.let { LocalDateTime.parse(it) }
 
         config["information"].fields().forEachRemaining { field ->
             val information = CourseInformationDTO()

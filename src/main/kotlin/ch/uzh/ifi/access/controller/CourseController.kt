@@ -1,17 +1,20 @@
 package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
+import ch.uzh.ifi.access.model.constants.Visibility
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.RoleService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
 
 
 @RestController
@@ -79,8 +82,23 @@ class CourseController(
     }
 
     @GetMapping("")
-    fun getCourses(): List<CourseOverview> {
-        return courseService.getCoursesOverview()
+    fun getCourses(request: HttpServletRequest): List<CourseOverview> {
+        val courses = courseService.getCoursesOverview()
+        val now = LocalDateTime.now()
+        return courses.filter { course ->
+            val visibility = if (course.overrideVisibility != null &&
+                course.overrideStart!! < now &&
+                (course.overrideEnd == null || course.overrideEnd!! > now)
+            ) {
+                course.overrideVisibility
+            } else {
+                course.defaultVisibility
+            }
+            visibility == Visibility.PUBLIC ||
+            (visibility == Visibility.REGISTERED &&
+            request.isUserInRole(course.slug))
+        }
+
     }
 
     @GetMapping("/{course}")

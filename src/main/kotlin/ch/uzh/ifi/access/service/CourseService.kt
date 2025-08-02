@@ -242,7 +242,6 @@ class CourseService(
     }
 
     fun getCoursesOverview(): List<CourseOverview> {
-        //return courseRepository.findCoursesBy()
         return courseRepository.findCoursesByAndDeletedFalse()
     }
 
@@ -462,6 +461,7 @@ class CourseService(
         existingCourse.repository = course.repository
         existingCourse.repositoryUser = course.repositoryUser
         existingCourse.repositoryPassword = course.repositoryPassword
+        existingCourse.repositoryBranch = course.repositoryBranch
         existingCourse.webhookSecret = course.webhookSecret
         courseRepository.save(existingCourse)
         return courseLifecycle.updateFromRepository(existingCourse)

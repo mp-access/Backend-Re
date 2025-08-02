@@ -239,6 +239,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
     )
     @Order(0)
     fun `The points of the best, not the latest submission counts`() {
+        // TODO: flaky test? is there a race condition in caching/repos when submissions are made in short succession?
         submissionTest("run", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
         submissionTest("grade", `is`(0.0), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
         submissionTest("test", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
