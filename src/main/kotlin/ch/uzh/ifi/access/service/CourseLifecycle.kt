@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.exception.NotFoundException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import org.eclipse.jgit.api.Git
@@ -301,14 +302,15 @@ class CourseLifecycle(
     }
 
     private fun pullDockerImage(imageName: String) {
-        val response = dockerClient.inspectImageCmd(imageName).exec()
-        if (response.id == null) {
-            try {
+        try {
+            val response = dockerClient.inspectImageCmd(imageName).exec()
+            if (response.id == null) {
+                logger.debug { "Pulling docker image $imageName" }
                 dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete()
-            } catch (e: InterruptedException) {
-                //CourseService.log.error("Failed to pull docker image {}", imageName)
-                Thread.currentThread().interrupt()
             }
+        } catch (e: NotFoundException) {
+            logger.debug { "Pulling docker image $imageName" }
+            dockerClient.pullImageCmd(imageName).start().awaitCompletion().onComplete()
         }
     }
 
@@ -318,7 +320,7 @@ class CourseLifecycle(
         return courseRepository.saveAndFlush(course)
     }
 
-    fun runExamplesOnceToRetrieveTestNames(course: Course) : Course {
+    fun runExamplesOnceToRetrieveTestNames(course: Course): Course {
         course.examples.forEach { example ->
             if (example.start == null) {
                 val result = executionService.executeTemplate(example)
