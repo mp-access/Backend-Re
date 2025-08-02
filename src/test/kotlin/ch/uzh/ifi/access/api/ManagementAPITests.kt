@@ -62,6 +62,20 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
     }
 
     @Test
+    @Order(2)
+    fun `Can register participant for lecture examples`() {
+        val payload = """["student@uzh.ch"]"""
+        mvc.perform(
+            post("/courses/access-mock-course-lecture-examples/participants")
+                .contentType("application/json")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+                .content(payload)
+        )
+            .andExpect(status().isOk)
+    }
+
+    @Test
     @Order(3)
     fun `Can retrieve participants`() {
         mvc.perform(
