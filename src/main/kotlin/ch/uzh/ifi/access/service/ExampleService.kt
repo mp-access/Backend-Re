@@ -196,7 +196,8 @@ class ExampleService(
             val submissions = submissionService.getSubmissions(example.id, studentId).filter {
                 it.command == Command.GRADE &&
                 !it.createdAt!!.isBefore(example.start) &&
-                !it.createdAt!!.isAfter(example.end)
+                !it.createdAt!!.isAfter(example.end) &&
+                it.testsPassed.isNotEmpty() // ensure to not get any submissions that are still being processed (important when multiple submissions come in concurrently)
             }
             if (submissions.isNotEmpty()) {
                 studentSubmissions.add(submissions[0])
@@ -213,6 +214,7 @@ class ExampleService(
         val totalTestsPassed = IntArray(size = testCount) { 0 }
 
         for (submission in submissions) {
+            logger.info { submission.testsPassed }
             for (i in totalTestsPassed.indices) {
                 totalTestsPassed[i] += submission.testsPassed[i]
             }
