@@ -205,11 +205,8 @@ class ExampleService(
         return studentSubmissions
     }
 
-    fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
-        val example = getExampleBySlug(courseSlug, exampleSlug)
-        val submissions = getSubmissions(courseSlug, exampleSlug)
-
-        val testCount = example.testNames.size
+    fun getExamplePassRatePerTestCase(submissions: List<Submission>, testNames: List<String>): Map<String, Double> {
+        val testCount = testNames.size
         val totalTestsPassed = IntArray(size = testCount) { 0 }
 
         for (submission in submissions) {
@@ -224,7 +221,7 @@ class ExampleService(
             List(testCount) { 0.0 }
         }
 
-        return example.testNames.zip(passRatePerTestCase).toMap()
+        return testNames.zip(passRatePerTestCase).toMap()
     }
 
     @Transactional
