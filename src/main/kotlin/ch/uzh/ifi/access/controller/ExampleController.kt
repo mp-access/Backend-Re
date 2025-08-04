@@ -48,8 +48,10 @@ class ExampleController(
     ): ExampleInformationDTO {
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfStudentsWhoSubmitted = exampleService.getInteractiveExampleSubmissions(course, example).size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
+        val currentExample = exampleService.getExampleBySlug(course, example)
+        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
+        val numberOfStudentsWhoSubmitted = submissions.size
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(submissions, currentExample.testNames)
 
         return ExampleInformationDTO(
             participantsOnline,
@@ -65,8 +67,15 @@ class ExampleController(
         @PathVariable course: String,
         @PathVariable example: String,
         authentication: Authentication
-    ): List<SubmissionSseDTO> {
-        val submissions = exampleService.getInteractiveExampleSubmissions(course, example).map {
+    ): ExampleSubmissionsDTO {
+        val participantsOnline = roleService.getOnlineCount(course)
+        val totalParticipants = courseService.getCourseBySlug(course).participantCount
+        val currentExample = exampleService.getExampleBySlug(course, example)
+        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
+        val numberOfStudentsWhoSubmitted = submissions.size
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(submissions, currentExample.testNames)
+
+        val submissionsDTO = submissions.map {
             SubmissionSseDTO(
                 it.id!!,
                 it.userId,
@@ -77,7 +86,13 @@ class ExampleController(
             )
         }
 
-        return submissions
+        return ExampleSubmissionsDTO(
+            participantsOnline,
+            totalParticipants,
+            numberOfStudentsWhoSubmitted,
+            passRatePerTestCase,
+            submissionsDTO
+        )
     }
 
     @PostMapping("/{example}/submit")
