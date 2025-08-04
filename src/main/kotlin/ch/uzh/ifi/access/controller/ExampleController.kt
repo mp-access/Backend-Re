@@ -262,4 +262,47 @@ class ExampleController(
             }
         return clusteringService.performSpectralClustering(submissionEmbeddingMap, numberOfClusters)
     }
+
+    @GetMapping("/{example}/point-distribution")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getPointDistribution(
+        @PathVariable course: String,
+        @PathVariable example: String,
+    ): PointDistributionDTO {
+        val response = PointDistributionDTO()
+
+        val bin1 = mapOf(
+            "lowerBoundary" to 0.0,
+            "upperBoundary" to 0.2,
+            "numberOfSubmissions" to 20.0
+        )
+        val bin2 = mapOf(
+            "lowerBoundary" to 0.2,
+            "upperBoundary" to 0.4,
+            "numberOfSubmissions" to 71.0
+        )
+        val bin3 = mapOf(
+            "lowerBoundary" to 0.4,
+            "upperBoundary" to 0.6,
+            "numberOfSubmissions" to 55.0
+        )
+        val bin4 = mapOf(
+            "lowerBoundary" to 0.6,
+            "upperBoundary" to 0.8,
+            "numberOfSubmissions" to 30.0
+        )
+        val bin5 = mapOf(
+            "lowerBoundary" to 0.8,
+            "upperBoundary" to 1.0,
+            "numberOfSubmissions" to 15.0
+        )
+
+        response.pointDistribution.add(bin1)
+        response.pointDistribution.add(bin2)
+        response.pointDistribution.add(bin3)
+        response.pointDistribution.add(bin4)
+        response.pointDistribution.add(bin5)
+
+        return response
+    }
 }
