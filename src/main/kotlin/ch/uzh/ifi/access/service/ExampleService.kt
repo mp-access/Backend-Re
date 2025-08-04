@@ -214,7 +214,6 @@ class ExampleService(
         val totalTestsPassed = IntArray(size = testCount) { 0 }
 
         for (submission in submissions) {
-            logger.info { submission.testsPassed }
             for (i in totalTestsPassed.indices) {
                 totalTestsPassed[i] += submission.testsPassed[i]
             }
