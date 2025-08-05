@@ -62,7 +62,8 @@ class ClusteringService {
                 distances.add(euclideanDistance.compute(pointsToConsider[i], pointsToConsider[j]))
             }
         }
-        return distances.median()
+        val median = distances.median()
+        return if (median != 0.0) median else 0.000001
     }
 
     private fun List<Double>.median(): Double {
