@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import org.springframework.http.HttpStatus
@@ -21,7 +22,8 @@ class ExampleService(
     private val roleService: RoleService,
     private val courseService: CourseService,
     private val exampleRepository: ExampleRepository,
-    private val evaluationRepository: EvaluationRepository
+    private val evaluationRepository: EvaluationRepository,
+    private val submissionRepository: SubmissionRepository
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -141,7 +143,7 @@ class ExampleService(
 
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
-        // If the user is admin, dont check
+        // If the user is admin, don't check
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
         val isAdmin =
             userRoles.contains("$courseSlug-assistant") ||
@@ -187,28 +189,32 @@ class ExampleService(
         val example = getExampleBySlug(courseSlug, exampleSlug)
         val students = courseService.getStudents(courseSlug)
 
-        val studentSubmissions = mutableListOf<Submission>()
         if (example.start == null || example.end == null)
-            return studentSubmissions
+            return emptyList()
 
-        for (student in students) {
-            val studentId = student.registrationId
-            val submissions = submissionService.getSubmissions(example.id, studentId).filter {
-                it.command == Command.GRADE &&
-                !it.createdAt!!.isBefore(example.start) &&
-                !it.createdAt!!.isAfter(example.end) &&
-                it.testsPassed.isNotEmpty() // ensure to not get any submissions that are still being processed (important when multiple submissions come in concurrently)
-            }
-            if (submissions.isNotEmpty()) {
-                studentSubmissions.add(submissions[0])
-            }
-        }
-        return studentSubmissions
+        val studentIds = students.map { it.registrationId }
+
+        val submissions = submissionRepository.findInteractiveExampleSubmissions(
+            example.id,
+            studentIds,
+            Command.GRADE,
+            example.start!!,
+            example.end!!
+        )
+        return excludeNotFullyProcessedSubmissions(submissions)
+    }
+
+    fun excludeNotFullyProcessedSubmissions(submissions: List<Submission>): List<Submission> {
+        return submissions.filter { submission -> submission.testsPassed.isNotEmpty() }
     }
 
     fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
-        val example = getExampleBySlug(courseSlug, exampleSlug)
         val submissions = getSubmissions(courseSlug, exampleSlug)
+        return getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
+    }
+
+    fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String, submissions: List<Submission>): Map<String, Double> {
+        val example = getExampleBySlug(courseSlug, exampleSlug)
 
         val testCount = example.testNames.size
         val totalTestsPassed = IntArray(size = testCount) { 0 }

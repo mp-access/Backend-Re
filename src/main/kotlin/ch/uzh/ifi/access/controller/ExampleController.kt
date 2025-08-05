@@ -107,9 +107,9 @@ class ExampleController(
 
             val participantsOnline = roleService.getOnlineCount(course)
             val totalParticipants = courseService.getCourseBySlug(course).participantCount
-            val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
-            val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
-
+            val submissions = exampleService.getSubmissions(course, example)
+            val numberOfStudentsWhoSubmitted = submissions.size
+            val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
 
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
@@ -123,7 +123,6 @@ class ExampleController(
                 )
             )
         }
-
     }
 
     @GetMapping("/{example}/users/{user}")
