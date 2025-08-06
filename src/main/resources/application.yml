@@ -35,6 +35,12 @@ llm:
   service:
     url: http://localhost:4000
 
+examples:
+  grace-period: 5
+  example-queue:
+    cpu-threshold: 0.70
+    max-concurrent-submissions: 7
+
 logging:
   level:
     org.springframework:
