@@ -125,7 +125,7 @@ class RoleServiceTests(
         // check if the roles have actually been re-added
         user = roleService.findUserByAllCriteria("student@uzh.ch")!!
         roles = accessRealm.users()[user.id].roles().realmLevel().listEffective()
-        assertThat(roles, hasSize<Any>(3))
+        assertThat(roles, hasSize<Any>(5))
         val roleNames = roles.map { it.name }
         assertThat(roleNames, hasItem("access-mock-course"))
         assertThat(roleNames, hasItem("access-mock-course-student"))
@@ -137,20 +137,24 @@ class RoleServiceTests(
     fun `Unregistering participants removes their corresponding roles`() {
         val user = roleService.findUserByAllCriteria("student@uzh.ch")!!
         val roles = accessRealm.users()[user.id].roles().realmLevel().listEffective()
-        assertThat(roles, hasSize<Any>(3))
+        assertThat(roles, hasSize<Any>(5))
         val roleNames = roles.map { it.name }
         assertThat(roleNames, hasItem("access-mock-course"))
         assertThat(roleNames, hasItem("access-mock-course-student"))
+        assertThat(roleNames, hasItem("access-mock-course-lecture-examples"))
+        assertThat(roleNames, hasItem("access-mock-course-lecture-examples-student"))
         assertThat(roleNames, hasItem("student"))
         val payload = """[]"""
-        mvc.perform(
-            post("/courses/access-mock-course/participants")
-                .contentType("application/json")
-                .header("X-API-Key", "1234")
-                .with(csrf())
-                .content(payload)
-        )
-            .andExpect(status().isOk)
+        listOf("access-mock-course", "access-mock-course-lecture-examples").forEach {
+            mvc.perform(
+                post("/courses/$it/participants")
+                    .contentType("application/json")
+                    .header("X-API-Key", "1234")
+                    .with(csrf())
+                    .content(payload)
+            )
+                .andExpect(status().isOk)
+        }
         assertThat(accessRealm.users()[user.id].roles().realmLevel().listEffective(), hasSize<Any>(0))
     }
 
@@ -160,19 +164,23 @@ class RoleServiceTests(
         val user = roleService.findUserByAllCriteria("student@uzh.ch")!!
         assertThat(accessRealm.users()[user.id].roles().realmLevel().listEffective(), hasSize<Any>(0))
         val payload = """["student@uzh.ch"]"""
-        mvc.perform(
-            post("/courses/access-mock-course/participants")
-                .contentType("application/json")
-                .header("X-API-Key", "1234")
-                .with(csrf())
-                .content(payload)
-        )
-            .andExpect(status().isOk)
+        listOf("access-mock-course", "access-mock-course-lecture-examples").forEach {
+            mvc.perform(
+                post("/courses/$it/participants")
+                    .contentType("application/json")
+                    .header("X-API-Key", "1234")
+                    .with(csrf())
+                    .content(payload)
+            )
+                .andExpect(status().isOk)
+        }
         val roles = accessRealm.users()[user.id].roles().realmLevel().listEffective()
-        assertThat(roles, hasSize<Any>(3))
+        assertThat(roles, hasSize<Any>(5))
         val roleNames = roles.map { it.name }
         assertThat(roleNames, hasItem("access-mock-course"))
         assertThat(roleNames, hasItem("access-mock-course-student"))
+        assertThat(roleNames, hasItem("access-mock-course-lecture-examples"))
+        assertThat(roleNames, hasItem("access-mock-course-lecture-examples-student"))
         assertThat(roleNames, hasItem("student"))
     }
 
