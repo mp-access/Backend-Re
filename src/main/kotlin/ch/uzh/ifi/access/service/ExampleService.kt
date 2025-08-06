@@ -185,7 +185,7 @@ class ExampleService(
         return newSubmission
     }
 
-    fun getSubmissions(courseSlug: String, exampleSlug: String): List<Submission> {
+    fun getInteractiveExampleSubmissions(courseSlug: String, exampleSlug: String): List<Submission> {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         val students = courseService.getStudents(courseSlug)
 
@@ -209,7 +209,7 @@ class ExampleService(
     }
 
     fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
-        val submissions = getSubmissions(courseSlug, exampleSlug)
+        val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
         return getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
     }
 

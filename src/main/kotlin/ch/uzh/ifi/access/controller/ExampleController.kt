@@ -48,7 +48,7 @@ class ExampleController(
     ): ExampleInformationDTO {
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfStudentsWhoSubmitted = exampleService.getSubmissions(course, example).size
+        val numberOfStudentsWhoSubmitted = exampleService.getInteractiveExampleSubmissions(course, example).size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example)
 
         return ExampleInformationDTO(
@@ -66,7 +66,7 @@ class ExampleController(
         @PathVariable example: String,
         authentication: Authentication
     ): List<SubmissionSseDTO> {
-        val submissions = exampleService.getSubmissions(course, example).map {
+        val submissions = exampleService.getInteractiveExampleSubmissions(course, example).map {
             SubmissionSseDTO(
                 it.id!!,
                 it.userId,
@@ -107,7 +107,7 @@ class ExampleController(
 
             val participantsOnline = roleService.getOnlineCount(course)
             val totalParticipants = courseService.getCourseBySlug(course).participantCount
-            val submissions = exampleService.getSubmissions(course, example)
+            val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
             val numberOfStudentsWhoSubmitted = submissions.size
             val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
 
