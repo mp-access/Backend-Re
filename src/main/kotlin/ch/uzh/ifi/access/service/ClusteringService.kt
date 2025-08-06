@@ -1,6 +1,11 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.CategorizationDTO
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.apache.commons.math3.ml.distance.EuclideanDistance
 import org.springframework.stereotype.Service
 import smile.clustering.SpectralClustering
@@ -8,13 +13,18 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 @Service
-class ClusteringService {
+class ClusteringService (
+    private val executionService: ExecutionService
+) {
+    private val logger = KotlinLogging.logger {}
 
     fun performSpectralClustering(
         embeddingsMap: Map<Long, DoubleArray>,
         numClusters: Int
     ): CategorizationDTO {
-        val orderedEmbeddingsMap = embeddingsMap.entries.sortedBy { it.key }
+        val (submissionsWithEmbeddings, submissionsWithoutEmbeddings) = embeddingsMap.entries.partition { it.value.isNotEmpty() }
+        if (submissionsWithoutEmbeddings.isNotEmpty()) retryCalculatingEmbeddings(submissionsWithoutEmbeddings.map { it.key })
+        val orderedEmbeddingsMap = submissionsWithEmbeddings.sortedBy { it.key }
         val orderedSubmissionIds = orderedEmbeddingsMap.map { it.key }
         val orderedEmbeddings = orderedEmbeddingsMap.map { it.value }.toTypedArray()
 
@@ -74,6 +84,19 @@ class ClusteringService {
             (sortedList[mid - 1] + sortedList[mid]) / 2.0
         } else {
             sortedList[mid]
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    fun retryCalculatingEmbeddings(submissionsWithoutEmbedding: List<Long>) {
+        GlobalScope.launch(Dispatchers.IO) {
+            submissionsWithoutEmbedding.forEach { submissionId ->
+                try {
+                    executionService.recalculateSubmissionEmbedding(submissionId)
+                } catch (e: Exception) {
+                    logger.error(e) { "Failed to re-calculate embedding for submission $submissionId." }
+                }
+            }
         }
     }
 }

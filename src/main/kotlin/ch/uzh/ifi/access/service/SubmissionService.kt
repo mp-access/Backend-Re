@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
 
 @Service
 class SubmissionService(
@@ -56,7 +57,8 @@ class SubmissionService(
             courseSlug,
             taskSlug,
             getTaskBySlug(courseSlug, assignmentSlug, taskSlug),
-            submissionDTO
+            submissionDTO,
+            null
         )
     }
 
@@ -67,7 +69,7 @@ class SubmissionService(
         ]
     )
     // It only accepts assignment tasks, not examples
-    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO): Submission {
+    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO, submissionReceivedAt: LocalDateTime?): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
@@ -97,6 +99,7 @@ class SubmissionService(
         }
         // at this point, all restrictions have passed, and we can create the submission
         val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
+        if (submissionReceivedAt != null) submission.createdAt = submissionReceivedAt
         submissionRepository.saveAndFlush(submission)
         submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
