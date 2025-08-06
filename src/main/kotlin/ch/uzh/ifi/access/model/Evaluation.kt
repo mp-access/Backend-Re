@@ -24,7 +24,7 @@ class Evaluation {
     var remainingAttempts: Int? = null
 
     @JsonIgnore
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 

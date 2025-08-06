@@ -12,7 +12,6 @@ import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
-import java.util.stream.Stream
 
 @Service
 class SubmissionService(
@@ -27,30 +26,24 @@ class SubmissionService(
     private val evaluationService: EvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
-        // run and test submissions include the execution logs
-        val includingLogs = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        includingLogs.forEach { submission ->
+        val submissions = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
+        processLogs(submissions)
+        return submissions
+    }
+
+    fun processLogs(submissions: List<Submission>) {
+        submissions.forEach { submission ->
             submission.logs?.let { output ->
-                if (submission.command == Command.GRADE) {
+                if (submission.command == Command.GRADE &&
+                    submission.evaluation!!.task!!.status != TaskStatus.Interactive) {
                     submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+                } else if (submission.command == Command.GRADE) {
+                    submission.output = ""
                 } else {
                     submission.output = output
                 }
             }
         }
-        // graded submissions do not include the logs unless the user has the assistant role
-        val restrictedLogs =
-            submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
-        restrictedLogs.forEach { submission ->
-            submission.output.let { output ->
-                if (submission.evaluation!!.task!!.status === TaskStatus.Interactive) {
-                    submission.output = ""
-                }
-            }
-        }
-        return Stream.concat(includingLogs.stream(), restrictedLogs.stream())
-            .sorted { obj1, obj2 -> obj2.id!!.compareTo(obj1.id!!) }
-            .toList()
     }
 
     fun createTaskSubmission(
