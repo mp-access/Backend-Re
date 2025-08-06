@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.concurrent.thread
 
 @Service
 class ExampleQueueService (
@@ -21,10 +20,10 @@ class ExampleQueueService (
     @Value("\${examples.example-queue.max-concurrent-submissions}") private val maxConcurrentSubmissions: Int
 ) {
     private val logger = KotlinLogging.logger {}
-    private val coolDownPeriod = 500L
     private val maxRetries = 2
-    private val submissionQueue: BlockingQueue<SubmissionWithContext> = LinkedBlockingQueue()
+    private val submissionQueue: BlockingQueue<SubmissionWithContext> = LinkedBlockingQueue(1000)
     private val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrentSubmissions)
+    private lateinit var processorThread: Thread
     private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
@@ -39,7 +38,7 @@ class ExampleQueueService (
 
     @PostConstruct
     fun startQueueProcessor() {
-        thread(name = "submission-processor-thread") {
+        processorThread = Thread {
             while (!Thread.currentThread().isInterrupted) {
                 try {
                     val currentCpuUsage: Double? = meterRegistry.find("system.cpu.usage")
@@ -58,46 +57,67 @@ class ExampleQueueService (
                         continue
                     }
 
-                    val submissionWithContext = submissionQueue.poll()
-                    if (submissionWithContext != null) {
-                        val exampleKey = Pair(submissionWithContext.courseSlug, submissionWithContext.exampleSlug)
-                        runningSubmissionsPerExample.computeIfAbsent(exampleKey) { AtomicInteger(0) }.incrementAndGet()
-                        executor.submit {
-                            try {
-                                exampleService.processSubmission(
-                                    submissionWithContext.courseSlug,
-                                    submissionWithContext.exampleSlug,
-                                    submissionWithContext.submissionDTO,
-                                    submissionWithContext.submissionReceivedAt
-                                )
-                            } catch (e: Exception) {
-                                logger.error(e) { "Error processing submission for ${submissionWithContext.submissionDTO.userId}: ${e.message}" }
-                                submissionWithContext.retryCount += 1
-                                if (submissionWithContext.retryCount <= maxRetries) {
-                                    submissionQueue.offer(submissionWithContext)
-                                    logger.warn { "Submission re-added to queue (attempt ${submissionWithContext.retryCount})." }
-                                } else {
-                                    logger.error { "Submission for ${submissionWithContext.submissionDTO.userId} failed after ${maxRetries} retries. Discarding." }
-                                }
-                            } finally {
-                                val count = runningSubmissionsPerExample[exampleKey]?.decrementAndGet()
-                                if (count == 0) {
-                                    runningSubmissionsPerExample.remove(exampleKey)
-                                }
-                                logger.info { "Submission task for ${submissionWithContext.submissionDTO.userId} finished. Running tasks: ${getTotalRunningSubmissions()}" }
+                    val submissionWithContext = submissionQueue.take()
+                    val exampleKey = Pair(submissionWithContext.courseSlug, submissionWithContext.exampleSlug)
+                    runningSubmissionsPerExample.computeIfAbsent(exampleKey) { AtomicInteger(0) }.incrementAndGet()
+                    executor.submit {
+                        try {
+                            exampleService.processSubmission(
+                                submissionWithContext.courseSlug,
+                                submissionWithContext.exampleSlug,
+                                submissionWithContext.submissionDTO,
+                                submissionWithContext.submissionReceivedAt
+                            )
+                        } catch (e: Exception) {
+                            logger.error(e) {
+                                "Error processing submission for ${submissionWithContext.submissionDTO.userId}"
+                            }
+                            handleRetry(submissionWithContext)
+                        } finally {
+                            val count = runningSubmissionsPerExample[exampleKey]?.decrementAndGet()
+                            if (count == 0) {
+                                runningSubmissionsPerExample.remove(exampleKey)
+                            }
+                            logger.debug {
+                                "Completed submission for ${submissionWithContext.submissionDTO.userId}"
                             }
                         }
-                        Thread.sleep(coolDownPeriod) // cool-down period to prevent "The Thundering Herd"-problem
-                    } else {
-                        Thread.sleep(1000)
                     }
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
-                    logger.warn { "Submission processor thread interrupted. Shutting down." }
+                    logger.warn { "Processor thread interrupted. Shutting down." }
                 } catch (e: Exception) {
-                    logger.error(e) { "An unexpected error occurred in the queue processor loop." }
+                    logger.error(e) { "Unexpected error in processor thread." }
                 }
             }
+        }
+        processorThread.name = "submission-processor-thread"
+        processorThread.isDaemon = true
+        processorThread.start()
+    }
+
+    private fun handleRetry(submission: SubmissionWithContext) {
+        submission.retryCount += 1
+        if (submission.retryCount <= maxRetries) {
+            submissionQueue.offer(submission)
+            logger.warn {
+                "Retrying submission for ${submission.submissionDTO.userId} (attempt ${submission.retryCount})"
+            }
+        } else {
+            logger.error {
+                "Submission for ${submission.submissionDTO.userId} failed after $maxRetries retries. Discarding."
+            }
+        }
+    }
+
+    fun areInteractiveExampleSubmissionsFullyProcessed(courseSlug: String, exampleSlug: String): Boolean {
+        return !hasWaitingSubmissions(courseSlug, exampleSlug) &&
+                !runningSubmissionsPerExample.containsKey(Pair(courseSlug, exampleSlug))
+    }
+
+    private fun hasWaitingSubmissions(courseSlug: String, exampleSlug: String): Boolean {
+        return submissionQueue.any {
+            it.courseSlug == courseSlug && it.exampleSlug == exampleSlug
         }
     }
 
@@ -105,30 +125,13 @@ class ExampleQueueService (
         return runningSubmissionsPerExample.values.sumOf { it.get() }
     }
 
-    fun areInteractiveExampleSubmissionsFullyProcessed(courseSlug: String, exampleSlug: String) : Boolean {
-        return if (hasWaitingSubmissions(courseSlug, exampleSlug)) {
-            false
-        } else {
-            !runningSubmissionsPerExample.containsKey(Pair(courseSlug, exampleSlug))
-        }
-    }
-
-    private fun hasWaitingSubmissions(courseSlug: String, exampleSlug: String): Boolean {
-        for (submission in submissionQueue) {
-            if (submission.exampleSlug == exampleSlug && submission.courseSlug == courseSlug) {
-                return true
-            }
-        }
-        return false
-    }
-
     @PreDestroy
     fun shutdown() {
-        logger.info { "Shutting down submission executor and queue processor thread." }
+        logger.info { "Shutting down executor and processor thread." }
+        processorThread.interrupt()
         executor.shutdown()
-        Thread.currentThread().interrupt()
         if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
-            logger.warn { "Executor did not terminate in time. Forcing shutdown." }
+            logger.warn { "Executor didn't shut down gracefully. Forcing shutdown." }
             executor.shutdownNow()
         }
     }
