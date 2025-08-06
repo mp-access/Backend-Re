@@ -231,7 +231,7 @@ class ExampleService(
             List(testCount) { 0.0 }
         }
 
-        return example.testNames.zip(passRatePerTestCase).toMap()
+        return testNames.zip(passRatePerTestCase).toMap()
     }
 
     @Transactional
