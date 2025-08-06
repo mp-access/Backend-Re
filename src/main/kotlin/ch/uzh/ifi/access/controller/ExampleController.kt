@@ -1,6 +1,5 @@
 package ch.uzh.ifi.access.controller
 
-import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskWorkspace
@@ -13,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
 import java.util.*
 
 
@@ -21,6 +21,7 @@ import java.util.*
 @EnableAsync
 class ExampleController(
     private val exampleService: ExampleService,
+    private val exampleQueueService: ExampleQueueService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val courseService: CourseService,
@@ -48,10 +49,9 @@ class ExampleController(
     ): ExampleInformationDTO {
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val currentExample = exampleService.getExampleBySlug(course, example)
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(submissions, currentExample.testNames)
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
 
         return ExampleInformationDTO(
             participantsOnline,
@@ -70,10 +70,9 @@ class ExampleController(
     ): ExampleSubmissionsDTO {
         val participantsOnline = roleService.getOnlineCount(course)
         val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val currentExample = exampleService.getExampleBySlug(course, example)
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(submissions, currentExample.testNames)
+        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
 
         val submissionsDTO = submissions.map {
             SubmissionSseDTO(
@@ -104,39 +103,11 @@ class ExampleController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
-        val newSubmission = exampleService.createExampleSubmission(course, example, submission)
-        if (newSubmission.command == Command.GRADE) {
-            emitterService.sendPayload(
-                EmitterType.SUPERVISOR,
-                course,
-                "student-submission",
-                SubmissionSseDTO(
-                    newSubmission.id!!,
-                    newSubmission.userId,
-                    newSubmission.createdAt,
-                    newSubmission.points,
-                    newSubmission.testsPassed,
-                    newSubmission.files[0].content
-                )
-            )
-
-            val participantsOnline = roleService.getOnlineCount(course)
-            val totalParticipants = courseService.getCourseBySlug(course).participantCount
-            val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
-            val numberOfStudentsWhoSubmitted = submissions.size
-            val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
-
-            emitterService.sendPayload(
-                EmitterType.SUPERVISOR,
-                course,
-                "example-information",
-                ExampleInformationDTO(
-                    participantsOnline,
-                    totalParticipants,
-                    numberOfStudentsWhoSubmitted,
-                    passRatePerTestCase
-                )
-            )
+        val submissionReceivedAt = LocalDateTime.now()
+        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt)) {
+            exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
+        } else {
+            exampleService.processSubmission(course, example, submission, submissionReceivedAt)
         }
     }
 
@@ -275,5 +246,43 @@ class ExampleController(
                 submission.getId() to submission.getEmbedding()
             }
         return clusteringService.performSpectralClustering(submissionEmbeddingMap, numberOfClusters)
+    }
+
+    @GetMapping("/{example}/point-distribution")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getPointDistribution(
+        @PathVariable course: String,
+        @PathVariable example: String,
+    ): PointDistributionDTO {
+        val currentExample = exampleService.getExampleBySlug(course, example)
+        require(currentExample.end!! <= LocalDateTime.now()) {"The example is still running. The point distribution of students cannot be shown until the example has finished."}
+        while (!exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
+            Thread.sleep(1000)
+        }
+
+        val response = PointDistributionDTO()
+        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
+        val points = submissions.mapNotNull { submission -> submission.points }
+        val testCaseCount = currentExample.testNames.size
+        val numBins = if (testCaseCount <= 10) testCaseCount else 10
+        val binSize = 1.0 / numBins.toDouble()
+        val binCounts = IntArray(numBins) { 0 }
+
+        for (point in points) {
+            val binIndex = minOf((point / binSize).toInt(), numBins - 1)
+            binCounts[binIndex]++
+        }
+
+        for (i in 0 until numBins) {
+            val lowerBoundary = i * binSize
+            val upperBoundary = if (i == numBins - 1) 1.0 else (i + 1) * binSize
+            val binMap = mapOf(
+                "lowerBoundary" to Math.round(lowerBoundary * 100.0) / 100.0,
+                "upperBoundary" to Math.round(upperBoundary * 100.0) / 100.0,
+                "numberOfSubmissions" to binCounts[i].toDouble()
+            )
+            response.pointDistribution.add(binMap)
+        }
+        return response
     }
 }

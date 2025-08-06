@@ -3,13 +3,16 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
+import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
+import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -21,11 +24,12 @@ class ExampleService(
     private val submissionService: SubmissionService,
     private val roleService: RoleService,
     private val courseService: CourseService,
+    private val emitterService: EmitterService,
     private val exampleRepository: ExampleRepository,
     private val evaluationRepository: EvaluationRepository,
-    private val submissionRepository: SubmissionRepository
+    private val submissionRepository: SubmissionRepository,
+    @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
-
     private val logger = KotlinLogging.logger {}
 
     // TODO: make this return TaskOverview
@@ -138,7 +142,45 @@ class ExampleService(
         return example
     }
 
-    fun createExampleSubmission(courseSlug: String, exampleSlug: String, submissionDTO: SubmissionDTO): Submission {
+    @Transactional
+    fun processSubmission(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
+        val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
+        if (newSubmission.command == Command.GRADE) {
+            emitterService.sendPayload(
+                EmitterType.SUPERVISOR,
+                courseSlug,
+                "student-submission",
+                SubmissionSseDTO(
+                    newSubmission.id!!,
+                    newSubmission.userId,
+                    newSubmission.createdAt,
+                    newSubmission.points,
+                    newSubmission.testsPassed,
+                    newSubmission.files[0].content
+                )
+            )
+
+            val participantsOnline = roleService.getOnlineCount(courseSlug)
+            val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount
+            val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+            val numberOfStudentsWhoSubmitted = submissions.size
+            val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
+
+            emitterService.sendPayload(
+                EmitterType.SUPERVISOR,
+                courseSlug,
+                "example-information",
+                ExampleInformationDTO(
+                    participantsOnline,
+                    totalParticipants,
+                    numberOfStudentsWhoSubmitted,
+                    passRatePerTestCase
+                )
+            )
+        }
+    }
+
+    fun createExampleSubmission(courseSlug: String, exampleSlug: String, submissionDTO: SubmissionDTO, submissionReceivedAt: LocalDateTime): Submission {
         val submissionLockDuration = 2L
 
         val example = getExampleBySlug(courseSlug, exampleSlug)
@@ -156,31 +198,27 @@ class ExampleService(
                     "Example not published yet"
                 )
             if (submissionDTO.command == Command.GRADE) {
-                val now = LocalDateTime.now()
-
-                // There should be an interval between each submission
                 val lastSubmissionDate =
                     submissionService.getSubmissions(example.id, submissionDTO.userId)
                         .filter { it.command == Command.GRADE }
                         .sortedByDescending { it.createdAt }
                         .firstOrNull()?.createdAt
-                if (lastSubmissionDate != null && now.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
+                if (lastSubmissionDate != null && submissionReceivedAt.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
                     throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "You must wait for 2 hours before submitting a solution again"
                     )
-
-                // Checking if example has ended and is now on the grace period
-                val afterPublishPeriod = example.end!!.plusHours(submissionLockDuration)
-                if (now.isAfter(example.end) && now.isBefore((afterPublishPeriod)))
+                val latestAcceptableFirstSubmissionTimeStamp = example.end!!.plusSeconds(gracePeriod)
+                val endOfPeriodAfterExampleWasInteractive = example.end!!.plusHours(submissionLockDuration)
+                if (lastSubmissionDate == null && submissionReceivedAt.isAfter(latestAcceptableFirstSubmissionTimeStamp) && submissionReceivedAt.isBefore(endOfPeriodAfterExampleWasInteractive))
                     throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Example submissions disabled until 2 hours after the example publish"
+                        "Your submission was processed too late. Therefore, it cannot be considered."
                     )
             }
         }
 
-        val newSubmission = submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO)
+        val newSubmission = submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO, submissionReceivedAt)
 
         return newSubmission
     }
@@ -208,11 +246,6 @@ class ExampleService(
         return submissions.filter { submission -> submission.testsPassed.isNotEmpty() }
     }
 
-    fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String): Map<String, Double> {
-        val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
-        return getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
-    }
-
     fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String, submissions: List<Submission>): Map<String, Double> {
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
@@ -231,7 +264,13 @@ class ExampleService(
             List(testCount) { 0.0 }
         }
 
-        return testNames.zip(passRatePerTestCase).toMap()
+        return example.testNames.zip(passRatePerTestCase).toMap()
+    }
+
+    fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+        if (example.start == null || example.end == null) return false
+        return (example.start!!.isBefore(submissionReceivedAt) || (example.end!!.plusSeconds(gracePeriod)).isAfter(submissionReceivedAt))
     }
 
     @Transactional

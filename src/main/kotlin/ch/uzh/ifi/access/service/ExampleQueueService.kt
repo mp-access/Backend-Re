@@ -9,10 +9,7 @@ import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
-import java.util.concurrent.BlockingQueue
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
@@ -25,9 +22,10 @@ class ExampleQueueService (
 ) {
     private val logger = KotlinLogging.logger {}
     private val coolDownPeriod = 500L
+    private val maxRetries = 2
     private val submissionQueue: BlockingQueue<SubmissionWithContext> = LinkedBlockingQueue()
     private val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrentSubmissions)
-    private val runningSubmissions = AtomicInteger(0)
+    private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
         val submissionWithContext = SubmissionWithContext(courseSlug, exampleSlug, submission, submissionReceivedAt, 0)
@@ -35,7 +33,7 @@ class ExampleQueueService (
         if (added) {
             logger.info { "Submission for user ${submission.userId} added to queue for example $exampleSlug." }
         } else {
-            logger.error { "Failed to add submission to queue. Queue may be full." }
+            logger.error { "Failed to add submission to queue." }
         }
     }
 
@@ -54,16 +52,16 @@ class ExampleQueueService (
                         continue
                     }
 
-                    if (currentCpuUsage >= cpuThreshold || runningSubmissions.get() >= maxConcurrentSubmissions) {
-                        logger.info { "System busy (CPU: %.2f%%) or at max tasks (${runningSubmissions.get()}). Waiting to process submissions...".format(currentCpuUsage * 100) }
+                    if (currentCpuUsage >= cpuThreshold || getTotalRunningSubmissions() >= maxConcurrentSubmissions) {
+                        logger.info { "System busy (CPU: %.2f%%) or at max tasks (${getTotalRunningSubmissions()}). Waiting to process submissions...".format(currentCpuUsage * 100) }
                         Thread.sleep(100)
                         continue
                     }
 
                     val submissionWithContext = submissionQueue.poll()
                     if (submissionWithContext != null) {
-                        logger.info { "Processing submission for ${submissionWithContext.submissionDTO.userId}." }
-                        runningSubmissions.incrementAndGet()
+                        val exampleKey = Pair(submissionWithContext.courseSlug, submissionWithContext.exampleSlug)
+                        runningSubmissionsPerExample.computeIfAbsent(exampleKey) { AtomicInteger(0) }.incrementAndGet()
                         executor.submit {
                             try {
                                 exampleService.processSubmission(
@@ -74,9 +72,19 @@ class ExampleQueueService (
                                 )
                             } catch (e: Exception) {
                                 logger.error(e) { "Error processing submission for ${submissionWithContext.submissionDTO.userId}: ${e.message}" }
+                                submissionWithContext.retryCount += 1
+                                if (submissionWithContext.retryCount <= maxRetries) {
+                                    submissionQueue.offer(submissionWithContext)
+                                    logger.warn { "Submission re-added to queue (attempt ${submissionWithContext.retryCount})." }
+                                } else {
+                                    logger.error { "Submission for ${submissionWithContext.submissionDTO.userId} failed after ${maxRetries} retries. Discarding." }
+                                }
                             } finally {
-                                runningSubmissions.decrementAndGet()
-                                logger.info { "Submission for ${submissionWithContext.submissionDTO.userId} finished. Running tasks: ${runningSubmissions.get()}" }
+                                val count = runningSubmissionsPerExample[exampleKey]?.decrementAndGet()
+                                if (count == 0) {
+                                    runningSubmissionsPerExample.remove(exampleKey)
+                                }
+                                logger.info { "Submission task for ${submissionWithContext.submissionDTO.userId} finished. Running tasks: ${getTotalRunningSubmissions()}" }
                             }
                         }
                         Thread.sleep(coolDownPeriod) // cool-down period to prevent "The Thundering Herd"-problem
@@ -93,7 +101,19 @@ class ExampleQueueService (
         }
     }
 
-    fun hasWaitingSubmissions(courseSlug: String, exampleSlug: String): Boolean {
+    private fun getTotalRunningSubmissions(): Int {
+        return runningSubmissionsPerExample.values.sumOf { it.get() }
+    }
+
+    fun areInteractiveExampleSubmissionsFullyProcessed(courseSlug: String, exampleSlug: String) : Boolean {
+        return if (hasWaitingSubmissions(courseSlug, exampleSlug)) {
+            false
+        } else {
+            !runningSubmissionsPerExample.containsKey(Pair(courseSlug, exampleSlug))
+        }
+    }
+
+    private fun hasWaitingSubmissions(courseSlug: String, exampleSlug: String): Boolean {
         for (submission in submissionQueue) {
             if (submission.exampleSlug == exampleSlug && submission.courseSlug == courseSlug) {
                 return true
@@ -107,7 +127,7 @@ class ExampleQueueService (
         logger.info { "Shutting down submission executor and queue processor thread." }
         executor.shutdown()
         Thread.currentThread().interrupt()
-        if (!executor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS)) {
+        if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
             logger.warn { "Executor did not terminate in time. Forcing shutdown." }
             executor.shutdownNow()
         }
