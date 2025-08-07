@@ -81,7 +81,9 @@ class ExampleController(
                 it.createdAt,
                 it.points,
                 it.testsPassed,
-                it.files[0].content
+                it.files.associate { file ->
+                    (file.taskFile?.name ?: "unknown") to file.content.toString()
+                }
             )
         }
 
