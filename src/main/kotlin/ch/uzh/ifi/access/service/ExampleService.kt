@@ -156,7 +156,9 @@ class ExampleService(
                     newSubmission.createdAt,
                     newSubmission.points,
                     newSubmission.testsPassed,
-                    newSubmission.files[0].content
+                    newSubmission.files.associate { file ->
+                        (file.taskFile?.name ?: "unknown") to file.content.toString()
+                    }
                 )
             )
 
