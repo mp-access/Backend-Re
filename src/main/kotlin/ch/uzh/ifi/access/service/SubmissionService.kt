@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import java.time.LocalDateTime
 import java.util.stream.Stream
 
 @Service
@@ -27,9 +28,9 @@ class SubmissionService(
     private val evaluationService: EvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
-        // run and test submissions include the execution logs
-        val includingLogs = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        includingLogs.forEach { submission ->
+        val task = taskRepository.findById(taskId!!).get()
+        val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
+        unrestricted.forEach { submission ->
             submission.logs?.let { output ->
                 if (submission.command == Command.GRADE) {
                     submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
@@ -38,19 +39,21 @@ class SubmissionService(
                 }
             }
         }
-        // graded submissions do not include the logs unless the user has the assistant role
-        val restrictedLogs =
-            submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
-        restrictedLogs.forEach { submission ->
-            submission.output.let { output ->
-                if (submission.evaluation!!.task!!.status === TaskStatus.Interactive) {
+        val restricted = submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
+        if (isExample(task)) {
+            unrestricted.forEach { submission ->
+                if (submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
                     submission.output = ""
                 }
             }
         }
-        return Stream.concat(includingLogs.stream(), restrictedLogs.stream())
-            .sorted { obj1, obj2 -> obj2.id!!.compareTo(obj1.id!!) }
-            .toList()
+        return Stream.concat(unrestricted.stream(), restricted.stream())
+            .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
+                .reversed()).toList()
+    }
+
+    private fun isExample(task: Task): Boolean {
+        return task.course != null
     }
 
     fun createTaskSubmission(
@@ -63,7 +66,8 @@ class SubmissionService(
             courseSlug,
             taskSlug,
             getTaskBySlug(courseSlug, assignmentSlug, taskSlug),
-            submissionDTO
+            submissionDTO,
+            null
         )
     }
 
@@ -74,7 +78,7 @@ class SubmissionService(
         ]
     )
     // It only accepts assignment tasks, not examples
-    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO): Submission {
+    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO, submissionReceivedAt: LocalDateTime?): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
@@ -104,6 +108,7 @@ class SubmissionService(
         }
         // at this point, all restrictions have passed, and we can create the submission
         val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
+        if (submissionReceivedAt != null) submission.createdAt = submissionReceivedAt
         submissionRepository.saveAndFlush(submission)
         submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
             .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }

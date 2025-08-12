@@ -6,7 +6,6 @@ import jakarta.persistence.*
 import lombok.Getter
 import lombok.Setter
 import org.apache.commons.lang3.StringUtils
-import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
@@ -31,7 +30,6 @@ class Submission {
     var points: Double? = null
     var valid = false
 
-    @CreationTimestamp
     @Column(nullable = false)
     var createdAt: LocalDateTime? = null
 
@@ -66,4 +64,10 @@ class Submission {
     val isGraded: Boolean
         get() = command!!.isGraded
 
+    @PrePersist
+    protected fun onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now()
+        }
+    }
 }

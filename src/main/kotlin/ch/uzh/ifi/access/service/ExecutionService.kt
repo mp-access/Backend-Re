@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.model.dto.EmbeddingDTO
 import ch.uzh.ifi.access.model.dto.ImplementationDTO
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.repository.TaskFileRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.json.JsonMapper
@@ -17,6 +18,7 @@ import com.github.dockerjava.api.exception.NotFoundException
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.transaction.Transactional
 import org.apache.commons.io.FileUtils
 import org.apache.hc.client5.http.classic.methods.HttpPost
 import org.apache.hc.client5.http.config.RequestConfig
@@ -42,6 +44,7 @@ class ExecutionService(
     private val fileService: FileService,
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
+    private val submissionRepository: SubmissionRepository,
     private val jsonMapper: JsonMapper,
     private val objectMapper: ObjectMapper,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
@@ -295,8 +298,10 @@ class ExecutionService(
                 if (results.points != null) {
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
-                    submission.testsPassed = results.hints.map { hint ->
-                        if (hint == null) 1 else 0
+                    if (isExample(task)) {
+                        submission.testsPassed = results.hints.map { hint ->
+                            if (hint == null) 1 else 0
+                        }
                     }
                     // never go over 100%; the number of points is otherwise up to the test suite to determine correctly
                     submission.points = minOf(results.points!!, submission.maxPoints!!)
@@ -408,6 +413,23 @@ class ExecutionService(
                     "LLM service returned error: $statusCode - $errorBody"
                 )
             }
+        }
+    }
+
+    @Transactional
+    fun recalculateSubmissionEmbedding(submissionId: Long) {
+        val submission = submissionRepository.findById(submissionId).orElse(null)
+        submission?.let {
+            val embedding = getImplementationEmbedding(
+                it.files
+                    .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                    .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+            )
+            it.embedding = embedding
+            submissionRepository.save(it)
+            logger.info { "Embedding for submission with ID $submissionId was successfully recalculated." }
+        } ?: run {
+            logger.warn { "Could not find submission with ID $submissionId to retry the embedding calculation." }
         }
     }
 
