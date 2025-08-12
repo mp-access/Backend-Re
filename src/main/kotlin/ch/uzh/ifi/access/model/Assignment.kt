@@ -47,13 +47,16 @@ class Assignment {
         get() = start!!.isBefore(LocalDateTime.now())
 
     val isPastDue: Boolean
-        get() = end!!.isBefore(LocalDateTime.now())
+        get() = end != null && end!!.isBefore(LocalDateTime.now())
 
     val isActive: Boolean
         get() = isPublished && !isPastDue
 
     val countDown: List<Timer>
         get() {
+            if (end == null) {
+                return listOf()
+            }
             val remaining = Duration.between(LocalDateTime.now(), end)
             return listOf(
                 Timer("DAYS", remaining.toDays(), Duration.between(start, end).toDays()),

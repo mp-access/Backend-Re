@@ -16,7 +16,7 @@ class CourseConfigImporter(
 ) {
 
     fun JsonNode?.asTextOrNull(): String? {
-        return if (this is NullNode || this==null) null else this.asText()
+        return if (this is NullNode || this == null) null else this.asText()
     }
 
     fun readCourseConfig(path: Path): CourseDTO {
@@ -78,7 +78,8 @@ class CourseConfigImporter(
 
         assignment.slug = config["slug"].asText()
         assignment.start = LocalDateTime.parse(config["start"].asText())
-        assignment.end = LocalDateTime.parse(config["end"].asText())
+        val end = config["end"]?.asText()
+        assignment.end = end?.let { LocalDateTime.parse(it) }
 
         config["tasks"].forEach { directory ->
             assignment.tasks.add(directory.asText())

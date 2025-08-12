@@ -9,7 +9,6 @@ import org.hibernate.type.SqlTypes
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
-import kotlin.collections.ArrayList
 
 @Entity
 @Check(constraints = "((assignment_id IS NOT NULL AND course_id IS NULL) OR (assignment_id IS NULL AND course_id IS NOT NULL))")
@@ -85,8 +84,7 @@ class Task {
     @Transient
     var userId: String? = null
     val instructions: String?
-        get() = files.filter { taskFile -> taskFile.enabled && taskFile.instruction }
-            .first().template
+        get() = files.first { taskFile -> taskFile.enabled && taskFile.instruction }.template
     val attemptRefill: Int?
         get() = if (Objects.nonNull(attemptWindow)) Math.toIntExact(attemptWindow!!.toSeconds()) else null
 
@@ -111,7 +109,6 @@ class Task {
             Command.RUN -> runCommand
             Command.TEST -> testCommand
             Command.GRADE -> gradeCommand
-            else -> null
         }
     }
 
@@ -136,7 +133,7 @@ class Task {
         if (assignment != null) {
             status = if (assignment!!.start == null || assignment!!.start!!.isAfter(now)) {
                 TaskStatus.Planned
-            } else if (assignment!!.end!!.isAfter(now)) {
+            } else if (assignment!!.end == null || assignment!!.end!!.isAfter(now)) {
                 TaskStatus.Active
             } else {
                 TaskStatus.Closed
