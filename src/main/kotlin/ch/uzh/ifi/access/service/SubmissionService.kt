@@ -28,23 +28,41 @@ class SubmissionService(
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
         val submissions = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        processLogs(submissions)
+        processLogs(submissions, taskId)
         return submissions
     }
 
-    fun processLogs(submissions: List<Submission>) {
-        submissions.forEach { submission ->
-            submission.logs?.let { output ->
-                if (submission.command == Command.GRADE &&
-                    submission.evaluation!!.task!!.status != TaskStatus.Interactive) {
-                    submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
-                } else if (submission.command == Command.GRADE) {
-                    submission.output = ""
-                } else {
-                    submission.output = output
+    fun processLogs(submissions: List<Submission>, taskId: Long?) {
+        val task = taskRepository.findById(taskId!!).get()
+        if (isExample(task)) {
+            submissions.forEach { submission ->
+                submission.logs?.let { output ->
+                    if (submission.command == Command.GRADE &&
+                        submission.evaluation!!.task!!.status != TaskStatus.Interactive
+                    ) {
+                        submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+                    } else if (submission.command == Command.GRADE) {
+                        submission.output = ""
+                    } else {
+                        submission.output = output
+                    }
+                }
+            }
+        } else {
+            submissions.forEach { submission ->
+                submission.logs?.let { output ->
+                    if (submission.command == Command.GRADE) {
+                        submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
+                    } else {
+                        submission.output = output
+                    }
                 }
             }
         }
+    }
+
+    private fun isExample(task: Task): Boolean {
+        return task.course != null
     }
 
     fun createTaskSubmission(
