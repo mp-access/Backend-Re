@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
+import java.util.stream.Stream
 
 @Service
 class SubmissionService(
@@ -27,24 +28,32 @@ class SubmissionService(
     private val evaluationService: EvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
-        val submissions = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        processLogs(submissions)
-        return submissions
-    }
-
-    fun processLogs(submissions: List<Submission>) {
-        submissions.forEach { submission ->
+        val task = taskRepository.findById(taskId!!).get()
+        val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
+        unrestricted.forEach { submission ->
             submission.logs?.let { output ->
-                if (submission.command == Command.GRADE &&
-                    submission.evaluation!!.task!!.status != TaskStatus.Interactive) {
+                if (submission.command == Command.GRADE) {
                     submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
-                } else if (submission.command == Command.GRADE) {
-                    submission.output = ""
                 } else {
                     submission.output = output
                 }
             }
         }
+        val restricted = submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
+        if (isExample(task)) {
+            unrestricted.forEach { submission ->
+                if (submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
+                    submission.output = ""
+                }
+            }
+        }
+        return Stream.concat(unrestricted.stream(), restricted.stream())
+            .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
+                .reversed()).toList()
+    }
+
+    private fun isExample(task: Task): Boolean {
+        return task.course != null
     }
 
     fun createTaskSubmission(
