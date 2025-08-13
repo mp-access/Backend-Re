@@ -24,6 +24,7 @@ class ClusteringService (
     ): CategorizationDTO {
         val (submissionsWithEmbeddings, submissionsWithoutEmbeddings) = embeddingsMap.entries.partition { it.value.isNotEmpty() }
         if (submissionsWithoutEmbeddings.isNotEmpty()) retryCalculatingEmbeddings(submissionsWithoutEmbeddings.map { it.key })
+        require(submissionsWithEmbeddings.size >= 5) { "For categorization to work, at least $numClusters submissions with embeddings are required. Try again later." }
         val orderedEmbeddingsMap = submissionsWithEmbeddings.sortedBy { it.key }
         val orderedSubmissionIds = orderedEmbeddingsMap.map { it.key }
         val orderedEmbeddings = orderedEmbeddingsMap.map { it.value }.toTypedArray()
