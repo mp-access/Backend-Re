@@ -36,6 +36,11 @@ class ExampleQueueService (
         }
     }
 
+    fun removeOutdatedSubmissions(courseSlug: String, exampleSlug: String) {
+        submissionQueue.removeIf { it.courseSlug == courseSlug && it.exampleSlug == exampleSlug }
+        logger.info { "All submissions for course \"$courseSlug\" and \"$exampleSlug\" are removed." }
+    }
+
     @PostConstruct
     fun startQueueProcessor() {
         processorThread = Thread {

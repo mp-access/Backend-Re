@@ -197,6 +197,7 @@ class ExampleController(
             "timer-update",
             "${updatedExample.start}/${updatedExample.end}"
         )
+        exampleQueueService.removeOutdatedSubmissions(course, example)
     }
 
     // Invoked by the teacher when publishing an example to inform the students
@@ -232,6 +233,7 @@ class ExampleController(
             "example-reset",
             "The example has been reset by the lecturer."
         )
+        exampleQueueService.removeOutdatedSubmissions(course, example)
     }
 
     @PostMapping("/{example}/categorize")
