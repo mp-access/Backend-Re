@@ -9,10 +9,10 @@ plugins {
     id("io.freefair.lombok") version "8.2.2"
     id("com.github.ben-manes.versions") version "0.47.0"
     id("org.flywaydb.flyway") version "9.21.1"
-    kotlin("jvm") version "1.9.0"
-    kotlin("plugin.spring") version "1.9.0"
-    kotlin("plugin.jpa") version "1.9.0"
-    kotlin("plugin.allopen") version "1.9.0"
+    kotlin("jvm") version "2.2.10"
+    kotlin("plugin.spring") version "2.2.10"
+    kotlin("plugin.jpa") version "2.2.10"
+    kotlin("plugin.allopen") version "2.2.10"
 }
 
 allOpen {
@@ -24,8 +24,8 @@ allOpen {
 
 
 group = "ch.uzh.ifi"
-version = "0.0.2"
-java.sourceCompatibility = JavaVersion.VERSION_17
+version = "0.0.3"
+java.sourceCompatibility = JavaVersion.VERSION_21
 
 repositories {
     mavenCentral()
@@ -126,9 +126,8 @@ tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17"
+    compilerOptions {
+        freeCompilerArgs = listOf("-Xjsr305=strict", "-Xannotation-default-target=param-property")
     }
 }
 
