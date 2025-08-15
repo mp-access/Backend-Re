@@ -105,8 +105,10 @@ class ExampleController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
+        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
-        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt)) {
+        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt) && !isAdmin) {
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
         } else {
             exampleService.processSubmission(course, example, submission, submissionReceivedAt)

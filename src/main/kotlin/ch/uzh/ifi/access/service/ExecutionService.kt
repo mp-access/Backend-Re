@@ -45,6 +45,7 @@ class ExecutionService(
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
+    private val roleService: RoleService,
     private val jsonMapper: JsonMapper,
     private val objectMapper: ObjectMapper,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
@@ -98,9 +99,12 @@ class ExecutionService(
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
 
+        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val isAdmin = roleService.isAdmin(userRoles, course.slug!!)
+
         // calculate the embedding in parallel with running the code.
         val embeddingFuture: CompletableFuture<DoubleArray?> =
-            if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task)) {
+            if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task) && !isAdmin) {
                 CompletableFuture.supplyAsync {
                     val concatenatedSubmissionContent = submission.files
                         .filter { submissionFile -> submissionFile.taskFile?.editable == true }

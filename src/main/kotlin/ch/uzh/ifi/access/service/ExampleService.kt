@@ -145,7 +145,11 @@ class ExampleService(
     @Transactional
     fun processSubmission(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
-        if (newSubmission.command == Command.GRADE) {
+
+        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val isAdmin = roleService.isAdmin(userRoles, courseSlug)
+
+        if (newSubmission.command == Command.GRADE && !isAdmin) {
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
                 courseSlug,
@@ -189,9 +193,7 @@ class ExampleService(
 
         // If the user is admin, don't check
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
-        val isAdmin =
-            userRoles.contains("$courseSlug-assistant") ||
-            userRoles.contains("$courseSlug-supervisor")
+        val isAdmin = roleService.isAdmin(userRoles, courseSlug)
 
         if (!isAdmin) {
             if (example.start == null || example.end == null)
