@@ -225,6 +225,15 @@ class ExampleController(
         @PathVariable course: String,
         @PathVariable example: String
     ) {
+        exampleQueueService.removeOutdatedSubmissions(course, example)
+        val now = LocalDateTime.now()
+        val maxWaitingTime = now.plusSeconds(30)
+        while (now <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
+            Thread.sleep(100)
+        }
+        if (now > maxWaitingTime) {
+            logger.warn { "It is likely that not all submissions of example $example in course $course were deleted after reset." }
+        }
         exampleService.resetExampleBySlug(course, example)
 
         emitterService.sendPayload(
@@ -233,7 +242,6 @@ class ExampleController(
             "example-reset",
             "The example has been reset by the lecturer."
         )
-        exampleQueueService.removeOutdatedSubmissions(course, example)
     }
 
     @PostMapping("/{example}/categorize")
