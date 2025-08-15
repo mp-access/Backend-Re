@@ -326,6 +326,10 @@ class RoleService(
         return roles.any { it.name == "${courseSlug}-supervisor" }
     }
 
+    fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {
+        return userRoles.contains("$courseSlug-assistant") || userRoles.contains("$courseSlug-supervisor")
+    }
+
     @Cacheable("RoleService.getOnlineCount", key = "#courseSlug")
     fun getOnlineCount(courseSlug: String): Int {
         val clientRepresentation = accessRealm.clients().findByClientId("access-client")[0]
