@@ -95,6 +95,7 @@ dependencies {
 
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     if (project.hasProperty("username")) {
+        builder.set("paketobuildpacks/builder-jammy-base")
         imageName.set("sealuzh/access-backend:x")
         publish.set(true)
         docker.publishRegistry.username.set(project.property("username") as String)

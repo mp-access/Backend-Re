@@ -4,7 +4,7 @@ import ch.uzh.ifi.access.model.GlobalFile
 import ch.uzh.ifi.access.model.ResultFile
 import ch.uzh.ifi.access.model.TaskFile
 import org.apache.commons.codec.binary.Base64
-import org.apache.commons.compress.utils.FileNameUtils
+import org.apache.commons.io.file.PathUtils
 import org.apache.tika.Tika
 import org.springframework.stereotype.Service
 import java.nio.file.Files
@@ -41,7 +41,7 @@ class FileService(val tika: Tika) {
         fileData.path = path.toString()
         fileData.name = path.fileName.toString()
         // because Tika actually cannot detect python3 scripts, we trust the file extension for now
-        val extension = FileNameUtils.getExtension(path.toString()).lowercase(Locale.getDefault())
+        val extension = PathUtils.getExtension(path).lowercase(Locale.getDefault())
         if (listOf("py", "r", "sh", "bash").contains(extension)) {
             fileData.mimeType = when (extension) {
                 "py" -> "text/x-python"
