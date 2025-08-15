@@ -143,7 +143,12 @@ class ExampleService(
     }
 
     @Transactional
-    fun processSubmission(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
+    fun processSubmission(
+        courseSlug: String,
+        exampleSlug: String,
+        submission: SubmissionDTO,
+        submissionReceivedAt: LocalDateTime
+    ) {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
         if (newSubmission.command == Command.GRADE) {
             emitterService.sendPayload(
@@ -182,7 +187,12 @@ class ExampleService(
         }
     }
 
-    fun createExampleSubmission(courseSlug: String, exampleSlug: String, submissionDTO: SubmissionDTO, submissionReceivedAt: LocalDateTime): Submission {
+    fun createExampleSubmission(
+        courseSlug: String,
+        exampleSlug: String,
+        submissionDTO: SubmissionDTO,
+        submissionReceivedAt: LocalDateTime
+    ): Submission {
         val submissionLockDuration = 2L
 
         val example = getExampleBySlug(courseSlug, exampleSlug)
@@ -205,14 +215,22 @@ class ExampleService(
                         .filter { it.command == Command.GRADE }
                         .sortedByDescending { it.createdAt }
                         .firstOrNull()?.createdAt
-                if (lastSubmissionDate != null && submissionReceivedAt.isBefore(lastSubmissionDate.plusHours(submissionLockDuration)))
+                if (lastSubmissionDate != null && submissionReceivedAt.isBefore(
+                        lastSubmissionDate.plusHours(
+                            submissionLockDuration
+                        )
+                    )
+                )
                     throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "You must wait for 2 hours before submitting a solution again"
                     )
                 val latestAcceptableFirstSubmissionTimeStamp = example.end!!.plusSeconds(gracePeriod)
                 val endOfPeriodAfterExampleWasInteractive = example.end!!.plusHours(submissionLockDuration)
-                if (lastSubmissionDate == null && submissionReceivedAt.isAfter(latestAcceptableFirstSubmissionTimeStamp) && submissionReceivedAt.isBefore(endOfPeriodAfterExampleWasInteractive))
+                if (lastSubmissionDate == null && submissionReceivedAt.isAfter(latestAcceptableFirstSubmissionTimeStamp) && submissionReceivedAt.isBefore(
+                        endOfPeriodAfterExampleWasInteractive
+                    )
+                )
                     throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Your submission was processed too late. Therefore, it cannot be considered."
@@ -220,7 +238,8 @@ class ExampleService(
             }
         }
 
-        val newSubmission = submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO, submissionReceivedAt)
+        val newSubmission =
+            submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO, submissionReceivedAt)
 
         return newSubmission
     }
@@ -248,7 +267,11 @@ class ExampleService(
         return submissions.filter { submission -> submission.testsPassed.isNotEmpty() }
     }
 
-    fun getExamplePassRatePerTestCase(courseSlug: String, exampleSlug: String, submissions: List<Submission>): Map<String, Double> {
+    fun getExamplePassRatePerTestCase(
+        courseSlug: String,
+        exampleSlug: String,
+        submissions: List<Submission>
+    ): Map<String, Double> {
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
         val testCount = example.testNames.size
@@ -272,7 +295,9 @@ class ExampleService(
     fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         if (example.start == null || example.end == null) return false
-        return (example.start!!.isBefore(submissionReceivedAt) || (example.end!!.plusSeconds(gracePeriod)).isAfter(submissionReceivedAt))
+        return (example.start!!.isBefore(submissionReceivedAt) || (example.end!!.plusSeconds(gracePeriod)).isAfter(
+            submissionReceivedAt
+        ))
     }
 
     @Transactional
