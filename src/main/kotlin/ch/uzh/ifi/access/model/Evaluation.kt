@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import lombok.Getter
 import lombok.Setter
-import org.hibernate.annotations.OrderBy
+import org.hibernate.annotations.SQLOrder
 import java.time.Duration
 import java.time.LocalDateTime
 
@@ -29,7 +29,7 @@ class Evaluation {
     var task: Task? = null
 
     @OneToMany(mappedBy = "evaluation", cascade = [CascadeType.ALL], orphanRemoval = true)
-    @OrderBy(clause = "CREATED_AT DESC")
+    @SQLOrder("CREATED_AT DESC")
     var submissions: MutableList<Submission> = ArrayList()
 
     @Transient
