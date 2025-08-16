@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
@@ -28,6 +29,7 @@ class ExampleService(
     private val exampleRepository: ExampleRepository,
     private val evaluationRepository: EvaluationRepository,
     private val submissionRepository: SubmissionRepository,
+    private val courseRepository: CourseRepository,
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     private val logger = KotlinLogging.logger {}
@@ -285,7 +287,8 @@ class ExampleService(
                 "No example found with the URL $exampleSlug"
             )
 
-        val evaluations = evaluationRepository.findAllByTask_Id(example.id)
+        val students = courseRepository.getBySlug(courseSlug)!!.registeredStudents
+        val evaluations = evaluationRepository.findAllByTask_IdAndUserIdIn(example.id, students)
         if (!evaluations.isNullOrEmpty())
             evaluationRepository.deleteAll(evaluations.toList())
 
