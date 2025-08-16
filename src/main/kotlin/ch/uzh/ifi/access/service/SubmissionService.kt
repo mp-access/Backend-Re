@@ -13,7 +13,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
-import java.util.stream.Stream
 
 @Service
 class SubmissionService(
@@ -24,32 +23,45 @@ class SubmissionService(
     private val submissionRepository: SubmissionRepository,
     private val evaluationRepository: EvaluationRepository,
     private val pointsService: PointsService,
+    private val roleService: RoleService,
     private val dockerService: ExecutionService,
     private val evaluationService: EvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
+        if (userId == null) {
+            return emptyList()
+        }
+
         val task = taskRepository.findById(taskId!!).get()
-        val unrestricted = submissionRepository.findByEvaluation_Task_IdAndUserId(taskId, userId)
-        unrestricted.forEach { submission ->
-            submission.logs?.let { output ->
-                if (submission.command == Command.GRADE) {
-                    submission.output = "Logs:\n$output\n\nHint:\n${submission.output}"
-                } else {
-                    submission.output = output
+        val courseSlug = if (isExample(task)) {
+            task.course!!.slug
+        } else {
+            task.assignment!!.course!!.slug
+        }
+        val userRoles = roleService.getUserRoles(listOf(userId))
+        val isAdmin = roleService.isAdmin(userRoles, courseSlug!!)
+
+        val submissions = submissionRepository.findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId, userId)
+        if (isAdmin) {
+            submissions.forEach { submission ->
+                submission.logs?.let { logs ->
+                    if (submission.command == Command.GRADE) {
+                        submission.output = "Logs:\n$logs\n\nHint:\n${submission.output}"
+                    } else {
+                        submission.output = logs
+                    }
+                }
+            }
+        } else {
+            if (isExample(task)) {
+                submissions.forEach { submission ->
+                    if (submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
+                        submission.output = ""
+                    }
                 }
             }
         }
-        val restricted = submissionRepository.findByEvaluation_Task_IdAndUserIdAndCommand(taskId, userId, Command.GRADE)
-        if (isExample(task)) {
-            unrestricted.forEach { submission ->
-                if (submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
-                    submission.output = ""
-                }
-            }
-        }
-        return Stream.concat(unrestricted.stream(), restricted.stream())
-            .sorted(Comparator.comparingLong { obj: Submission -> obj.id!! } // TODO: safety
-                .reversed()).toList()
+        return submissions
     }
 
     private fun isExample(task: Task): Boolean {
