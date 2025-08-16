@@ -99,8 +99,11 @@ class ExecutionService(
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
 
-        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
-        val isAdmin = roleService.isAdmin(userRoles, course.slug!!)
+        var isAdmin = false
+        if (submission.userId != null) {
+            val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+            isAdmin = roleService.isAdmin(userRoles, course.slug!!)
+        }
 
         // calculate the embedding in parallel with running the code.
         val embeddingFuture: CompletableFuture<DoubleArray?> =
