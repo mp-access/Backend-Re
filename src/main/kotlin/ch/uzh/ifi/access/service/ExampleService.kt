@@ -29,8 +29,8 @@ class ExampleService(
     private val exampleRepository: ExampleRepository,
     private val evaluationRepository: EvaluationRepository,
     private val submissionRepository: SubmissionRepository,
-    @Value("\${examples.grace-period}") private val gracePeriod: Long,
-    private val courseRepository: CourseRepository
+    private val courseRepository: CourseRepository,
+    @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     private val logger = KotlinLogging.logger {}
 
