@@ -197,7 +197,6 @@ class RoleService(
     private val semaphore = Semaphore(1)
 
     @Transactional
-    @Cacheable("RoleService.getUserRoles", key = "#usernames")
     fun getUserRoles(usernames: List<String>): List<String> {
         return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
             val slug = course.slug
@@ -327,7 +326,6 @@ class RoleService(
         return roles.any { it.name == "${courseSlug}-supervisor" }
     }
 
-    @Cacheable("RoleService.isAdmin", key = "#userRoles-#courseSlug")
     fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {
         return userRoles.contains("$courseSlug-assistant") || userRoles.contains("$courseSlug-supervisor")
     }
