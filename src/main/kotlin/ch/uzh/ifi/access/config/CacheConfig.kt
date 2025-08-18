@@ -25,6 +25,7 @@ class CacheConfig {
             "RoleService.isAdmin",
             "RoleService.getOnlineCount",
             "RoleService.getUserId",
+            "RoleService.getUserRoles",
             "PointsService.calculateTaskPoints",
             "PointsService.calculateAssignmentPoints",
             "PointsService.getMaxPoints",
