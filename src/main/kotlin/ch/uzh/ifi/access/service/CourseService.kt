@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.Role
+import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.repository.AssignmentRepository
@@ -176,7 +177,14 @@ class CourseService(
     }
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        val res = evaluationService.getEvaluation(taskId, userId ?: roleService.getUserId())?.nextAttemptAt
+        var res = evaluationService.getEvaluation(taskId, userId ?: roleService.getUserId())?.nextAttemptAt
+        val task = if (taskId != null) getTaskById(taskId) else null
+
+        // Example without any submissions
+        if (res == null && task != null && task.assignment == null && task.status == TaskStatus.Active && task.end != null) {
+            res = task.end!!.plusHours(2)
+        }
+
         return res
     }
 

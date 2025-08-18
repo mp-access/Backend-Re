@@ -326,6 +326,7 @@ class RoleService(
         return roles.any { it.name == "${courseSlug}-supervisor" }
     }
 
+    @Cacheable("RoleService.isAdmin", key = "#userRoles-#courseSlug")
     fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {
         return userRoles.contains("$courseSlug-assistant") || userRoles.contains("$courseSlug-supervisor")
     }
