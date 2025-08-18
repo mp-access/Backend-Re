@@ -1,3 +1,4 @@
+.kotlin
 scripts/get_submissions*
 *.class
 *.log

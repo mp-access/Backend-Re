@@ -2,17 +2,15 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("java")
-    id("jacoco")
-    id("org.springframework.boot") version "3.1.2"
-    id("io.spring.dependency-management") version "1.1.3"
-    id("org.sonarqube") version "4.3.0.3225"
-    id("io.freefair.lombok") version "8.2.2"
-    id("com.github.ben-manes.versions") version "0.47.0"
-    id("org.flywaydb.flyway") version "9.21.1"
-    kotlin("jvm") version "1.9.0"
-    kotlin("plugin.spring") version "1.9.0"
-    kotlin("plugin.jpa") version "1.9.0"
-    kotlin("plugin.allopen") version "1.9.0"
+    id("org.springframework.boot") version "3.5.4"
+    id("io.spring.dependency-management") version "1.1.7"
+    id("io.freefair.lombok") version "8.14"
+    id("com.github.ben-manes.versions") version "0.52.0"
+    id("org.flywaydb.flyway") version "11.11.0"
+    kotlin("jvm") version "2.2.10"
+    kotlin("plugin.spring") version "2.2.10"
+    kotlin("plugin.jpa") version "2.2.10"
+    kotlin("plugin.allopen") version "2.2.10"
 }
 
 allOpen {
@@ -24,8 +22,8 @@ allOpen {
 
 
 group = "ch.uzh.ifi"
-version = "0.0.2"
-java.sourceCompatibility = JavaVersion.VERSION_17
+version = "0.0.3"
+java.sourceCompatibility = JavaVersion.VERSION_21
 
 repositories {
     mavenCentral()
@@ -45,29 +43,30 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.restdocs:spring-restdocs-mockmvc")
     testImplementation("org.springframework.security:spring-security-test")
-    implementation("org.springframework.security:spring-security-data:6.1.3")
-    implementation("org.springframework.security:spring-security-oauth2-jose:6.1.3")
-    implementation("org.springdoc:springdoc-openapi-ui:1.7.0")
-    implementation("org.springdoc:springdoc-openapi-security:1.7.0")
+    implementation("org.springframework.security:spring-security-data:6.5.2")
+    implementation("org.springframework.security:spring-security-oauth2-jose:6.5.2")
+    implementation("org.springdoc:springdoc-openapi-ui:1.8.0")
+    implementation("org.springdoc:springdoc-openapi-security:1.8.0")
     runtimeOnly("org.postgresql:postgresql")
-    implementation("org.modelmapper:modelmapper:3.1.1")
-    implementation("org.apache.commons:commons-text:1.10.0")
+    implementation("org.modelmapper:modelmapper:3.2.4")
+    implementation("org.apache.commons:commons-text:1.14.0")
     implementation("org.apache.commons:commons-math3:3.6.1")
-    implementation("org.apache.commons:commons-collections4:4.4")
+    implementation("org.apache.commons:commons-collections4:4.5.0")
     implementation("org.keycloak:keycloak-admin-client:22.0.1")
-    implementation("com.github.docker-java:docker-java:3.3.3")
-    implementation("com.github.docker-java:docker-java-transport-httpclient5:3.3.3")
-    implementation("org.eclipse.jgit:org.eclipse.jgit:6.6.0.202305301015-r")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.15.2")
+    implementation("com.github.docker-java:docker-java:3.5.3")
+    implementation("com.github.docker-java:docker-java-transport-httpclient5:3.5.3")
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.19.2")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("org.apache.httpcomponents:httpcore:4.4.16")
     implementation("org.apache.httpcomponents:httpclient:4.5.14")
-    implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
-    implementation("org.apache.tika:tika-core:2.8.0")
+    implementation("org.apache.httpcomponents.client5:httpclient5:5.5")
+    implementation("org.apache.tika:tika-core:3.2.2")
     implementation("org.flywaydb:flyway-core")
-    implementation("io.github.oshai:kotlin-logging-jvm:5.1.0")
+    implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("io.github.oshai:kotlin-logging-jvm:7.0.12")
     implementation("com.github.haifengl:smile-core:3.0.0")
     implementation("org.bytedeco:arpack-ng-platform:3.9.1-1.5.12")
     implementation("org.bytedeco:openblas-platform:0.3.30-1.5.12")
@@ -81,31 +80,9 @@ dependencies {
         exclude("junit", "junit")
     }
     testImplementation("com.ninja-squad:springmockk:4.0.2")
-    testImplementation("org.junit.platform:junit-platform-suite:1.10.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
+    testImplementation("org.junit.platform:junit-platform-suite:1.13.4")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
 }
-/*
-test {
-    useJUnitPlatform()
-    finalizedBy jacocoTestReport
-}
-
-
-jacocoTestReport {
-    dependsOn test
-    reports {
-        xml.required = true
-    }
-}
-
-sonarqube {
-    properties {
-        property "sonar.projectKey", "mp-access_Backend"
-        property "sonar.organization", "access"
-        property "sonar.host.url", "https://sonarcloud.io"
-    }
-}
-*/
 
 /**
  * Build and push a Docker image of the backend to DockerHub via the built-in gradle task.
@@ -118,6 +95,7 @@ sonarqube {
 
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     if (project.hasProperty("username")) {
+        builder.set("paketobuildpacks/builder-jammy-base")
         imageName.set("sealuzh/access-backend:x")
         publish.set(true)
         docker.publishRegistry.username.set(project.property("username") as String)
@@ -126,9 +104,8 @@ tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("
 }
 
 tasks.withType<KotlinCompile> {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xjsr305=strict")
-        jvmTarget = "17"
+    compilerOptions {
+        freeCompilerArgs = listOf("-Xjsr305=strict", "-Xannotation-default-target=param-property")
     }
 }
 

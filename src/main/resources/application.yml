@@ -33,7 +33,7 @@ spring:
 
 llm:
   service:
-    url: http://localhost:4000
+    url: ${CLUSTER_URL:http://localhost:4000}
 
 examples:
   grace-period: 5

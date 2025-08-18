@@ -7,20 +7,24 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.security.access.prepost.PostFilter
 import java.time.LocalDateTime
 
 interface SubmissionRepository : JpaRepository<Submission?, Long?> {
 
     fun findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId: Long?, userId: String?): List<Submission>
 
-    @Query(value = """
+    @Query(
+        value = """
         SELECT s FROM Submission s
+        JOIN FETCH s.evaluation e
         WHERE s.evaluation.task.id = :taskId
           AND s.userId IN :userIds
           AND s.command = :command
           AND s.createdAt >= :exampleStart
           AND s.createdAt <= :exampleEnd
-    """)
+    """
+    )
     fun findInteractiveExampleSubmissions(
         @Param("taskId") taskId: Long?,
         @Param("userIds") userIds: List<String?>,

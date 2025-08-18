@@ -2,7 +2,7 @@ package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.dao.Timer
 import jakarta.persistence.*
-import org.hibernate.annotations.OrderBy
+import org.hibernate.annotations.SQLOrder
 import java.time.Duration
 import java.time.LocalDateTime
 
@@ -37,7 +37,7 @@ class Assignment {
     var course: Course? = null
 
     @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL])
-    @OrderBy(clause = "ID ASC")
+    @SQLOrder("ID ASC")
     var tasks: MutableList<Task> = ArrayList()
 
     @Transient
