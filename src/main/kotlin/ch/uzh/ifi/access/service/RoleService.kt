@@ -197,6 +197,7 @@ class RoleService(
     private val semaphore = Semaphore(1)
 
     @Transactional
+    @Cacheable("RoleService.getUserRoles", key = "#usernames")
     fun getUserRoles(usernames: List<String>): List<String> {
         return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
             val slug = course.slug
