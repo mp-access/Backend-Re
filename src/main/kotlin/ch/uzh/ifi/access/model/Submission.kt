@@ -60,7 +60,7 @@ class Submission {
     val maxPoints: Double?
         get() = evaluation!!.task!!.maxPoints
     val name: String
-        get() = "%s %s".formatted(StringUtils.capitalize(command!!.displayName), ordinalNum)
+        get() = "${StringUtils.capitalize(command!!.displayName)} $ordinalNum"
     val isGraded: Boolean
         get() = command!!.isGraded
 

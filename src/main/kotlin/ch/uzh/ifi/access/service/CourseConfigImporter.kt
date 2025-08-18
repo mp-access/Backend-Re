@@ -41,7 +41,7 @@ class CourseConfigImporter(
         course.overrideStart = overrideStart?.let { LocalDateTime.parse(it) }
         course.overrideEnd = overrideEnd?.let { LocalDateTime.parse(it) }
 
-        config["information"].fields().forEachRemaining { field ->
+        config["information"].properties().forEach { field ->
             val information = CourseInformationDTO()
             val data = field.value
             information.language = field.key
@@ -53,7 +53,7 @@ class CourseConfigImporter(
         }
 
         val files = CourseFilesDTO()
-        config["global_files"].fields().forEachRemaining { field ->
+        config["global_files"].properties().forEach { field ->
             val data = field.value
             val filenames = ArrayList<String>()
             data.forEach { filename ->
@@ -85,7 +85,7 @@ class CourseConfigImporter(
             assignment.tasks.add(directory.asText())
         }
 
-        val information = config["information"].fields().forEachRemaining { field ->
+        val information = config["information"].properties().forEach { field ->
             val information = AssignmentInformationDTO()
             val data = field.value
             information.language = field.key
@@ -105,7 +105,7 @@ class CourseConfigImporter(
         task.refill = config["refill"].asInt()
         task.maxPoints = config["max_points"].asDouble()
 
-        val instructionFiles = config["information"].fields().asSequence().map { field ->
+        val instructionFiles = config["information"].properties().map { field ->
             val information = TaskInformationDTO()
             val data = field.value
             information.language = field.key
@@ -124,7 +124,7 @@ class CourseConfigImporter(
 
         val files = TaskFilesDTO()
         files.instruction = instructionFiles
-        config["files"].fields().forEachRemaining { field ->
+        config["files"].properties().forEach { field ->
             val data = field.value
             val filenames = ArrayList<String>()
             data.forEach { filename ->
@@ -152,7 +152,7 @@ class CourseConfigImporter(
         example.maxAttempts = 1
         example.maxPoints = 1.0
 
-        val instructionFiles = config["information"].fields().asSequence().map { field ->
+        val instructionFiles = config["information"].properties().map { field ->
             val information = TaskInformationDTO()
             val data = field.value
             information.language = field.key
@@ -171,7 +171,7 @@ class CourseConfigImporter(
 
         val files = TaskFilesDTO()
         files.instruction = instructionFiles
-        config["files"].fields().forEachRemaining { field ->
+        config["files"].properties().forEach { field ->
             val data = field.value
             val filenames = ArrayList<String>()
             data.forEach { filename ->
