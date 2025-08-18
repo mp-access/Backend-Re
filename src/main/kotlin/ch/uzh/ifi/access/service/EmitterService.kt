@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.PerishableSseEmitter
 import io.github.oshai.kotlinlogging.KotlinLogging
+import jakarta.annotation.PreDestroy
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -105,5 +106,22 @@ class EmitterService {
                 }
             }
         }
+    }
+
+    /** Close all SSE connections and stop scheduler on shutdown */
+    @PreDestroy
+    fun preDestroy() = closeAllEmitters()
+
+    private fun closeAllEmitters() {
+        logger.info { "Closing all SSE emitters on shutdown..." }
+        emitters.forEach { (_, slugMap) ->
+            slugMap.forEach { (_, emitterMap) ->
+                emitterMap.values.forEach { e -> runCatching { e.complete() } }
+                emitterMap.clear()
+            }
+            slugMap.clear()
+        }
+        emitters.clear()
+        scheduler.shutdownNow()
     }
 }
