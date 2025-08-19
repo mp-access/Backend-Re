@@ -52,12 +52,14 @@ class ExampleController(
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
+        val avgPoints = exampleService.calculateAvgPoints(submissions)
 
         return ExampleInformationDTO(
             participantsOnline,
             totalParticipants,
             numberOfStudentsWhoSubmitted,
-            passRatePerTestCase
+            passRatePerTestCase,
+            avgPoints
         )
     }
 
