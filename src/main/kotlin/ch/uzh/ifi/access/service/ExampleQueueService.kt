@@ -126,6 +126,13 @@ class ExampleQueueService (
         }
     }
 
+    fun isSubmissionInTheQueue(exampleSlug: String, userId: String?): Boolean {
+        if (userId == null) return false
+        return submissionQueue.any {
+            it.submissionDTO.userId == userId && it.exampleSlug == exampleSlug
+        }
+    }
+
     private fun getTotalRunningSubmissions(): Int {
         return runningSubmissionsPerExample.values.sumOf { it.get() }
     }

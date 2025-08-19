@@ -40,6 +40,7 @@ class CourseService(
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
+    private val exampleQueueService: ExampleQueueService
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -178,10 +179,10 @@ class CourseService(
 
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
         var res = evaluationService.getEvaluation(taskId, userId ?: roleService.getUserId())?.nextAttemptAt
-        val task = if (taskId != null) getTaskById(taskId) else null
+        val task = if (taskId != null) getTaskById(taskId) else return null
 
         // Example without any submissions
-        if (res == null && task != null && task.assignment == null && task.status == TaskStatus.Active && task.end != null) {
+        if (exampleQueueService.isSubmissionInTheQueue(task.slug!!, userId) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)) {
             res = task.end!!.plusHours(2)
         }
 
