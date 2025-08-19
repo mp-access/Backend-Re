@@ -98,6 +98,14 @@ class CourseService(
         )
     }
 
+    fun getCourseSlugByTask(task: Task): String {
+        if (task.assignment != null) {
+            return task.assignment!!.course!!.slug!!
+        } else {
+            return task.course!!.slug!!
+        }
+    }
+
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace {
         return courseRepository.findBySlug(courseSlug) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
@@ -180,9 +188,10 @@ class CourseService(
     fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
         var res = evaluationService.getEvaluation(taskId, userId ?: roleService.getUserId())?.nextAttemptAt
         val task = if (taskId != null) getTaskById(taskId) else return null
+        val courseSlug = getCourseSlugByTask(task)
 
         // Example without any submissions
-        if (exampleQueueService.isSubmissionInTheQueue(task.slug!!, userId) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)) {
+        if (exampleQueueService.isSubmissionInTheQueue(courseSlug, task.slug!!, userId) || exampleQueueService.isSubmissionCurrentlyProcessed(courseSlug, task.slug!!, userId) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)) {
             res = task.end!!.plusHours(2)
         }
 
