@@ -7,12 +7,22 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
-import org.springframework.security.access.prepost.PostFilter
 import java.time.LocalDateTime
 
 interface SubmissionRepository : JpaRepository<Submission?, Long?> {
 
-    fun findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId: Long?, userId: String?): List<Submission>
+    @Query(
+        value = """
+            SELECT s 
+            FROM Submission s 
+            JOIN FETCH s.evaluation e 
+            JOIN FETCH e.task t 
+            WHERE t.id = :taskId 
+            AND s.userId = :userId 
+            ORDER BY s.createdAt DESC
+        """
+        )
+    fun findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(@Param("taskId") taskId: Long, @Param("userId") userId: String): List<Submission>
 
     @Query(
         value = """
