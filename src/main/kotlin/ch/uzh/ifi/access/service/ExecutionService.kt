@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dao.Results
 import ch.uzh.ifi.access.model.dto.EmbeddingDTO
 import ch.uzh.ifi.access.model.dto.ImplementationDTO
+import ch.uzh.ifi.access.model.dto.LlmHealthStatusDTO
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.repository.TaskFileRepository
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -29,6 +30,7 @@ import org.apache.hc.core5.http.io.entity.StringEntity
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.server.ResponseStatusException
 import java.nio.charset.Charset
 import java.nio.file.Files
@@ -37,6 +39,7 @@ import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import reactor.core.publisher.Mono
 
 @Service
 class ExecutionService(
@@ -48,6 +51,7 @@ class ExecutionService(
     private val roleService: RoleService,
     private val jsonMapper: JsonMapper,
     private val objectMapper: ObjectMapper,
+    private val webClient: WebClient,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
 ) {
     private val logger = KotlinLogging.logger {}
@@ -443,4 +447,11 @@ class ExecutionService(
     fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
         return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
+
+    fun checkLlmMicroserviceAvailable(): Mono<LlmHealthStatusDTO> =
+        webClient.get()
+            .uri("$llmServiceUrl/health/")
+            .retrieve()
+            .bodyToMono(LlmHealthStatusDTO::class.java)
+            .onErrorReturn(LlmHealthStatusDTO("down", false))
 }
