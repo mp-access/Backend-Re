@@ -75,6 +75,7 @@ class ExampleController(
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
+        val avgPoints = exampleService.calculateAvgPoints(submissions)
 
         val submissionsDTO = submissions.map {
             SubmissionSseDTO(
@@ -94,6 +95,7 @@ class ExampleController(
             totalParticipants,
             numberOfStudentsWhoSubmitted,
             passRatePerTestCase,
+            avgPoints,
             submissionsDTO
         )
     }
