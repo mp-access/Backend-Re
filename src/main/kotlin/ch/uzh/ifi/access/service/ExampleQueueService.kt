@@ -24,7 +24,7 @@ class ExampleQueueService (
     private val submissionQueue: BlockingQueue<SubmissionWithContext> = LinkedBlockingQueue(1000)
     private val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrentSubmissions)
     private lateinit var processorThread: Thread
-    private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, MutableList<String>>()
+    private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, MutableList<SubmissionDTO>>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
         val submissionWithContext = SubmissionWithContext(courseSlug, exampleSlug, submission, submissionReceivedAt, 0)
@@ -67,7 +67,7 @@ class ExampleQueueService (
                     val userId = submissionWithContext.submissionDTO.userId!!
                     runningSubmissionsPerExample
                         .computeIfAbsent(exampleKey) { Collections.synchronizedList(mutableListOf()) }
-                        .add(userId)
+                        .add(submissionWithContext.submissionDTO)
                     executor.submit {
                         try {
                             exampleService.processSubmission(
@@ -82,10 +82,12 @@ class ExampleQueueService (
                             }
                             handleRetry(submissionWithContext)
                         } finally {
-                            val userList = runningSubmissionsPerExample[exampleKey]
-                            userList?.let { list ->
+                            val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+                            runningSubmissionsList?.let { list ->
                                 synchronized(list) {
-                                    list.remove(userId)
+                                    list.removeIf {
+                                        submissionDTO -> submissionDTO.userId == userId
+                                    }
                                     if (list.isEmpty()) {
                                         runningSubmissionsPerExample.remove(exampleKey, list)
                                     }
@@ -146,6 +148,43 @@ class ExampleQueueService (
         }
     }
 
+    fun isSubmissionCurrentlyProcessed(courseSlug: String, exampleSlug: String, userId: String?): Boolean {
+        if (userId == null) {
+            return false
+        }
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+        runningSubmissionsList?.let { list ->
+            synchronized(list) {
+                val submissionFound = list.any {
+                        submissionDTO -> submissionDTO.userId == userId
+                }
+                return submissionFound
+            }
+        }
+        return false
+    }
+
+    fun getPendingSubmissionFromQueue(courseSlug: String, exampleSlug: String, userId: String): SubmissionDTO? {
+        val submissionWithContext = submissionQueue.find {
+            it.courseSlug == courseSlug && it.exampleSlug == exampleSlug && it.submissionDTO.userId == userId
+        }
+        return submissionWithContext?.submissionDTO
+    }
+
+    fun getRunningSubmission(courseSlug: String, exampleSlug: String, userId: String): SubmissionDTO? {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+        val submissionDTO = runningSubmissionsList?.let { list ->
+            synchronized(list) {
+                list.find {
+                        submissionDTO -> submissionDTO.userId == userId
+                }
+            }
+        }
+        return submissionDTO
+    }
+
     @PreDestroy
     fun shutdown() {
         logger.info { "Shutting down executor and processor thread." }
@@ -155,19 +194,5 @@ class ExampleQueueService (
             logger.warn { "Executor didn't shut down gracefully. Forcing shutdown." }
             executor.shutdownNow()
         }
-    }
-
-    fun isSubmissionCurrentlyProcessed(courseSlug: String, exampleSlug: String, userId: String?): Boolean {
-        if (userId == null) {
-            return false
-        }
-        val exampleKey = Pair(courseSlug, exampleSlug)
-        val userList = runningSubmissionsPerExample[exampleKey]
-        userList?.let { list ->
-            synchronized(list) {
-                return list.contains(userId)
-            }
-        }
-        return false
     }
 }
