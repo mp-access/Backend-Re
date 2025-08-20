@@ -5,6 +5,7 @@ data class ExampleInformationDTO(
     val participantsOnline: Int,
     val totalParticipants: Long,
     val numberOfStudentsWhoSubmitted: Int,
-    val passRatePerTestCase: Map<String, Double>
+    val passRatePerTestCase: Map<String, Double>,
+    val avgPoints: Double
 )
 

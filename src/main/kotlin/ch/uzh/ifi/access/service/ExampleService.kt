@@ -178,6 +178,7 @@ class ExampleService(
             val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
             val numberOfStudentsWhoSubmitted = submissions.size
             val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
+            val avgPoints = calculateAvgPoints(submissions)
 
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
@@ -187,7 +188,8 @@ class ExampleService(
                     participantsOnline,
                     totalParticipants,
                     numberOfStudentsWhoSubmitted,
-                    passRatePerTestCase
+                    passRatePerTestCase,
+                    avgPoints
                 )
             )
         }
@@ -294,6 +296,13 @@ class ExampleService(
         }
 
         return example.testNames.zip(passRatePerTestCase).toMap()
+    }
+
+    fun calculateAvgPoints(submissions: List<Submission>): Double {
+        return submissions
+            .mapNotNull { it.points }
+            .ifEmpty { listOf(0.0) }
+            .average()
     }
 
     fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
