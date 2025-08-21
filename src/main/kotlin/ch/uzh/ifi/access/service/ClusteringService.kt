@@ -90,14 +90,21 @@ class ClusteringService (
 
     @OptIn(DelicateCoroutinesApi::class)
     fun retryCalculatingEmbeddings(submissionsWithoutEmbedding: List<Long>) {
-        GlobalScope.launch(Dispatchers.IO) {
-            submissionsWithoutEmbedding.forEach { submissionId ->
-                try {
-                    executionService.recalculateSubmissionEmbedding(submissionId)
-                } catch (e: Exception) {
-                    logger.error(e) { "Failed to re-calculate embedding for submission $submissionId." }
+        executionService.checkLlmMicroserviceAvailable()
+            .subscribe { response ->
+                if (response.status == "running" && response.modelLoaded) {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        submissionsWithoutEmbedding.forEach { submissionId ->
+                            try {
+                                executionService.recalculateSubmissionEmbedding(submissionId)
+                            } catch (e: Exception) {
+                                logger.error(e) { "Failed to re-calculate embedding for submission $submissionId." }
+                            }
+                        }
+                    }
+                } else {
+                    logger.error { "LLM Microservice is not working properly: Health check did not return a 200." }
                 }
             }
-        }
     }
 }
