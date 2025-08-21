@@ -6,6 +6,7 @@ import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
@@ -245,6 +246,7 @@ class ExampleController(
 
     @DeleteMapping("/{example}/reset")
     @PreAuthorize("hasRole(#course+'-supervisor')")
+    @CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true)
     fun resetExample(
         @PathVariable course: String,
         @PathVariable example: String
