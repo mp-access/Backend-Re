@@ -129,6 +129,24 @@ class ExampleController(
         return exampleService.getExample(course, example, user)
     }
 
+    @GetMapping("/{example}/users/{user}/pending-submissions")
+    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
+    fun getPendingSubmissions(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @PathVariable user: String
+    ): List<SubmissionDTO> {
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, user)
+        if (pendingSubmission != null) {
+            return listOf(pendingSubmission)
+        }
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, user)
+        if (runningSubmission != null) {
+            return listOf(runningSubmission)
+        }
+        return emptyList()
+    }
+
     // Invoked by the teacher when publishing an example to inform the students
     @PostMapping("/{example}/publish")
     @PreAuthorize("hasRole(#course+'-supervisor')")
