@@ -265,7 +265,9 @@ class ExampleController(
             EmitterType.EVERYONE,
             course,
             "example-reset",
-            "The example has been reset by the lecturer."
+            ResetExampleSseDTO(
+                exampleSlug = example,
+            )
         )
     }
 
