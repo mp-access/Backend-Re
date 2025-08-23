@@ -9,8 +9,8 @@ import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
+import java.util.*
 import java.util.concurrent.*
-import java.util.concurrent.atomic.AtomicInteger
 
 @Service
 class ExampleQueueService (
@@ -24,7 +24,7 @@ class ExampleQueueService (
     private val submissionQueue: BlockingQueue<SubmissionWithContext> = LinkedBlockingQueue(1000)
     private val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrentSubmissions)
     private lateinit var processorThread: Thread
-    private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
+    private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, MutableList<SubmissionDTO>>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
         val submissionWithContext = SubmissionWithContext(courseSlug, exampleSlug, submission, submissionReceivedAt, 0)
@@ -34,6 +34,11 @@ class ExampleQueueService (
         } else {
             logger.error { "Failed to add submission to queue." }
         }
+    }
+
+    fun removeOutdatedSubmissions(courseSlug: String, exampleSlug: String) {
+        submissionQueue.removeIf { it.courseSlug == courseSlug && it.exampleSlug == exampleSlug }
+        logger.info { "All submissions for course \"$courseSlug\" and \"$exampleSlug\" are removed." }
     }
 
     @PostConstruct
@@ -59,7 +64,10 @@ class ExampleQueueService (
 
                     val submissionWithContext = submissionQueue.take()
                     val exampleKey = Pair(submissionWithContext.courseSlug, submissionWithContext.exampleSlug)
-                    runningSubmissionsPerExample.computeIfAbsent(exampleKey) { AtomicInteger(0) }.incrementAndGet()
+                    val userId = submissionWithContext.submissionDTO.userId!!
+                    runningSubmissionsPerExample
+                        .computeIfAbsent(exampleKey) { Collections.synchronizedList(mutableListOf()) }
+                        .add(submissionWithContext.submissionDTO)
                     executor.submit {
                         try {
                             exampleService.processSubmission(
@@ -74,12 +82,16 @@ class ExampleQueueService (
                             }
                             handleRetry(submissionWithContext)
                         } finally {
-                            val count = runningSubmissionsPerExample[exampleKey]?.decrementAndGet()
-                            if (count == 0) {
-                                runningSubmissionsPerExample.remove(exampleKey)
-                            }
-                            logger.debug {
-                                "Completed submission for ${submissionWithContext.submissionDTO.userId}"
+                            val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+                            runningSubmissionsList?.let { list ->
+                                synchronized(list) {
+                                    list.removeIf {
+                                        submissionDTO -> submissionDTO.userId == userId
+                                    }
+                                    if (list.isEmpty()) {
+                                        runningSubmissionsPerExample.remove(exampleKey, list)
+                                    }
+                                }
                             }
                         }
                     }
@@ -121,8 +133,56 @@ class ExampleQueueService (
         }
     }
 
+    fun isSubmissionInTheQueue(courseSlug: String, exampleSlug: String, userId: String?): Boolean {
+        if (userId == null) return false
+        return submissionQueue.any {
+            it.submissionDTO.userId == userId && it.exampleSlug == exampleSlug && it.courseSlug == courseSlug
+        }
+    }
+
     private fun getTotalRunningSubmissions(): Int {
-        return runningSubmissionsPerExample.values.sumOf { it.get() }
+        return runningSubmissionsPerExample.values.sumOf {
+            synchronized(it) {
+                it.size
+            }
+        }
+    }
+
+    fun isSubmissionCurrentlyProcessed(courseSlug: String, exampleSlug: String, userId: String?): Boolean {
+        if (userId == null) {
+            return false
+        }
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+        runningSubmissionsList?.let { list ->
+            synchronized(list) {
+                val submissionFound = list.any {
+                        submissionDTO -> submissionDTO.userId == userId
+                }
+                return submissionFound
+            }
+        }
+        return false
+    }
+
+    fun getPendingSubmissionFromQueue(courseSlug: String, exampleSlug: String, userId: String): SubmissionDTO? {
+        val submissionWithContext = submissionQueue.find {
+            it.courseSlug == courseSlug && it.exampleSlug == exampleSlug && it.submissionDTO.userId == userId
+        }
+        return submissionWithContext?.submissionDTO
+    }
+
+    fun getRunningSubmission(courseSlug: String, exampleSlug: String, userId: String): SubmissionDTO? {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val runningSubmissionsList = runningSubmissionsPerExample[exampleKey]
+        val submissionDTO = runningSubmissionsList?.let { list ->
+            synchronized(list) {
+                list.find {
+                        submissionDTO -> submissionDTO.userId == userId
+                }
+            }
+        }
+        return submissionDTO
     }
 
     @PreDestroy

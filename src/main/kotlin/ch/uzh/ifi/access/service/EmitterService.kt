@@ -2,6 +2,8 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.PerishableSseEmitter
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.beans.factory.DisposableBean
+import org.springframework.context.SmartLifecycle
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -12,9 +14,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 @Service
-class EmitterService {
+class EmitterService : DisposableBean, SmartLifecycle {
     private val emitters =
         ConcurrentHashMap<EmitterType, ConcurrentHashMap<String, ConcurrentHashMap<String, PerishableSseEmitter>>>()
     private val logger = KotlinLogging.logger {}
@@ -105,5 +108,34 @@ class EmitterService {
                 }
             }
         }
+    }
+
+    /** Close all SSE connections and stop scheduler on shutdown */
+    override fun destroy() = closeAllEmitters()
+
+    private val running = AtomicBoolean(false)
+    override fun isRunning(): Boolean = running.get()
+    override fun start() = running.set(true)
+    override fun getPhase(): Int = Integer.MAX_VALUE
+    override fun stop() = closeAllEmitters()
+    override fun stop(callback: Runnable) {
+        try {
+            closeAllEmitters()
+        } finally {
+            callback.run()
+        }
+    }
+
+    private fun closeAllEmitters() {
+        logger.info { "Closing all SSE emitters on shutdown..." }
+        emitters.forEach { (_, slugMap) ->
+            slugMap.forEach { (_, emitterMap) ->
+                emitterMap.values.forEach { e -> runCatching { e.complete() } }
+                emitterMap.clear()
+            }
+            slugMap.clear()
+        }
+        emitters.clear()
+        scheduler.shutdownNow()
     }
 }

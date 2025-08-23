@@ -6,6 +6,7 @@ import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
@@ -52,12 +53,14 @@ class ExampleController(
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
+        val avgPoints = exampleService.calculateAvgPoints(submissions)
 
         return ExampleInformationDTO(
             participantsOnline,
             totalParticipants,
             numberOfStudentsWhoSubmitted,
-            passRatePerTestCase
+            passRatePerTestCase,
+            avgPoints
         )
     }
 
@@ -73,6 +76,7 @@ class ExampleController(
         val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
         val numberOfStudentsWhoSubmitted = submissions.size
         val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
+        val avgPoints = exampleService.calculateAvgPoints(submissions)
 
         val submissionsDTO = submissions.map {
             SubmissionSseDTO(
@@ -92,6 +96,7 @@ class ExampleController(
             totalParticipants,
             numberOfStudentsWhoSubmitted,
             passRatePerTestCase,
+            avgPoints,
             submissionsDTO
         )
     }
@@ -105,8 +110,10 @@ class ExampleController(
         authentication: Authentication
     ) {
         submission.userId = authentication.name
+        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
-        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt)) {
+        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt) && !isAdmin) {
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
         } else {
             exampleService.processSubmission(course, example, submission, submissionReceivedAt)
@@ -121,6 +128,24 @@ class ExampleController(
         @PathVariable user: String
     ): TaskWorkspace {
         return exampleService.getExample(course, example, user)
+    }
+
+    @GetMapping("/{example}/users/{user}/pending-submissions")
+    @PreAuthorize("hasRole(#course+'-assistant') or (#user == authentication.name)")
+    fun getPendingSubmissions(
+        @PathVariable course: String,
+        @PathVariable example: String,
+        @PathVariable user: String
+    ): List<SubmissionDTO> {
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, user)
+        if (pendingSubmission != null) {
+            return listOf(pendingSubmission)
+        }
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, user)
+        if (runningSubmission != null) {
+            return listOf(runningSubmission)
+        }
+        return emptyList()
     }
 
     // Invoked by the teacher when publishing an example to inform the students
@@ -197,6 +222,7 @@ class ExampleController(
             "timer-update",
             "${updatedExample.start}/${updatedExample.end}"
         )
+        exampleQueueService.removeOutdatedSubmissions(course, example)
     }
 
     // Invoked by the teacher when publishing an example to inform the students
@@ -220,17 +246,28 @@ class ExampleController(
 
     @DeleteMapping("/{example}/reset")
     @PreAuthorize("hasRole(#course+'-supervisor')")
+    @CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true)
     fun resetExample(
         @PathVariable course: String,
         @PathVariable example: String
     ) {
+        exampleQueueService.removeOutdatedSubmissions(course, example)
+        val maxWaitingTime = LocalDateTime.now().plusSeconds(30)
+        while (LocalDateTime.now() <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
+            Thread.sleep(100)
+        }
+        if (LocalDateTime.now() > maxWaitingTime) {
+            logger.warn { "It is likely that not all submissions of example $example in course $course were deleted after reset." }
+        }
         exampleService.resetExampleBySlug(course, example)
 
         emitterService.sendPayload(
             EmitterType.EVERYONE,
             course,
             "example-reset",
-            "The example has been reset by the lecturer."
+            ResetExampleSseDTO(
+                exampleSlug = example,
+            )
         )
     }
 

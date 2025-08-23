@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
@@ -28,6 +29,7 @@ class ExampleService(
     private val exampleRepository: ExampleRepository,
     private val evaluationRepository: EvaluationRepository,
     private val submissionRepository: SubmissionRepository,
+    private val courseRepository: CourseRepository,
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     private val logger = KotlinLogging.logger {}
@@ -150,7 +152,11 @@ class ExampleService(
         submissionReceivedAt: LocalDateTime
     ) {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
-        if (newSubmission.command == Command.GRADE) {
+
+        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val isAdmin = roleService.isAdmin(userRoles, courseSlug)
+
+        if (newSubmission.command == Command.GRADE && !isAdmin) {
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
                 courseSlug,
@@ -172,6 +178,7 @@ class ExampleService(
             val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
             val numberOfStudentsWhoSubmitted = submissions.size
             val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
+            val avgPoints = calculateAvgPoints(submissions)
 
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
@@ -181,7 +188,8 @@ class ExampleService(
                     participantsOnline,
                     totalParticipants,
                     numberOfStudentsWhoSubmitted,
-                    passRatePerTestCase
+                    passRatePerTestCase,
+                    avgPoints
                 )
             )
         }
@@ -199,9 +207,7 @@ class ExampleService(
 
         // If the user is admin, don't check
         val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
-        val isAdmin =
-            userRoles.contains("$courseSlug-assistant") ||
-            userRoles.contains("$courseSlug-supervisor")
+        val isAdmin = roleService.isAdmin(userRoles, courseSlug)
 
         if (!isAdmin) {
             if (example.start == null || example.end == null)
@@ -292,6 +298,13 @@ class ExampleService(
         return example.testNames.zip(passRatePerTestCase).toMap()
     }
 
+    fun calculateAvgPoints(submissions: List<Submission>): Double {
+        return submissions
+            .mapNotNull { it.points }
+            .ifEmpty { listOf(0.0) }
+            .average()
+    }
+
     fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         if (example.start == null || example.end == null) return false
@@ -308,7 +321,8 @@ class ExampleService(
                 "No example found with the URL $exampleSlug"
             )
 
-        val evaluations = evaluationRepository.findAllByTask_Id(example.id)
+        val students = courseRepository.getBySlug(courseSlug)!!.registeredStudents
+        val evaluations = evaluationRepository.findAllByTask_IdAndUserIdIn(example.id, students)
         if (!evaluations.isNullOrEmpty())
             evaluationRepository.deleteAll(evaluations.toList())
 
