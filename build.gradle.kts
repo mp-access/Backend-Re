@@ -59,6 +59,7 @@ dependencies {
     implementation("com.github.docker-java:docker-java-transport-httpclient5:3.5.3")
     implementation("org.eclipse.jgit:org.eclipse.jgit:7.3.0.202506031305-r")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-toml:2.19.2")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")

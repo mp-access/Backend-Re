@@ -36,7 +36,6 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import reactor.core.publisher.Mono
@@ -49,6 +48,7 @@ class ExecutionService(
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
     private val roleService: RoleService,
+    private val embeddingQueueService: EmbeddingQueueService,
     private val jsonMapper: JsonMapper,
     private val objectMapper: ObjectMapper,
     private val webClient: WebClient,
@@ -110,17 +110,12 @@ class ExecutionService(
         }
 
         // calculate the embedding in parallel with running the code.
-        val embeddingFuture: CompletableFuture<DoubleArray?> =
-            if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task) && !isAdmin) {
-                CompletableFuture.supplyAsync {
-                    val concatenatedSubmissionContent = submission.files
-                        .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                        .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-                    getImplementationEmbedding(concatenatedSubmissionContent)
-                }
-            } else {
-                CompletableFuture.completedFuture(null)
-            }
+        if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task) && !isAdmin) {
+            val concatenatedSubmissionContent = submission.files
+                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+            embeddingQueueService.addToQueue(submission.id!!, concatenatedSubmissionContent)
+        }
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
@@ -320,14 +315,6 @@ class ExecutionService(
                 }
             }
             FileUtils.deleteQuietly(submissionDir.toFile())
-        }
-        try {
-            val embedding = embeddingFuture.join()
-            if (embedding != null) {
-                submission.embedding = embedding
-            }
-        } catch (e: Exception) {
-            logger.debug { "Failed to get embedding after : ${e.message}" }
         }
         return Pair(submission, results)
     }
