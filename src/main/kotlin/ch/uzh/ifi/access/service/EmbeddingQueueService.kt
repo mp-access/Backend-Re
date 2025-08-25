@@ -107,7 +107,7 @@ class EmbeddingQueueService(
             submissions.map { submissionWithContext -> submissionWithContext.embeddingRequestBody }
 
         webClient.post()
-            .uri("$llmServiceUrl/get_embeddings/")
+            .uri("$llmServiceUrl/calculate_embeddings/")
             .bodyValue(batchForRequest)
             .retrieve()
             .bodyToMono(Array<EmbeddingResponseBodyDTO>::class.java)
