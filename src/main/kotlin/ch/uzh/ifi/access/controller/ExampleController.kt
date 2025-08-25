@@ -286,7 +286,7 @@ class ExampleController(
             .associate { submission ->
                 submission.getId() to submission.getEmbedding()
             }
-        return clusteringService.performSpectralClustering(course, example,submissionEmbeddingMap, numberOfClusters)
+        return clusteringService.performSpectralClustering(course, example, submissionEmbeddingMap, numberOfClusters)
     }
 
     @GetMapping("/{example}/point-distribution")
