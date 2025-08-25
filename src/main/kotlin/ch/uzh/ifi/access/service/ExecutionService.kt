@@ -5,12 +5,7 @@ import ch.uzh.ifi.access.Util.bytesToString
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dao.Results
-import ch.uzh.ifi.access.model.dto.EmbeddingDTO
-import ch.uzh.ifi.access.model.dto.ImplementationDTO
-import ch.uzh.ifi.access.model.dto.LlmHealthStatusDTO
-import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.repository.TaskFileRepository
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.command.PullImageResultCallback
@@ -19,26 +14,14 @@ import com.github.dockerjava.api.exception.NotFoundException
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
-import jakarta.transaction.Transactional
 import org.apache.commons.io.FileUtils
-import org.apache.hc.client5.http.classic.methods.HttpPost
-import org.apache.hc.client5.http.config.RequestConfig
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient
-import org.apache.hc.client5.http.impl.classic.HttpClients
-import org.apache.hc.core5.http.ContentType
-import org.apache.hc.core5.http.io.entity.StringEntity
-import org.springframework.beans.factory.annotation.Value
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.reactive.function.client.WebClient
-import org.springframework.web.server.ResponseStatusException
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import reactor.core.publisher.Mono
 
 @Service
 class ExecutionService(
@@ -46,25 +29,11 @@ class ExecutionService(
     private val fileService: FileService,
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
-    private val submissionRepository: SubmissionRepository,
     private val roleService: RoleService,
     private val embeddingQueueService: EmbeddingQueueService,
-    private val jsonMapper: JsonMapper,
-    private val objectMapper: ObjectMapper,
-    private val webClient: WebClient,
-    @Value("\${llm.service.url}") private val llmServiceUrl: String
+    private val jsonMapper: JsonMapper
 ) {
     private val logger = KotlinLogging.logger {}
-
-    private val requestConfig: RequestConfig = RequestConfig.custom()
-        .setConnectionRequestTimeout(60, TimeUnit.SECONDS)
-        .setResponseTimeout(60, TimeUnit.SECONDS)
-        .build()
-
-    // Initialize HttpClient with the configured timeouts
-    private val httpClient: CloseableHttpClient = HttpClients.custom()
-        .setDefaultRequestConfig(requestConfig)
-        .build()
 
     fun executeTemplate(task: Task): Pair<Submission, Results> {
         val course = task.assignment?.course ?: task.course!!
@@ -109,12 +78,16 @@ class ExecutionService(
             isAdmin = roleService.isAdmin(userRoles, course.slug!!)
         }
 
-        // calculate the embedding in parallel with running the code.
         if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task) && !isAdmin) {
             val concatenatedSubmissionContent = submission.files
                 .filter { submissionFile -> submissionFile.taskFile?.editable == true }
                 .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-            embeddingQueueService.addToQueue(submission.id!!, concatenatedSubmissionContent)
+            embeddingQueueService.addToQueue(
+                task.course!!.slug!!,
+                task.slug!!,
+                submission.id!!,
+                concatenatedSubmissionContent
+            )
         }
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
@@ -387,58 +360,7 @@ class ExecutionService(
         }.joinToString(separator = "\n").replace("\u0000", "") // null characters mess up transport
     }
 
-    fun getImplementationEmbedding(implementation: String): DoubleArray {
-        logger.info { "Requesting embedding for code snippet from LLM service." }
-        val requestBody = ImplementationDTO(implementation)
-        val jsonRequestBody = objectMapper.writeValueAsString(requestBody)
-
-        val httpPost = HttpPost("$llmServiceUrl/get_embedding/")
-        httpPost.entity = StringEntity(jsonRequestBody, ContentType.APPLICATION_JSON)
-
-        return httpClient.execute(httpPost) { response ->
-            val statusCode = response.code
-            if (statusCode == HttpStatus.OK.value()) {
-                response.entity?.let { entity ->
-                    val responseJson = String(entity.content.readAllBytes())
-                    val embeddingResponse = objectMapper.readValue(responseJson, EmbeddingDTO::class.java)
-                    return@execute embeddingResponse.embedding.toDoubleArray()
-                }
-            } else {
-                val errorBody = response.entity?.let { String(it.content.readAllBytes()) } ?: "No error message"
-                logger.error { "LLM service call failed with status $statusCode: $errorBody" }
-                throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "LLM service returned error: $statusCode - $errorBody"
-                )
-            }
-        }
-    }
-
-    @Transactional
-    fun recalculateSubmissionEmbedding(submissionId: Long) {
-        val submission = submissionRepository.findById(submissionId).orElse(null)
-        submission?.let {
-            val embedding = getImplementationEmbedding(
-                it.files
-                    .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                    .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-            )
-            it.embedding = embedding
-            submissionRepository.save(it)
-            logger.info { "Embedding for submission with ID $submissionId was successfully recalculated." }
-        } ?: run {
-            logger.warn { "Could not find submission with ID $submissionId to retry the embedding calculation." }
-        }
-    }
-
     fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
         return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
-
-    fun checkLlmMicroserviceAvailable(): Mono<LlmHealthStatusDTO> =
-        webClient.get()
-            .uri("$llmServiceUrl/health/")
-            .retrieve()
-            .bodyToMono(LlmHealthStatusDTO::class.java)
-            .onErrorReturn(LlmHealthStatusDTO("down", false))
 }
