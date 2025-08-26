@@ -23,6 +23,7 @@ import java.util.*
 class ExampleController(
     private val exampleService: ExampleService,
     private val exampleQueueService: ExampleQueueService,
+    private val embeddingQueueService: EmbeddingQueueService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val courseService: CourseService,
@@ -252,6 +253,7 @@ class ExampleController(
         @PathVariable example: String
     ) {
         exampleQueueService.removeOutdatedSubmissions(course, example)
+        embeddingQueueService.removeOutdatedSubmissions(course, example)
         val maxWaitingTime = LocalDateTime.now().plusSeconds(30)
         while (LocalDateTime.now() <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
             Thread.sleep(100)
@@ -284,7 +286,7 @@ class ExampleController(
             .associate { submission ->
                 submission.getId() to submission.getEmbedding()
             }
-        return clusteringService.performSpectralClustering(submissionEmbeddingMap, numberOfClusters)
+        return clusteringService.performSpectralClustering(course, example, submissionEmbeddingMap, numberOfClusters)
     }
 
     @GetMapping("/{example}/point-distribution")

@@ -308,7 +308,7 @@ class ExampleService(
     fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         if (example.start == null || example.end == null) return false
-        return (example.start!!.isBefore(submissionReceivedAt) || (example.end!!.plusSeconds(gracePeriod)).isAfter(
+        return (example.start!!.isBefore(submissionReceivedAt) && (example.end!!.plusSeconds(gracePeriod)).isAfter(
             submissionReceivedAt
         ))
     }
