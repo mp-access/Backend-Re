@@ -50,7 +50,7 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/info1-hs24/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
