@@ -6,6 +6,9 @@ import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
@@ -274,6 +277,7 @@ class ExampleController(
         return clusteringService.performSpectralClustering(course, example, submissionEmbeddingMap, numberOfClusters)
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     @GetMapping("/{example}/point-distribution")
     @PreAuthorize("hasRole(#course+'-assistant')")
     fun getPointDistribution(
@@ -281,34 +285,17 @@ class ExampleController(
         @PathVariable example: String,
     ): PointDistributionDTO {
         val currentExample = exampleService.getExampleBySlug(course, example)
-        require(currentExample.end!! <= LocalDateTime.now()) {"The example is still running. The point distribution of students cannot be shown until the example has finished."}
-        while (!exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
-            Thread.sleep(1000)
+        if (currentExample.end!! >= LocalDateTime.now()) {
+            GlobalScope.launch {
+                exampleService.sendPointDistributionUpdates(course, example)
+            }
+            return PointDistributionDTO()
         }
-
-        val response = PointDistributionDTO()
-        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
-        val points = submissions.mapNotNull { submission -> submission.points }
-        val testCaseCount = currentExample.testNames.size
-        val numBins = if (testCaseCount <= 10) testCaseCount else 10
-        val binSize = 1.0 / numBins.toDouble()
-        val binCounts = IntArray(numBins) { 0 }
-
-        for (point in points) {
-            val binIndex = minOf((point / binSize).toInt(), numBins - 1)
-            binCounts[binIndex]++
+        if (exampleService.getInteractiveExampleSubmissions(course, example).size < exampleService.getExampleSubmissionCount(course, example)) {
+            GlobalScope.launch {
+                exampleService.sendPointDistributionUpdates(course, example)
+            }
         }
-
-        for (i in 0 until numBins) {
-            val lowerBoundary = i * binSize
-            val upperBoundary = if (i == numBins - 1) 1.0 else (i + 1) * binSize
-            val binMap = mapOf(
-                "lowerBoundary" to Math.round(lowerBoundary * 100.0) / 100.0,
-                "upperBoundary" to Math.round(upperBoundary * 100.0) / 100.0,
-                "numberOfSubmissions" to binCounts[i].toDouble()
-            )
-            response.pointDistribution.add(binMap)
-        }
-        return response
+        return exampleService.computePointDistribution(course, example)
     }
 }
