@@ -99,6 +99,7 @@ dependencies {
 
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
     if (project.hasProperty("username")) {
+        // tiny is not an option because smile needs libstdc++.so
         builder.set("paketobuildpacks/builder-jammy-base")
         imageName.set("sealuzh/access-backend:x")
         publish.set(true)
