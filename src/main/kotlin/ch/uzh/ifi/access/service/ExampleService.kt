@@ -11,13 +11,14 @@ import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
-import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 
 @Service
@@ -32,7 +33,7 @@ class ExampleService(
     private val courseRepository: CourseRepository,
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
-    private val logger = KotlinLogging.logger {}
+    val exampleSubmissionCount = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
 
     // TODO: make this return TaskOverview
     fun getExamples(courseSlug: String): List<TaskWorkspace> {
@@ -173,26 +174,35 @@ class ExampleService(
                 )
             )
 
-            val participantsOnline = roleService.getOnlineCount(courseSlug)
-            val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount
-            val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
-            val numberOfStudentsWhoSubmitted = submissions.size
-            val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, submissions)
-            val avgPoints = calculateAvgPoints(submissions)
-
             emitterService.sendPayload(
                 EmitterType.SUPERVISOR,
                 courseSlug,
                 "example-information",
-                ExampleInformationDTO(
-                    participantsOnline,
-                    totalParticipants,
-                    numberOfStudentsWhoSubmitted,
-                    passRatePerTestCase,
-                    avgPoints
-                )
+                computeExampleInformation(courseSlug, exampleSlug)
             )
         }
+    }
+
+    fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
+        val participantsOnline = roleService.getOnlineCount(courseSlug)
+        val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount
+        val processedSubmissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+        val numberOfProcessedSubmissions = processedSubmissions.size
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val numberOfReceivedSubmissions = exampleSubmissionCount[exampleKey]?.get() ?: 0
+        val numberOfProcessedSubmissionsWithEmbeddings = processedSubmissions.filter { it.embedding.isNotEmpty() }.size
+        val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, processedSubmissions)
+        val avgPoints = calculateAvgPoints(processedSubmissions)
+
+        return ExampleInformationDTO(
+            participantsOnline,
+            totalParticipants,
+            numberOfReceivedSubmissions,
+            numberOfProcessedSubmissions,
+            numberOfProcessedSubmissionsWithEmbeddings,
+            passRatePerTestCase,
+            avgPoints
+        )
     }
 
     fun createExampleSubmission(
@@ -305,12 +315,26 @@ class ExampleService(
             .average()
     }
 
-    fun isExampleInteractive(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
+    fun isSubmittedDuringInteractivePeriod(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         if (example.start == null || example.end == null) return false
         return (example.start!!.isBefore(submissionReceivedAt) && (example.end!!.plusSeconds(gracePeriod)).isAfter(
             submissionReceivedAt
         ))
+    }
+
+    fun isExampleInteractive(courseSlug: String, exampleSlug: String): Boolean {
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+        if (example.start == null || example.end == null) return false
+        return (example.start!!.isBefore(LocalDateTime.now()) && (example.end!!.plusSeconds(gracePeriod)).isAfter(
+            LocalDateTime.now()
+        ))
+    }
+
+    fun increaseInteractiveSubmissionCount(courseSlug: String, exampleSlug: String) {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val atomicSubmissionCount = exampleSubmissionCount.computeIfAbsent(exampleKey) { AtomicInteger(0) }
+        atomicSubmissionCount.incrementAndGet()
     }
 
     @Transactional
@@ -330,6 +354,9 @@ class ExampleService(
         example.start = null
         example.end = null
         exampleRepository.saveAndFlush(example)
+
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        exampleSubmissionCount.remove(exampleKey)
 
         return example
     }

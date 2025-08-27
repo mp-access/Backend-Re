@@ -26,7 +26,6 @@ class ExampleController(
     private val embeddingQueueService: EmbeddingQueueService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
-    private val courseService: CourseService,
     private val clusteringService: ClusteringService,
     private val submissionRepository: SubmissionRepository
 ) {
@@ -49,20 +48,7 @@ class ExampleController(
         @PathVariable example: String,
         authentication: Authentication
     ): ExampleInformationDTO {
-        val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
-        val numberOfStudentsWhoSubmitted = submissions.size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
-        val avgPoints = exampleService.calculateAvgPoints(submissions)
-
-        return ExampleInformationDTO(
-            participantsOnline,
-            totalParticipants,
-            numberOfStudentsWhoSubmitted,
-            passRatePerTestCase,
-            avgPoints
-        )
+        return exampleService.computeExampleInformation(course, example)
     }
 
     @GetMapping("/{example}/submissions")
@@ -72,14 +58,9 @@ class ExampleController(
         @PathVariable example: String,
         authentication: Authentication
     ): ExampleSubmissionsDTO {
-        val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val submissions = exampleService.getInteractiveExampleSubmissions(course, example)
-        val numberOfStudentsWhoSubmitted = submissions.size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, submissions)
-        val avgPoints = exampleService.calculateAvgPoints(submissions)
 
-        val submissionsDTO = submissions.map {
+        val processedSubmissions = exampleService.getInteractiveExampleSubmissions(course, example)
+        val submissionsDTO = processedSubmissions.map {
             SubmissionSseDTO(
                 it.id!!,
                 it.userId,
@@ -92,12 +73,15 @@ class ExampleController(
             )
         }
 
+        val exampleInformationDTO = exampleService.computeExampleInformation(course, example)
         return ExampleSubmissionsDTO(
-            participantsOnline,
-            totalParticipants,
-            numberOfStudentsWhoSubmitted,
-            passRatePerTestCase,
-            avgPoints,
+            exampleInformationDTO.participantsOnline,
+            exampleInformationDTO.totalParticipants,
+            exampleInformationDTO.numberOfReceivedSubmissions,
+            exampleInformationDTO.numberOfProcessedSubmissions,
+            exampleInformationDTO.numberOfProcessedSubmissionsWithEmbeddings,
+            exampleInformationDTO.passRatePerTestCase,
+            exampleInformationDTO.avgPoints,
             submissionsDTO
         )
     }
@@ -114,8 +98,9 @@ class ExampleController(
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
-        if (exampleService.isExampleInteractive(course, example, submissionReceivedAt) && !isAdmin) {
+        if (exampleService.isSubmittedDuringInteractivePeriod(course, example, submissionReceivedAt) && !isAdmin) {
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
+            exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
             exampleService.processSubmission(course, example, submission, submissionReceivedAt)
         }

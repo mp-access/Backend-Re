@@ -1,11 +1,9 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.CategorizationDTO
-import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.math3.ml.distance.EuclideanDistance
 import org.springframework.stereotype.Service
 import smile.clustering.SpectralClustering
-import java.time.LocalDateTime
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -15,8 +13,6 @@ class ClusteringService(
     private val exampleService: ExampleService,
     private val exampleQueueService: ExampleQueueService
 ) {
-    private val logger = KotlinLogging.logger {}
-
     fun performSpectralClustering(
         courseSlug: String,
         exampleSlug: String,
@@ -25,7 +21,7 @@ class ClusteringService(
     ): CategorizationDTO {
         val (submissionsWithEmbeddings, submissionsWithoutEmbeddings) = embeddingsMap.entries.partition { it.value.isNotEmpty() }
         if (submissionsWithoutEmbeddings.isNotEmpty()
-            && !exampleService.isExampleInteractive(courseSlug, exampleSlug, LocalDateTime.now())
+            && !exampleService.isExampleInteractive(courseSlug, exampleSlug)
             && exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(courseSlug, exampleSlug)
             && embeddingQueueService.getRunningSubmissions(courseSlug, exampleSlug).isEmpty())
         {
