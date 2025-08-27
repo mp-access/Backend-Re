@@ -26,7 +26,11 @@ public class ModelMapperConfig {
                 .setMatchingStrategy(MatchingStrategies.STRICT)
                 .setSkipNullEnabled(true);
         modelMapper.typeMap(CourseDTO.class, Course.class)
-                .addMappings(mapping -> mapping.skip(CourseDTO::getAssignments, Course::setAssignments));
+                .addMappings(
+                mapping -> {
+                    mapping.skip(CourseDTO::getAssignments, Course::setAssignments);
+                    mapping.skip(CourseDTO::getExamples, Course::setExamples);
+                });
         modelMapper.typeMap(AssignmentDTO.class, Assignment.class)
                 .addMappings(mapping -> mapping.skip(AssignmentDTO::getTasks, Assignment::setTasks));
         modelMapper.typeMap(TaskDTO.class, Task.class)

@@ -64,11 +64,10 @@ class CourseLifecycle(
 
     @Transactional
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
-        logger.debug { "Updating ${course.slug} from ${coursePath}" }
+        logger.debug { "Updating course ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
         modelMapper.map(courseDTO, course)
-        course.examples.clear() // TODO: The model mapper maps examples which should not. So I have to clear them first
         course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
         course.studentRole = roleService.createCourseRoles(course.slug!!)
@@ -81,15 +80,18 @@ class CourseLifecycle(
             createOrUpdateGlobalFile(course, coursePath, filePath).grading = true
         }
 
-        // Disable all assignments and tasks, re-enable the relevant ones later
+        // Disable all assignments, examples and tasks, re-enable the relevant ones later
         course.assignments.forEach { assignment ->
             assignment.tasks.forEach { task -> task.enabled = false }
             assignment.enabled = false
         }
+        course.examples.forEach { example ->
+            example.enabled = false
+        }
         courseDTO.assignments.forEachIndexed { index, assignmentDir ->
             val assignmentPath = coursePath.resolve(assignmentDir)
             val assignmentDTO = cci.readAssignmentConfig(assignmentPath)
-            logger.debug { "Updating ${assignmentDTO.slug}" }
+            logger.debug { "Updating assignment ${assignmentDTO.slug}" }
             val assignment = course.assignments.stream()
                 .filter { existing: Assignment -> existing.slug == assignmentDTO.slug }.findFirst()
                 .orElseGet { course.createAssignment() }
@@ -165,16 +167,16 @@ class CourseLifecycle(
             //assignment.maxPoints = assignment.tasks.map { it.maxPoints!! }.sum() // TODO: safety
         }
 
-        course.examples.forEach { example ->
-            example.enabled = false
-        }
         courseDTO.examples.forEachIndexed { index, exampleDir ->
             val examplePath = coursePath.resolve(exampleDir)
             val exampleDTO = cci.readExampleConfig(examplePath)
-            logger.debug { "Updating ${exampleDTO.slug}" }
+            logger.debug { "Updating example ${exampleDTO.slug}" }
             val example = course.examples.stream()
                 .filter { existing: Task -> existing.slug == exampleDTO.slug }.findFirst()
-                .orElseGet { course.createExample() }
+                .orElseGet {
+                    logger.debug { "No existing example found, creating new task for ${exampleDTO.slug}" }
+                    course.createExample()
+                }
             example.ordinalNum = index + 1
             pullDockerImage(exampleDTO.evaluator!!.dockerImage!!) // TODO: safety
             modelMapper.map(exampleDTO, example)
