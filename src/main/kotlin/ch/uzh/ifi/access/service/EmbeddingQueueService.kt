@@ -133,6 +133,17 @@ class EmbeddingQueueService(
                             "example-information",
                             exampleService.computeExampleInformation(submissions[0].courseSlug, submissions[0].exampleSlug),
                         )
+                        if (!submissions.any {it.forceComputation}) {
+                            val submissionsWithoutEmbeddings =
+                                exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+                                    .filter { it.embedding.isEmpty() }
+                            if (submissionsWithoutEmbeddings.isNotEmpty()) {
+                                reAddSubmissionsToQueue(
+                                    courseSlug,
+                                    exampleSlug,
+                                    submissionsWithoutEmbeddings.map { it.id!! })
+                            }
+                        }
                     }
                 },
                 { error ->
