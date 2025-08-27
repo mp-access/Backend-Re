@@ -177,58 +177,60 @@ class CourseLifecycle(
                     logger.debug { "No existing example found, creating new task for ${exampleDTO.slug}" }
                     course.createExample()
                 }
-            example.ordinalNum = index + 1
-            pullDockerImage(exampleDTO.evaluator!!.dockerImage!!) // TODO: safety
-            modelMapper.map(exampleDTO, example)
-            example.information.forEach { it.value.task = example }
-            val instructionFiles = example.information.values.map { it.instructionsFile }
+            if (example.start == null) {
+                example.ordinalNum = index + 1
+                pullDockerImage(exampleDTO.evaluator!!.dockerImage!!) // TODO: safety
+                modelMapper.map(exampleDTO, example)
+                example.information.forEach { it.value.task = example }
+                val instructionFiles = example.information.values.map { it.instructionsFile }
 
-            example.ordinalNum = index + 1
-            example.dockerImage = exampleDTO.evaluator!!.dockerImage // TODO: safety
-            example.runCommand = exampleDTO.evaluator!!.runCommand // TODO: safety
-            example.testCommand = exampleDTO.evaluator!!.testCommand // TODO: safety
-            example.gradeCommand = exampleDTO.evaluator!!.gradeCommand // TODO: safety
-            example.enabled = true
+                example.ordinalNum = index + 1
+                example.dockerImage = exampleDTO.evaluator!!.dockerImage // TODO: safety
+                example.runCommand = exampleDTO.evaluator!!.runCommand // TODO: safety
+                example.testCommand = exampleDTO.evaluator!!.testCommand // TODO: safety
+                example.gradeCommand = exampleDTO.evaluator!!.gradeCommand // TODO: safety
+                example.enabled = true
 
-            if (Objects.nonNull(exampleDTO.refill) && exampleDTO.refill!! > 0) example.attemptWindow =
-                Duration.of(exampleDTO.refill!!.toLong(), ChronoUnit.SECONDS)
+                if (Objects.nonNull(exampleDTO.refill) && exampleDTO.refill!! > 0) example.attemptWindow =
+                    Duration.of(exampleDTO.refill!!.toLong(), ChronoUnit.SECONDS)
 
-            // Disable all files, re-enable the relevant ones later
-            example.files.forEach { file ->
-                file.enabled = false
-            }
-
-            // reset all file attributes to false
-            exampleDTO.files?.let {
-                (it.instruction + it.visible + it.grading + it.editable + it.solution).forEach { filePath ->
-                    val file = createOrUpdateTaskFile(example, examplePath, filePath)
-                    file.instruction = false
-                    file.visible = false
-                    file.grading = false
-                    file.editable = false
-                    file.solution = false
+                // Disable all files, re-enable the relevant ones later
+                example.files.forEach { file ->
+                    file.enabled = false
                 }
-            }
-            // set desired file attributes
-            exampleDTO.files?.instruction?.forEach { filePath ->
-                createOrUpdateTaskFile(example, examplePath, filePath).instruction = true
-            }
-            exampleDTO.files?.visible?.forEach { filePath ->
-                createOrUpdateTaskFile(example, examplePath, filePath).visible = true
-            }
-            exampleDTO.files?.grading?.forEach { filePath ->
-                createOrUpdateTaskFile(example, examplePath, filePath).grading = true
-            }
-            exampleDTO.files?.editable?.forEach { filePath ->
-                createOrUpdateTaskFile(example, examplePath, filePath).editable = true
-            }
-            exampleDTO.files?.solution?.forEach { filePath ->
-                createOrUpdateTaskFile(example, examplePath, filePath).solution = true
-            }
-            // update persistent file paths
-            example.persistentResultFilePaths.clear()
-            exampleDTO.files?.persist?.forEach { path ->
-                example.persistentResultFilePaths.add(path)
+
+                // reset all file attributes to false
+                exampleDTO.files?.let {
+                    (it.instruction + it.visible + it.grading + it.editable + it.solution).forEach { filePath ->
+                        val file = createOrUpdateTaskFile(example, examplePath, filePath)
+                        file.instruction = false
+                        file.visible = false
+                        file.grading = false
+                        file.editable = false
+                        file.solution = false
+                    }
+                }
+                // set desired file attributes
+                exampleDTO.files?.instruction?.forEach { filePath ->
+                    createOrUpdateTaskFile(example, examplePath, filePath).instruction = true
+                }
+                exampleDTO.files?.visible?.forEach { filePath ->
+                    createOrUpdateTaskFile(example, examplePath, filePath).visible = true
+                }
+                exampleDTO.files?.grading?.forEach { filePath ->
+                    createOrUpdateTaskFile(example, examplePath, filePath).grading = true
+                }
+                exampleDTO.files?.editable?.forEach { filePath ->
+                    createOrUpdateTaskFile(example, examplePath, filePath).editable = true
+                }
+                exampleDTO.files?.solution?.forEach { filePath ->
+                    createOrUpdateTaskFile(example, examplePath, filePath).solution = true
+                }
+                // update persistent file paths
+                example.persistentResultFilePaths.clear()
+                exampleDTO.files?.persist?.forEach { path ->
+                    example.persistentResultFilePaths.add(path)
+                }
             }
         }
         val storedCourse = courseRepository.save(course)
