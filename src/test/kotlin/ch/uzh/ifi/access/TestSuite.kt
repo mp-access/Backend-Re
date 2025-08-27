@@ -56,6 +56,7 @@ abstract class BaseTest {
 
     companion object {
         private var mvcResult: MvcResult? = null
+        val API_KEY: String = System.getenv("API_KEY") ?: "1234"
     }
 
     class CurlCommandListener : AfterTestExecutionCallback {
