@@ -134,10 +134,7 @@ class ExampleService(
                 "$exampleSlug has not been published"
             )
         } else if (example.end!!.isBefore(now)) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "$exampleSlug is past due"
-            )
+            return example
         }
 
         example.end = now
