@@ -26,7 +26,6 @@ class ExampleController(
     private val embeddingQueueService: EmbeddingQueueService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
-    private val courseService: CourseService,
     private val clusteringService: ClusteringService,
     private val submissionRepository: SubmissionRepository
 ) {
@@ -74,23 +73,15 @@ class ExampleController(
             )
         }
 
-        val participantsOnline = roleService.getOnlineCount(course)
-        val totalParticipants = courseService.getCourseBySlug(course).participantCount
-        val numberOfProcessedSubmissions = processedSubmissions.size
-        val exampleKey = Pair(course, example)
-        val numberOfReceivedSubmissions = exampleService.exampleSubmissionCount[exampleKey]?.get() ?: 0
-        val numberOfProcessedSubmissionsWithEmbeddings = processedSubmissions.filter { it.embedding.isNotEmpty() }.size
-        val passRatePerTestCase = exampleService.getExamplePassRatePerTestCase(course, example, processedSubmissions)
-        val avgPoints = exampleService.calculateAvgPoints(processedSubmissions)
-
+        val exampleInformationDTO = exampleService.computeExampleInformation(course, example)
         return ExampleSubmissionsDTO(
-            participantsOnline,
-            totalParticipants,
-            numberOfReceivedSubmissions,
-            numberOfProcessedSubmissions,
-            numberOfProcessedSubmissionsWithEmbeddings,
-            passRatePerTestCase,
-            avgPoints,
+            exampleInformationDTO.participantsOnline,
+            exampleInformationDTO.totalParticipants,
+            exampleInformationDTO.numberOfReceivedSubmissions,
+            exampleInformationDTO.numberOfProcessedSubmissions,
+            exampleInformationDTO.numberOfProcessedSubmissionsWithEmbeddings,
+            exampleInformationDTO.passRatePerTestCase,
+            exampleInformationDTO.avgPoints,
             submissionsDTO
         )
     }
