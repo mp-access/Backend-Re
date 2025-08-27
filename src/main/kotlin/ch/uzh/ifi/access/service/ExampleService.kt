@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
+import ch.uzh.ifi.access.model.dto.PointDistributionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.projections.TaskWorkspace
@@ -274,7 +275,7 @@ class ExampleService(
             studentIds,
             Command.GRADE,
             example.start!!,
-            example.end!!
+            example.end!!.plusSeconds(gracePeriod)
         )
         return excludeNotFullyProcessedSubmissions(submissions)
     }
@@ -335,6 +336,67 @@ class ExampleService(
         val exampleKey = Pair(courseSlug, exampleSlug)
         val atomicSubmissionCount = exampleSubmissionCount.computeIfAbsent(exampleKey) { AtomicInteger(0) }
         atomicSubmissionCount.incrementAndGet()
+    }
+
+    fun sendPointDistributionUpdates(courseSlug: String, exampleSlug: String) {
+        val maxTime = 5 * 60 * 1000L
+        val waitTime = 5 * 1000L
+        var timeWaited = 0L
+
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+
+        while (example.end!! > LocalDateTime.now()) {
+            Thread.sleep(waitTime)
+        }
+
+        while (exampleSubmissionCount[Pair(courseSlug, exampleSlug)] != null // if it is null, the example was reset, so we can stop sending updates
+            && timeWaited < maxTime
+            && getInteractiveExampleSubmissions(courseSlug, exampleSlug).size < getExampleSubmissionCount(courseSlug, exampleSlug))
+        {
+            val pointDistributionDTO = computePointDistribution(courseSlug, exampleSlug)
+
+            emitterService.sendPayload(
+                EmitterType.SUPERVISOR,
+                courseSlug,
+                "point-distribution",
+                pointDistributionDTO
+            )
+
+            Thread.sleep(waitTime)
+            timeWaited += waitTime
+        }
+    }
+
+    fun getExampleSubmissionCount(courseSlug: String, exampleSlug: String): Int {
+        return exampleSubmissionCount[Pair(courseSlug, exampleSlug)]?.get() ?: 0
+    }
+
+    fun computePointDistribution(courseSlug: String, exampleSlug: String): PointDistributionDTO {
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+        val response = PointDistributionDTO()
+        val submissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+        val points = submissions.mapNotNull { submission -> submission.points }
+        val testCaseCount = example.testNames.size
+        val numBins = if (testCaseCount <= 10) testCaseCount else 10
+        val binSize = 1.0 / numBins.toDouble()
+        val binCounts = IntArray(numBins) { 0 }
+
+        for (point in points) {
+            val binIndex = minOf((point / binSize).toInt(), numBins - 1)
+            binCounts[binIndex]++
+        }
+
+        for (i in 0 until numBins) {
+            val lowerBoundary = i * binSize
+            val upperBoundary = if (i == numBins - 1) 1.0 else (i + 1) * binSize
+            val binMap = mapOf(
+                "lowerBoundary" to Math.round(lowerBoundary * 100.0) / 100.0,
+                "upperBoundary" to Math.round(upperBoundary * 100.0) / 100.0,
+                "numberOfSubmissions" to binCounts[i].toDouble()
+            )
+            response.pointDistribution.add(binMap)
+        }
+        return response
     }
 
     @Transactional
