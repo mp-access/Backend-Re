@@ -29,8 +29,6 @@ class ExecutionService(
     private val fileService: FileService,
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
-    private val roleService: RoleService,
-    private val embeddingQueueService: EmbeddingQueueService,
     private val jsonMapper: JsonMapper
 ) {
     private val logger = KotlinLogging.logger {}
@@ -71,24 +69,6 @@ class ExecutionService(
                 .awaitCompletion()
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
-
-        var isAdmin = false
-        if (submission.userId != null) {
-            val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
-            isAdmin = roleService.isAdmin(userRoles, course.slug!!)
-        }
-
-        if (isExample(task) && (submission.command == Command.GRADE) && submittedWhenExampleWasInteractive(submission, task) && !isAdmin) {
-            val concatenatedSubmissionContent = submission.files
-                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-            embeddingQueueService.addToQueue(
-                task.course!!.slug!!,
-                task.slug!!,
-                submission.id!!,
-                concatenatedSubmissionContent
-            )
-        }
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
@@ -358,9 +338,5 @@ class ExecutionService(
                 else -> lines
             }
         }.joinToString(separator = "\n").replace("\u0000", "") // null characters mess up transport
-    }
-
-    fun submittedWhenExampleWasInteractive(submission: Submission, example: Task): Boolean {
-        return (example.start != null) && (example.end != null) && (submission.createdAt!! >= example.start && submission.createdAt!! <= example.end)
     }
 }

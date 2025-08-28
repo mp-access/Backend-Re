@@ -15,6 +15,7 @@ import java.util.concurrent.*
 @Service
 class ExampleQueueService (
     private val exampleService: ExampleService,
+    private val embeddingQueueService: EmbeddingQueueService,
     private val meterRegistry: MeterRegistry,
     @Value("\${examples.example-queue.cpu-threshold}") private val cpuThreshold: Double,
     @Value("\${examples.example-queue.max-concurrent-submissions}") private val maxConcurrentSubmissions: Int
@@ -70,11 +71,22 @@ class ExampleQueueService (
                         .add(submissionWithContext.submissionDTO)
                     executor.submit {
                         try {
-                            exampleService.processSubmission(
+                            val newSubmission = exampleService.processSubmission(
                                 submissionWithContext.courseSlug,
                                 submissionWithContext.exampleSlug,
                                 submissionWithContext.submissionDTO,
                                 submissionWithContext.submissionReceivedAt
+                            )
+
+                            val concatenatedSubmissionContent = newSubmission.files
+                                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+                            val example = newSubmission.evaluation!!.task!!
+                            embeddingQueueService.addToQueue(
+                                example.course!!.slug!!,
+                                example.slug!!,
+                                newSubmission.id!!,
+                                concatenatedSubmissionContent
                             )
                         } catch (e: Exception) {
                             logger.error(e) {
