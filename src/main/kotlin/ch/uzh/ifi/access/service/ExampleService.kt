@@ -149,7 +149,7 @@ class ExampleService(
         exampleSlug: String,
         submission: SubmissionDTO,
         submissionReceivedAt: LocalDateTime
-    ) {
+    ) : Submission {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
 
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
@@ -179,6 +179,7 @@ class ExampleService(
                 computeExampleInformation(courseSlug, exampleSlug)
             )
         }
+        return newSubmission
     }
 
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {

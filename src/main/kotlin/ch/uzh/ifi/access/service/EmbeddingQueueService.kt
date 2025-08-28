@@ -8,7 +8,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
 import java.util.*
@@ -19,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class EmbeddingQueueService(
     private val submissionRepository: SubmissionRepository,
-    @Lazy private val exampleService: ExampleService,
+    private val exampleService: ExampleService,
     private val emitterService: EmitterService,
     private val webClient: WebClient,
     @Value("\${llm.service.batch-size}") private val batchSize: Int,
