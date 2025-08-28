@@ -51,4 +51,14 @@ interface SubmissionRepository : JpaRepository<Submission?, Long?> {
     fun updateUserId(@Param("name") names: List<String>, @Param("userId") userId: String): Int
 
     fun findByIdIn(submissionIds: Collection<Long>): List<SubmissionEmbedding>
+
+    @Query(
+        value = """
+    SELECT s 
+    FROM Submission s
+    JOIN FETCH s.evaluation e
+    WHERE s.id IN :submissionIds
+    """
+    )
+    fun findByIdInList(@Param("submissionIds") submissionIds: Collection<Long>): List<Submission>
 }
