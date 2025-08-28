@@ -249,6 +249,8 @@ class ExampleController(
         if (LocalDateTime.now() > maxWaitingTime) {
             logger.warn { "It is likely that not all submissions of example $example in course $course were deleted after reset." }
         }
+
+        exampleQueueService.resetProcessedSubmissionsCount(course, example)
         exampleService.resetExampleBySlug(course, example)
 
         emitterService.sendPayload(
