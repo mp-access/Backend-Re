@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.execution
 
 import ch.uzh.ifi.access.BaseTest
-import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.TaskRepository
 import ch.uzh.ifi.access.service.ExecutionService
 import jakarta.transaction.Transactional
@@ -16,12 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ExecutionServiceTests(
-    @Autowired val courseRepository: CourseRepository,
     @Autowired val taskRepository: TaskRepository,
     @Autowired val executionService: ExecutionService,
 ) : BaseTest() {
-
-
     @Test
     @Transactional
     @Order(0)
@@ -38,5 +34,4 @@ class ExecutionServiceTests(
         assertThat(10 < results.hints.size)
         assertThat(10 < results.tests.size)
     }
-
 }

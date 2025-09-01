@@ -3,11 +3,11 @@ package ch.uzh.ifi.access
 import ch.uzh.ifi.access.api.AfterSubmissionTests
 import ch.uzh.ifi.access.api.ManagementAPITests
 import ch.uzh.ifi.access.api.SubmissionTests
+import ch.uzh.ifi.access.controller.ExampleControllerTests
 import ch.uzh.ifi.access.execution.ExecutionServiceTests
-import ch.uzh.ifi.access.import.ImportAssignmentTests
-import ch.uzh.ifi.access.import.ImportCourseTests
-import ch.uzh.ifi.access.import.ImportRepoTests
-import ch.uzh.ifi.access.import.ImportTaskTests
+import ch.uzh.ifi.access.import.*
+import ch.uzh.ifi.access.service.ClusteringServiceTests
+import ch.uzh.ifi.access.service.ExampleServiceTests
 import ch.uzh.ifi.access.users.RoleServiceTests
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.junit.jupiter.api.ClassOrderer
@@ -37,10 +37,14 @@ import java.util.concurrent.TimeUnit
     ImportCourseTests::class,
     ImportAssignmentTests::class,
     ImportTaskTests::class,
+    ImportExampleTests::class,
     ManagementAPITests::class,
     ExecutionServiceTests::class,
     SubmissionTests::class,
     AfterSubmissionTests::class,
+    ExampleControllerTests::class,
+    ClusteringServiceTests::class,
+    ExampleServiceTests::class,
     RoleServiceTests::class,
     PerformanceTests::class,
 )
