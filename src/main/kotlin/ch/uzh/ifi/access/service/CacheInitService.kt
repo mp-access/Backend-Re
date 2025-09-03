@@ -27,10 +27,10 @@ class CacheInitService(
     }
 
     fun renameIDs() {
-        var evaluationCount = 0
-        var submissionCount = 0
         courseRepository.findAll().forEach {
             logger.info { "Course ${it?.slug}: changing userIds for evaluations and submissions..." }
+            var evaluationCount = 0
+            var submissionCount = 0
             it?.registeredStudents?.map { registrationId ->
                 roleService.findUserByAllCriteria(registrationId)?.let { user ->
                     //logger.info { "Changing userIds for evaluations and submissions of user ${user.username}" }
