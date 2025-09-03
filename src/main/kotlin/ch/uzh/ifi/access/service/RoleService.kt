@@ -213,6 +213,10 @@ class RoleService(
     fun initializeUserRoles(username: String) {
         try {
             semaphore.acquire()
+            // evict the username to ensure we get a UserRepresentation and not null
+            // this only happens on first login anyway, and should not be necessary,
+            // but if someone deletes a user from Keycloak manually, then the caching is broken even after a reboot
+            cacheManager.getCache("RoleService.findUserByAllCriteria")?.evict(username);
             val user = proxy.findUserByAllCriteria(username)
             if (user == null) {
                 logger.error { "Trying to initialize roles for $username: no matching username in Keycloak" }

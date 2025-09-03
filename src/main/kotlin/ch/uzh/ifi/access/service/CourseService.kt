@@ -329,8 +329,12 @@ class CourseService(
         val newUsersSet = registrationIDs.toSet()
         val existingUsersSet = existingUsers.toSet()
 
+        logger.debug { "existingUsersSet: $existingUsers" }
+        logger.debug { "newUsersSet: $newUsersSet" }
         val removedUsers = existingUsersSet.minus(newUsersSet).toList()
         val addedUsers = newUsersSet.minus(existingUsersSet).toList()
+        logger.debug { "removedUsers: $removedUsers" }
+        logger.debug { "addedUsers: $addedUsers" }
 
         when (role) {
             Role.SUPERVISOR -> course.supervisors = newUsersSet.toMutableSet()
