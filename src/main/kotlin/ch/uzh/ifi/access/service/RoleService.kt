@@ -327,7 +327,7 @@ class RoleService(
             ?: throw Exception("User with registrationID $registrationID not found")
 
         val roles = user.toResource().roles().realmLevel().listEffective()
-        return roles.any { it.name == "${courseSlug}-supervisor" }
+        return roles.any { listOf("${courseSlug}-supervisor", "supervisor").contains(it.name) }
     }
 
     fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {

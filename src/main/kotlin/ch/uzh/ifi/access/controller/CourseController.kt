@@ -91,17 +91,21 @@ class CourseController(
         val courses = courseService.getCoursesOverview()
         val now = LocalDateTime.now()
         return courses.filter { course ->
-            val visibility = if (course.overrideVisibility != null &&
-                course.overrideStart!! < now &&
-                (course.overrideEnd == null || course.overrideEnd!! > now)
-            ) {
-                course.overrideVisibility
+            if (roleService.isSupervisor(course.slug!!)) {
+                true
             } else {
-                course.defaultVisibility
+                val visibility = if (course.overrideVisibility != null &&
+                    course.overrideStart!! < now &&
+                    (course.overrideEnd == null || course.overrideEnd!! > now)
+                ) {
+                    course.overrideVisibility
+                } else {
+                    course.defaultVisibility
+                }
+                visibility == Visibility.PUBLIC ||
+                (visibility == Visibility.REGISTERED &&
+                request.isUserInRole(course.slug))
             }
-            visibility == Visibility.PUBLIC ||
-            (visibility == Visibility.REGISTERED &&
-            request.isUserInRole(course.slug))
         }
 
     }
