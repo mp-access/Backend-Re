@@ -237,7 +237,7 @@ class ExampleService(
                     )
                 )
                     throw ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
+                        HttpStatus.FORBIDDEN,
                         "You must wait for 2 hours before submitting a solution again"
                     )
                 val latestAcceptableFirstSubmissionTimeStamp = example.end!!.plusSeconds(gracePeriod)

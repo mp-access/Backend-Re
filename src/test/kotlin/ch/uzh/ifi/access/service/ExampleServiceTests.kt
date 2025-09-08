@@ -91,7 +91,7 @@ class ExampleServiceTests(
             )
         }
         
-        assertEquals(HttpStatus.BAD_REQUEST, exception.statusCode)
+        assertEquals(HttpStatus.FORBIDDEN, exception.statusCode)
         assertThat(exception.reason).contains("You must wait for 2 hours before submitting a solution again")
     }
 
@@ -178,8 +178,7 @@ class ExampleServiceTests(
         
         val isInteractive1 = exampleService.isExampleInteractive(
             "access-mock-course-lecture-examples",
-            "circle-square-rect",
-            now
+            "circle-square-rect"
         )
         assertThat(isInteractive1).isTrue
         
@@ -189,8 +188,7 @@ class ExampleServiceTests(
         
         val isInteractive2 = exampleService.isExampleInteractive(
             "access-mock-course-lecture-examples",
-            "circle-square-rect",
-            now
+            "circle-square-rect"
         )
         assertThat(isInteractive2).isTrue
         
@@ -200,8 +198,7 @@ class ExampleServiceTests(
         
         val isInteractive3 = exampleService.isExampleInteractive(
             "access-mock-course-lecture-examples",
-            "circle-square-rect",
-            now
+            "circle-square-rect"
         )
         assertThat(isInteractive3).isFalse
     }

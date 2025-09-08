@@ -15,6 +15,7 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.transaction.Transactional
 import org.hamcrest.Matchers.greaterThanOrEqualTo
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.MethodOrderer
 import org.junit.jupiter.api.Order
@@ -160,7 +161,7 @@ class ExampleControllerTests(
         }
 
         // Verify the exception details
-        assert(exception.statusCode == HttpStatus.BAD_REQUEST) { "Expected BAD_REQUEST but got ${exception.statusCode}" }
+        assertEquals(exception.statusCode, HttpStatus.FORBIDDEN) { "Expected FORBIDDEN but got ${exception.statusCode}" }
         assert(exception.reason?.contains("late") == true) { "Expected message to contain 'late' but got: ${exception.reason}" }
 
         // Wait for embedding generation to complete
@@ -218,7 +219,7 @@ class ExampleControllerTests(
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.participantsOnline", greaterThanOrEqualTo(0)))
             .andExpect(jsonPath("$.totalParticipants").exists())
-            .andExpect(jsonPath("$.numberOfStudentsWhoSubmitted", greaterThanOrEqualTo(0)))
+            .andExpect(jsonPath("$.numberOfProcessedSubmissions", greaterThanOrEqualTo(0)))
             .andExpect(jsonPath("$.passRatePerTestCase").exists())
             .andExpect(jsonPath("$.avgPoints").exists())
     }
