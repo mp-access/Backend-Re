@@ -53,10 +53,12 @@ class SubmissionService(
                 }
             }
         } else {
-            if (isExample(task)) {
-                submissions.forEach { submission ->
-                    if (submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
+            submissions.forEach { submission ->
+                submission.logs?.let { logs ->
+                    if (isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
                         submission.output = ""
+                    } else if (submission.command != Command.GRADE) {
+                        submission.output = logs
                     }
                 }
             }
@@ -90,7 +92,13 @@ class SubmissionService(
         ]
     )
     // It only accepts assignment tasks, not examples
-    fun createSubmission(courseSlug: String, taskSlug: String, task: Task, submissionDTO: SubmissionDTO, submissionReceivedAt: LocalDateTime?): Submission {
+    fun createSubmission(
+        courseSlug: String,
+        taskSlug: String,
+        task: Task,
+        submissionDTO: SubmissionDTO,
+        submissionReceivedAt: LocalDateTime?
+    ): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
@@ -138,7 +146,6 @@ class SubmissionService(
             evaluationRepository.save(evaluation)
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
         }
-
         return submission
     }
 
