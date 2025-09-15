@@ -28,6 +28,8 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesBy(): List<CourseOverview>
 
+    // TODO: remove for public courses and handle in controller
+    @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesByAndDeletedFalse(): List<CourseOverview>
 
     fun findAllByDeletedFalse(): List<Course>

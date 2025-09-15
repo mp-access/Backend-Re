@@ -1,7 +1,6 @@
 package ch.uzh.ifi.access.controller
 
 import ch.uzh.ifi.access.model.constants.Role
-import ch.uzh.ifi.access.model.constants.Visibility
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.*
@@ -18,7 +17,6 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import java.time.LocalDateTime
 
 
 @RestController
@@ -88,6 +86,9 @@ class CourseController(
 
     @GetMapping("")
     fun getCourses(request: HttpServletRequest): List<CourseOverview> {
+        return courseService.getCoursesOverview()
+        // TODO: implement correctly for public courses
+        /*
         val courses = courseService.getCoursesOverview()
         val now = LocalDateTime.now()
         return courses.filter { course ->
@@ -107,6 +108,7 @@ class CourseController(
                 request.isUserInRole(course.slug))
             }
         }
+        */
 
     }
 
