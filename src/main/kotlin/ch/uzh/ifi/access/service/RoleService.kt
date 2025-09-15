@@ -161,8 +161,9 @@ class RoleService(
         val results = mutableSetOf<String>()
         user.username?.let { results.add(it) }
         user.email?.let { results.add(it) }
-        user.attributes?.get("swissEduIDLinkedAffiliationUniqueID")?.firstOrNull()?.let { results.add(it) }
-        user.attributes?.get("swissEduPersonUniqueID")?.firstOrNull()?.let { results.add(it) }
+        ATTRIBUTE_KEYS.forEach { attribute ->
+            user.attributes?.get(attribute)?.forEach { results.add(it) }
+        }
         return results.toList()
     }
 
@@ -230,7 +231,7 @@ class RoleService(
                 }
                 // check all courses if the user has been registered under one of the possible identifiers
                 val roles = proxy.getUserRoles(searchNames)
-                logger.info { "Initializing roles for $username: $roles" }
+                logger.info { "Initializing roles for $username (a.k.a. $searchNames): $roles" }
                 // add the corresponding Keycloak roles
                 user.toResource().roles().realmLevel().add(roles.map {
                     getRoleByName(it).toRepresentation()
