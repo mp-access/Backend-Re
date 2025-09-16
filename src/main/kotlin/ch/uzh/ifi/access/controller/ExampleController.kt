@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskWorkspace
@@ -101,7 +102,7 @@ class ExampleController(
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
-        if (exampleService.isSubmittedDuringInteractivePeriod(course, example, submissionReceivedAt) && !isAdmin) {
+        if (exampleService.isSubmittedDuringInteractivePeriod(course, example, submissionReceivedAt) && !isAdmin && submission.command == Command.GRADE) {
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
             exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
