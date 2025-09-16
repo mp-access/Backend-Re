@@ -38,7 +38,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/123456789@eduid.ch")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -54,7 +54,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -69,7 +69,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -86,7 +86,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=0&includeGrade=false&includeTest=true")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -101,7 +101,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=1&includeGrade=false&includeRun=true")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -120,14 +120,14 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         val res = mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         ).andReturn()
 
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -148,7 +148,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics/tasks/for-testing?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
