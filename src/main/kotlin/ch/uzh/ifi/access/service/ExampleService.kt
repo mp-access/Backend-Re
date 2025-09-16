@@ -196,7 +196,10 @@ class ExampleService(
         return ExampleInformationDTO(
             participantsOnline,
             totalParticipants,
-            numberOfReceivedSubmissions,
+            maxOf(
+                numberOfReceivedSubmissions,
+                numberOfProcessedSubmissions
+            ),
             numberOfProcessedSubmissions,
             numberOfProcessedSubmissionsWithEmbeddings,
             passRatePerTestCase,
