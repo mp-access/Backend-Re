@@ -80,10 +80,7 @@ class ExampleController(
         return ExampleSubmissionsDTO(
             exampleInformationDTO.participantsOnline,
             exampleInformationDTO.totalParticipants,
-            maxOf(
-                exampleInformationDTO.numberOfReceivedSubmissions,
-                exampleInformationDTO.numberOfProcessedSubmissions
-            ),
+            exampleInformationDTO.numberOfReceivedSubmissions,
             exampleInformationDTO.numberOfProcessedSubmissions,
             exampleInformationDTO.numberOfProcessedSubmissionsWithEmbeddings,
             exampleInformationDTO.passRatePerTestCase,
