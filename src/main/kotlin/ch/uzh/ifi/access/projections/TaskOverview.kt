@@ -28,7 +28,8 @@ interface TaskOverview {
     @get:Value("#{@pointsService.calculateAvgTaskPoints(target.slug)}")
     val avgPoints: Double?
 
-    @get:Value("#{@courseService.calculateTaskPoints(target.id)}")
+    @get:Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")
+
     val points: Double?
 
     @get:Value("#{@courseService.getRemainingAttempts(target.id, target.maxAttempts)}")

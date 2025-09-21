@@ -224,9 +224,9 @@ class CourseService(
         return newEvent
     }
 
-    fun calculateTaskPoints(taskId: Long?): Double {
-        val userId = roleService.getUserId() ?: return 0.0
-        return pointsService.calculateTaskPoints(taskId, userId)
+    fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
+        val id = userId ?: roleService.getUserId() ?: return 0.0
+        return pointsService.calculateTaskPoints(taskId, id)
     }
 
 
