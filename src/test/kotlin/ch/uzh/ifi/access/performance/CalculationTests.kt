@@ -60,7 +60,7 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
 
     @Test
     @Order(1)
-    //@Timeout(value = 1, unit = TimeUnit.SECONDS)
+    @Timeout(value = 1, unit = TimeUnit.SECONDS)
     @AccessUser(
         username = "assistant@uzh.ch",
         authorities = ["assistant", "info1-hs24-assistant", "info1-hs24"]
@@ -73,6 +73,23 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(status().isOk)
             .andExpect(content().contentType("application/json"))
             .andExpect(jsonPath("$.[?(@.email =~ /philip.*?/i)].email", `is`(not(empty<Any>()))))
+    }
+
+    @Test
+    @Order(1)
+    @Timeout(value = 1, unit = TimeUnit.SECONDS)
+    @AccessUser(
+        username = "assistant@uzh.ch",
+        authorities = ["assistant", "info1-hs24-assistant", "info1-hs24"]
+    )
+    fun `Can retrieve users with points`() {
+        mvc.perform(
+            get("/courses/info1-hs24/users")
+                .contentType("application/json")
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.[?(@.email =~ /supervisor.*?/i)].email", `is`(not(empty<Any>()))))
     }
 
 
