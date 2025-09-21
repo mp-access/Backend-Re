@@ -176,6 +176,13 @@ class CourseController(
         return courseService.getStudentsWithPoints(courseSlug)
     }
 
+    @GetMapping("/{courseSlug}/users")
+    @PreAuthorize("hasRole(#courseSlug + '-assistant')")
+    fun getUsersWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
+        // this includes assistants and supervisors
+        return courseService.getStudentsWithPoints(courseSlug, true)
+    }
+
     @GetMapping("/{courseSlug}/students")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getStudents(@PathVariable courseSlug: String): List<StudentDTO> {

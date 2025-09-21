@@ -24,7 +24,7 @@ interface CourseSummary {
     @get:Value("#{@courseService.getTeamMembers(target.assistants)}")
     val assistants: Set<MemberOverview?>?
 
-    @get:Value("#{@courseService.getStudentsWithPoints(target.slug)}")
+    @get:Value("#{@courseService.getStudentsWithPoints(target.slug, false)}")
     val students: List<StudentDTO?>?
     val assignments: List<AssignmentSummary?>?
 

@@ -62,9 +62,14 @@ class CourseService(
         }
     }
 
-    fun getStudentsWithPoints(courseSlug: String): List<StudentDTO> {
+    fun getStudentsWithPoints(courseSlug: String, withAssistants: Boolean = false): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
-        val users = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it) }
+        val names = if (withAssistants) {
+            course.registeredStudents + course.assistants + course.supervisors
+        } else {
+            course.registeredStudents
+        }
+        val users = names.associateWith { roleService.findUserByAllCriteria(it) }
         val registrationIDs = course.registeredStudents.associateWith { roleService.getRegistrationIDCandidates(it) }
         val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
         val hasPoints =
@@ -191,7 +196,16 @@ class CourseService(
         val courseSlug = getCourseSlugByTask(task)
 
         // Example without any submissions
-        if (exampleQueueService.isSubmissionInTheQueue(courseSlug, task.slug!!, userId) || exampleQueueService.isSubmissionCurrentlyProcessed(courseSlug, task.slug!!, userId) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)) {
+        if (exampleQueueService.isSubmissionInTheQueue(
+                courseSlug,
+                task.slug!!,
+                userId
+            ) || exampleQueueService.isSubmissionCurrentlyProcessed(
+                courseSlug,
+                task.slug!!,
+                userId
+            ) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)
+        ) {
             res = task.end!!.plusHours(2)
         }
 
