@@ -42,4 +42,12 @@ class PointsService(
     )
     fun evictTaskPoints(taskId: Long, userId: String) {
     }
+
+    @Caching(
+        evict = [
+            CacheEvict("CourseService.calculateCoursePoints", key = "#courseSlug + '-' + #userId"),
+        ]
+    )
+    fun evictCoursePoints(courseSlug: String?, userId: String) {
+    }
 }

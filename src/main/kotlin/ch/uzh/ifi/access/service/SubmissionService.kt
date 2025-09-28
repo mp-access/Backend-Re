@@ -113,6 +113,7 @@ class SubmissionService(
             )
         }
         pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+        pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         val evaluation =
             evaluationService.getEvaluation(task.id, submissionDTO.userId)
                 ?: task.createEvaluation(submissionDTO.userId)
@@ -145,6 +146,7 @@ class SubmissionService(
             submissionRepository.save(submission)
             evaluationRepository.save(evaluation)
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+            pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         }
         return submission
     }

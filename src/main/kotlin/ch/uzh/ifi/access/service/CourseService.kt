@@ -243,11 +243,18 @@ class CourseService(
 
     fun calculateCoursePoints(slug: String): Double {
         val userId = roleService.getUserId() ?: return 0.0
+        return proxy.calculateCoursePoints(slug, userId)
+    }
+
+    @Cacheable(value = ["CourseService.calculateCoursePoints"], key = "#slug + '-' + #userId")
+    fun calculateCoursePoints(slug: String, userId: String): Double {
         return courseRepository.getTotalPoints(slug, userId) ?: 0.0
     }
 
     fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {
-        return memberIds.mapNotNull { courseRepository.getTeamMemberName(it) }.toSet()
+        return setOf()
+        // TODO: re-enable if needed
+        //return memberIds.mapNotNull { courseRepository.getTeamMemberName(it) }.toSet()
     }
 
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
@@ -309,6 +316,7 @@ class CourseService(
         evict = [
             CacheEvict(value = ["PointsService.getMaxPoints"], key = "#courseSlug"),
             CacheEvict(value = ["PointsService.calculateAssignmentMaxPoints"], allEntries = true),
+            CacheEvict(value = ["CourseService.calculateCoursePoints"], allEntries = true),
         ]
     )
     fun updateCourse(courseSlug: String): Course {

@@ -30,6 +30,7 @@ class CacheConfig {
             "PointsService.calculateAvgTaskPoints",
             "PointsService.calculateAssignmentMaxPoints",
             "CourseService.getStudents",
+            "CourseService.calculateCoursePoints",
         )
     }
 }
