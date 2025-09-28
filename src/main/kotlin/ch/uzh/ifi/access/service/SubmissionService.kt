@@ -55,7 +55,7 @@ class SubmissionService(
         } else {
             submissions.forEach { submission ->
                 submission.logs?.let { logs ->
-                    if (isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive) {
+                    if (isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive && submission.command == Command.GRADE) {
                         submission.output = ""
                     } else if (submission.command != Command.GRADE) {
                         submission.output = logs
