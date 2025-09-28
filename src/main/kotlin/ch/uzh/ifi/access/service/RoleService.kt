@@ -228,6 +228,7 @@ class RoleService(
                 searchNames.forEach {
                     cacheManager.getCache("RoleService.findUserByAllCriteria")?.evict(it);
                     cacheManager.getCache("RoleService.getRegistrationIDCandidates")?.evict(it);
+                    // TODO: probably should also evict isSupervisor here, but it's an edge case
                 }
                 // check all courses if the user has been registered under one of the possible identifiers
                 val roles = proxy.getUserRoles(searchNames)
@@ -250,6 +251,7 @@ class RoleService(
         }
     }
 
+    @CacheEvict("RoleService.isSupervisor", allEntries = true)
     fun updateRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
         val roleName = role.withCourse(course.slug)
         val realmRoleRepresentation = getRoleByName(roleName).toRepresentation()
@@ -326,7 +328,12 @@ class RoleService(
         val registrationID = getCurrentUsername()
         val user = proxy.findUserByAllCriteria(registrationID)
             ?: throw Exception("User with registrationID $registrationID not found")
+        return proxy.isSupervisor(courseSlug, user)
 
+    }
+
+    @Cacheable("RoleService.isSupervisor", key = "#courseSlug + '-' + #user.id")
+    fun isSupervisor(courseSlug: String, user: UserRepresentation): Boolean {
         val roles = user.toResource().roles().realmLevel().listEffective()
         return roles.any { listOf("${courseSlug}-supervisor", "supervisor").contains(it.name) }
     }
