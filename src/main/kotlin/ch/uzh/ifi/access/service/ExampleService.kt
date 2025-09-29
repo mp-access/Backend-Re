@@ -223,6 +223,21 @@ class ExampleService(
         return newSubmission
     }
 
+    @Cacheable(value = ["ExampleService.computeSubmissionsCount"], key = "#courseSlug")
+    fun computeSubmissionsCount(courseSlug: String): ExampleSubmissionsCountDTO {
+        val res = exampleRepository.getSubmissionsCount(courseSlug)
+
+        val submissionsCount: Map<String, Int> = res.associate { row ->
+            val userId = row["user_id"] as String
+            val count = (row["entry_count"] as Number).toInt()
+            userId to count
+        }
+
+        return ExampleSubmissionsCountDTO(
+            submissionsCount = submissionsCount.toMutableMap()
+        )
+    }
+
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
         val participantsOnline = visitQueueService.getRecentlyActiveCount(courseSlug)
         val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount

@@ -45,6 +45,15 @@ class ExampleController(
         return exampleService.getExamples(course)
     }
 
+    @GetMapping("/submissions-count")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getSubmissionsCount(
+        @PathVariable course: String,
+        authentication: Authentication
+    ): ExampleSubmissionsCountDTO {
+        return exampleService.computeSubmissionsCount(course)
+    }
+
     @GetMapping("/interactive")
     @PreAuthorize("hasRole(#course)")
     fun getInteractiveExampleSlug(
@@ -101,6 +110,7 @@ class ExampleController(
 
     @PostMapping("/{example}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
+    @CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
     fun evaluateExampleSubmission(
         @PathVariable course: String,
         @PathVariable example: String,

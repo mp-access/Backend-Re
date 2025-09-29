@@ -227,7 +227,7 @@ class CourseController(
     }
 
     @PostMapping("/{course}/participants")
-    @CacheEvict(value = ["CourseService.getStudents"], key = "#course")
+    @CacheEvict(value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"], key = "#course")
     fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
         return updateRoles(course, registrationIDs, Role.STUDENT)
     }
