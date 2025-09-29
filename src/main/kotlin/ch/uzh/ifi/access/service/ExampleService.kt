@@ -3,10 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
-import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
-import ch.uzh.ifi.access.model.dto.PointDistributionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
+import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
@@ -14,6 +11,7 @@ import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.cache.annotation.Cacheable
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -149,7 +147,7 @@ class ExampleService(
         exampleSlug: String,
         submission: SubmissionDTO,
         submissionReceivedAt: LocalDateTime
-    ) : Submission {
+    ): Submission {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
 
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
@@ -180,6 +178,21 @@ class ExampleService(
             )
         }
         return newSubmission
+    }
+
+    @Cacheable(value = ["ExampleService.computeSubmissionsCount"], key = "#courseSlug")
+    fun computeSubmissionsCount(courseSlug: String): ExampleSubmissionsCountDTO {
+        val res = exampleRepository.getSubmissionsCount(courseSlug)
+
+        val submissionsCount: Map<String, Int> = res.associate { row ->
+            val userId = row["user_id"] as String
+            val count = (row["entry_count"] as Number).toInt()
+            userId to count
+        }
+
+        return ExampleSubmissionsCountDTO(
+            submissionsCount = submissionsCount.toMutableMap()
+        )
     }
 
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
@@ -317,7 +330,11 @@ class ExampleService(
             .average()
     }
 
-    fun isSubmittedDuringInteractivePeriod(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean {
+    fun isSubmittedDuringInteractivePeriod(
+        courseSlug: String,
+        exampleSlug: String,
+        submissionReceivedAt: LocalDateTime
+    ): Boolean {
         val example = getExampleBySlug(courseSlug, exampleSlug)
         if (example.start == null || example.end == null) return false
         return (example.start!!.isBefore(submissionReceivedAt) && (example.end!!.plusSeconds(gracePeriod)).isAfter(
@@ -350,10 +367,16 @@ class ExampleService(
             Thread.sleep(waitTime)
         }
 
-        while (exampleSubmissionCount[Pair(courseSlug, exampleSlug)] != null // if it is null, the example was reset, so we can stop sending updates
+        while (exampleSubmissionCount[Pair(
+                courseSlug,
+                exampleSlug
+            )] != null // if it is null, the example was reset, so we can stop sending updates
             && timeWaited < maxTime
-            && getInteractiveExampleSubmissions(courseSlug, exampleSlug).size < getExampleSubmissionCount(courseSlug, exampleSlug))
-        {
+            && getInteractiveExampleSubmissions(courseSlug, exampleSlug).size < getExampleSubmissionCount(
+                courseSlug,
+                exampleSlug
+            )
+        ) {
             val pointDistributionDTO = computePointDistribution(courseSlug, exampleSlug)
 
             emitterService.sendPayload(
