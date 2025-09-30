@@ -10,5 +10,5 @@ interface CourseWorkspace : CourseOverview {
     val assignments: List<AssignmentWorkspace?>?
 
     @get:Value("#{@exampleService.getExamples(target.slug)}")
-    val examples: List<TaskWorkspace?>?
+    val examples: List<TaskOverview?>?
 }

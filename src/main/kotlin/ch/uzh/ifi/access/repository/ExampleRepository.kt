@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.repository
 
 import ch.uzh.ifi.access.model.Task
+import ch.uzh.ifi.access.projections.TaskOverview
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import org.springframework.data.jpa.repository.JpaRepository
 
@@ -8,7 +9,7 @@ interface ExampleRepository : JpaRepository<Task?, Long?> {
 
     fun findByCourse_SlugOrderByOrdinalNumDesc(
         courseSlug: String?
-    ): List<TaskWorkspace>
+    ): List<TaskOverview>
 
     fun findByCourse_SlugAndSlug(
         courseSlug: String?,
