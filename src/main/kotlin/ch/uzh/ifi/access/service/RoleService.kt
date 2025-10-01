@@ -17,12 +17,10 @@ import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
 
 
 @Service
@@ -340,26 +338,5 @@ class RoleService(
 
     fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {
         return userRoles.contains("$courseSlug-assistant") || userRoles.contains("$courseSlug-supervisor")
-    }
-
-    @Cacheable("RoleService.getOnlineCount", key = "#courseSlug")
-    fun getOnlineCount(courseSlug: String): Int {
-        val clientRepresentation = accessRealm.clients().findByClientId("access-client")[0]
-        val resource = accessRealm.clients().get(clientRepresentation.id)
-        val sessions = resource.getUserSessions(0, 1000).filter {
-            // only care about users who are students in the given course
-            val roles = accessRealm.users()[it.userId].roles().realmLevel().listEffective()
-            val matchesRole = roles.any { role -> role.name == "$courseSlug-student" }
-            // users who were active in the last 5 minutes are considered online
-            val recentActivity = it.lastAccess + 300 < System.currentTimeMillis()
-            matchesRole && recentActivity
-        }
-        return sessions.size
-    }
-
-    @CacheEvict("RoleService.getOnlineCount", allEntries = true)
-    @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
-    fun evictOnlineCount() {
-        // this just ensures that the online count is cached for only 1 minute
     }
 }

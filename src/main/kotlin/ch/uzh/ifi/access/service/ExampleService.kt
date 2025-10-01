@@ -33,6 +33,7 @@ class ExampleService(
     private val evaluationRepository: EvaluationRepository,
     private val submissionRepository: SubmissionRepository,
     private val courseRepository: CourseRepository,
+    private val visitQueueService: VisitQueueService,
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     val exampleSubmissionCount = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
@@ -183,7 +184,7 @@ class ExampleService(
     }
 
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
-        val participantsOnline = roleService.getOnlineCount(courseSlug)
+        val participantsOnline = visitQueueService.getRecentlyActiveCount(courseSlug)
         val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount
         val processedSubmissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
         val numberOfProcessedSubmissions = processedSubmissions.size

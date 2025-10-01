@@ -22,7 +22,7 @@ class CacheConfig {
             "RoleService.getRegistrationIDCandidates",
             "RoleService.findUserByAllCriteria",
             "RoleService.getUserResourceById",
-            "RoleService.getOnlineCount",
+            "VisitQueueService.getRecentlyActiveCount",
             "RoleService.getUserId",
             "RoleService.isSupervisor",
             "PointsService.calculateTaskPoints",

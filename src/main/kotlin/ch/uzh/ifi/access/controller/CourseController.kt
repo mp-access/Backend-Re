@@ -75,6 +75,7 @@ class CourseController(
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val submissionService: SubmissionService,
+    private val visitQueueService: VisitQueueService
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -168,6 +169,10 @@ class CourseController(
     fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String) {
         val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
         emitterService.keepAliveEmitter(emitterType, course, emitterId)
+
+        if (emitterType == EmitterType.STUDENT) {
+            visitQueueService.record(emitterId)
+        }
     }
 
     @GetMapping("/{courseSlug}/points")
