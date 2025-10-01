@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.controller
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
+import ch.uzh.ifi.access.projections.TaskOverview
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
@@ -35,13 +36,12 @@ class ExampleController(
 ) {
     private val logger = KotlinLogging.logger {}
 
-    // TODO: Change this to returning TaskOverview, as we don't need more information. However, when changing it, an error occurs in the courses/{course} endpoint.
     @GetMapping("")
     @PreAuthorize("hasRole(#course)")
     fun getExamples(
         @PathVariable course: String,
         authentication: Authentication
-    ): List<TaskWorkspace> {
+    ): List<TaskOverview> {
         return exampleService.getExamples(course)
     }
 
@@ -102,7 +102,12 @@ class ExampleController(
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
-        if (exampleService.isSubmittedDuringInteractivePeriod(course, example, submissionReceivedAt) && !isAdmin && submission.command == Command.GRADE) {
+        if (exampleService.isSubmittedDuringInteractivePeriod(
+                course,
+                example,
+                submissionReceivedAt
+            ) && !isAdmin && submission.command == Command.GRADE
+        ) {
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
             exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
@@ -244,7 +249,11 @@ class ExampleController(
         exampleQueueService.removeOutdatedSubmissions(course, example)
         embeddingQueueService.removeOutdatedSubmissions(course, example)
         val maxWaitingTime = LocalDateTime.now().plusSeconds(30)
-        while (LocalDateTime.now() <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)) {
+        while (LocalDateTime.now() <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(
+                course,
+                example
+            )
+        ) {
             Thread.sleep(100)
         }
         if (LocalDateTime.now() > maxWaitingTime) {
@@ -292,7 +301,11 @@ class ExampleController(
             }
             return PointDistributionDTO()
         }
-        if (exampleService.getInteractiveExampleSubmissions(course, example).size < exampleService.getExampleSubmissionCount(course, example)) {
+        if (exampleService.getInteractiveExampleSubmissions(
+                course,
+                example
+            ).size < exampleService.getExampleSubmissionCount(course, example)
+        ) {
             GlobalScope.launch {
                 exampleService.sendPointDistributionUpdates(course, example)
             }
