@@ -124,24 +124,16 @@ class CourseService(
         return taskRepository.findById(taskId).get()
     }
 
-    fun getCoursesOverview(): List<CourseOverview> {
-      /*return courseRepository.findCoursesByAndDeletedFalse()*/
-        val userId = roleService.getUserId()
-            ?: throw IllegalStateException("Cannot resolve user ID for current user")
+    @Cacheable("CourseService.getCoursesOverview", key = "#userId")
+    fun getCoursesOverview(userId: String): List<CourseOverview> {
         val coursesForUser = courseRepository.findCoursesForUser(userId)
 
         return coursesForUser.map { course ->
-            // The ProjectionFactory ensures the SpEL expressions are evaluated
-            // against the 'course' object, correctly populating points, maxPoints, etc.
+            // ProjectionFactory ensures the SpEL expressions are evaluated against the 'course' object, to correctly populate points, maxPoints, etc. which are not part of course itself
             projectionFactory.createProjection(CourseOverview::class.java, course)
         }
-
-
     }
 
-    fun getCourses(): List<Course> {
-        return courseRepository.findAllByDeletedFalse()
-    }
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
         return courseRepository.findCourseBySlug(courseSlug) ?: throw ResponseStatusException(
