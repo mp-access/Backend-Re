@@ -87,7 +87,12 @@ class CourseController(
 
     @GetMapping("")
     fun getCourses(request: HttpServletRequest): List<CourseOverview> {
-        return courseService.getCoursesOverview()
+        val userId = roleService.getUserId() ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND,
+            "Cannot resolve user ID"
+        )
+        val courseOverview = courseService.getCoursesOverview(userId)
+        return courseOverview
         // TODO: implement correctly for public courses
         /*
         val courses = courseService.getCoursesOverview()

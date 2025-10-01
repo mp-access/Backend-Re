@@ -26,6 +26,7 @@ import java.nio.file.Path
 import java.time.LocalDateTime
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import org.springframework.data.projection.ProjectionFactory
 
 // TODO: decide properly which parameters should be nullable
 @Service
@@ -40,7 +41,8 @@ class CourseService(
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
-    private val exampleQueueService: ExampleQueueService
+    private val exampleQueueService: ExampleQueueService,
+    private val projectionFactory: ProjectionFactory
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -122,13 +124,16 @@ class CourseService(
         return taskRepository.findById(taskId).get()
     }
 
-    fun getCoursesOverview(): List<CourseOverview> {
-        return courseRepository.findCoursesByAndDeletedFalse()
+    @Cacheable("CourseService.getCoursesOverview", key = "#userId")
+    fun getCoursesOverview(userId: String): List<CourseOverview> {
+        val coursesForUser = courseRepository.findCoursesForUser(userId)
+
+        return coursesForUser.map { course ->
+            // ProjectionFactory ensures the SpEL expressions are evaluated against the 'course' object, to correctly populate points, maxPoints, etc. which are not part of course itself
+            projectionFactory.createProjection(CourseOverview::class.java, course)
+        }
     }
 
-    fun getCourses(): List<Course> {
-        return courseRepository.findAllByDeletedFalse()
-    }
 
     fun getCourseSummary(courseSlug: String): CourseSummary {
         return courseRepository.findCourseBySlug(courseSlug) ?: throw ResponseStatusException(

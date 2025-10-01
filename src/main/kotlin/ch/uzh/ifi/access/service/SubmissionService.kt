@@ -70,6 +70,7 @@ class SubmissionService(
         return task.course != null
     }
 
+    @CacheEvict(value = ["CourseService.getCoursesOverview"], key = "#submissionDTO.userId")
     fun createTaskSubmission(
         courseSlug: String,
         assignmentSlug: String,

@@ -11,6 +11,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.modelmapper.ModelMapper
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -59,10 +60,10 @@ class CourseLifecycle(
 
     fun createFromDirectory(coursePath: Path, course: Course): Course {
         return updateFromDirectory(course, coursePath)
-
     }
 
     @Transactional
+    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
         logger.debug { "Updating course ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
