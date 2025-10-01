@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.rest.core.config.Projection
 import org.springframework.security.access.prepost.PostFilter
+import org.springframework.data.repository.query.Param
 
 class UserPoints {
     var userId: String? = null
@@ -31,6 +32,21 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     // TODO: remove for public courses and handle in controller
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesByAndDeletedFalse(): List<CourseOverview>
+
+    @Query(
+        value = """
+       SELECT DISTINCT c.*
+        FROM course c
+        JOIN keycloak_role r ON r.name LIKE CONCAT(c.slug, '-%')
+        JOIN user_role_mapping urm ON urm.role_id = r.id
+        JOIN user_entity u ON u.id = urm.user_id
+        WHERE c.deleted = false
+        AND u.email = :userId;
+    """,
+        nativeQuery = true
+    )
+    fun findCoursesForUser(@Param("userId") userId: String): List<Course>
+
 
     fun findAllByDeletedFalse(): List<Course>
 
