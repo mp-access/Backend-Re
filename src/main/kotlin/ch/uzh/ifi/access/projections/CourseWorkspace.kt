@@ -10,5 +10,5 @@ interface CourseWorkspace : CourseOverview {
     val assignments: List<AssignmentWorkspace?>?
 
     @get:Value("#{@exampleService.hasVisibleExamples(target.slug)}")
-    val hasVisibleExamples: List<TaskOverview?>?
+    val hasVisibleExamples: Boolean
 }
