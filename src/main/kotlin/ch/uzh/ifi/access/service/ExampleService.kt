@@ -15,6 +15,10 @@ import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Cacheable
+import org.springframework.context.annotation.Scope
+import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -24,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 
 @Service
+@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class ExampleService(
     private val submissionService: SubmissionService,
     private val roleService: RoleService,
@@ -34,12 +39,31 @@ class ExampleService(
     private val submissionRepository: SubmissionRepository,
     private val courseRepository: CourseRepository,
     private val visitQueueService: VisitQueueService,
+    private val proxy: ExampleService,
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     val exampleSubmissionCount = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
 
     fun getExamples(courseSlug: String): List<TaskOverview> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
+    }
+
+    @Cacheable(value = ["ExampleService.studentHasVisibleExamples"], key="#courseSlug")
+    fun studentHasVisibleExamples(courseSlug: String):Boolean{
+        return getExamples(courseSlug).any{it.start != null}
+    }
+
+    @Cacheable(value = ["ExampleService.supervisorHasVisibleExamples"], key="#courseSlug")
+    fun supervisorHasVisibleExamples(courseSlug: String):Boolean{
+        return getExamples(courseSlug).isNotEmpty()
+    }
+
+    fun hasVisibleExamples(courseSlug: String):Boolean {
+        if(roleService.isSupervisor(courseSlug)){
+            return proxy.supervisorHasVisibleExamples(courseSlug)
+        }
+
+        return proxy.studentHasVisibleExamples(courseSlug)
     }
 
     fun getExample(courseSlug: String, exampleSlug: String, userId: String): TaskWorkspace {
@@ -61,6 +85,7 @@ class ExampleService(
             )
     }
 
+    @CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
     fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
@@ -412,6 +437,7 @@ class ExampleService(
     }
 
     @Transactional
+    @CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
     fun resetExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(

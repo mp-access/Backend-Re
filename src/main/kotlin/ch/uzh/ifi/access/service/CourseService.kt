@@ -323,6 +323,8 @@ class CourseService(
             CacheEvict(value = ["PointsService.getMaxPoints"], key = "#courseSlug"),
             CacheEvict(value = ["PointsService.calculateAssignmentMaxPoints"], allEntries = true),
             CacheEvict(value = ["CourseService.calculateCoursePoints"], allEntries = true),
+            CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug"),
+            CacheEvict(value = ["ExampleService.supervisorHasVisibleExamples"], key = "#courseSlug")
         ]
     )
     fun updateCourse(courseSlug: String): Course {
