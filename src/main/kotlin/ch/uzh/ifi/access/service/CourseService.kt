@@ -272,6 +272,7 @@ class CourseService(
         )
     }
 
+    @CacheEvict(value=["CourseService.getCoursesOverview"], allEntries = true)
     fun createCourse(course: CourseDTO): Course {
         return courseLifecycle.createFromRepository(course)
     }
@@ -336,6 +337,7 @@ class CourseService(
     }
 
     @Transactional
+    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
     fun deleteCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
         return courseLifecycle.delete(existingCourse)
