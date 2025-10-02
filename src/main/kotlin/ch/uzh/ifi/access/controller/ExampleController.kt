@@ -45,6 +45,15 @@ class ExampleController(
         return exampleService.getExamples(course)
     }
 
+    @GetMapping("/interactive")
+    @PreAuthorize("hasRole(#course)")
+    fun getInteractiveExampleSlug(
+        @PathVariable course: String,
+        authentication: Authentication
+    ): InteractiveExampleDTO {
+        return exampleService.getInteractiveExampleSlug(course)
+    }
+
     @GetMapping("/{example}/information")
     @PreAuthorize("hasRole(#course+'-assistant')")
     fun getGeneralInformation(

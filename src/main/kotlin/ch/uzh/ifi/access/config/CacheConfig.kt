@@ -35,6 +35,7 @@ class CacheConfig {
             "CourseService.getCoursesOverview",
             "ExampleService.studentHasVisibleExamples",
             "ExampleService.supervisorHasVisibleExamples",
+            "ExampleService.getInteractiveExampleSlug"
         )
     }
 }
