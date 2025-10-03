@@ -12,6 +12,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
@@ -260,7 +261,12 @@ class ExampleController(
 
     @DeleteMapping("/{example}/reset")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    @CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true)
+    @Caching(
+        evict = [
+            CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true),
+            CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
+        ]
+    )
     fun resetExample(
         @PathVariable course: String,
         @PathVariable example: String
