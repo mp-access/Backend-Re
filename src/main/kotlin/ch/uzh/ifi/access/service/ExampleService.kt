@@ -3,10 +3,7 @@ package ch.uzh.ifi.access.service
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.constants.Command
-import ch.uzh.ifi.access.model.dto.ExampleInformationDTO
-import ch.uzh.ifi.access.model.dto.PointDistributionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionDTO
-import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
+import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.TaskOverview
 import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.CourseRepository
@@ -17,6 +14,7 @@ import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
+import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.http.HttpStatus
@@ -46,6 +44,17 @@ class ExampleService(
 
     fun getExamples(courseSlug: String): List<TaskOverview> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
+    }
+
+    @Cacheable(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
+    fun getInteractiveExampleSlug(courseSlug: String):InteractiveExampleDTO{
+        val examples = getExamples(courseSlug)
+        val now = LocalDateTime.now()
+        val interactiveExampleSlug = examples
+            .firstOrNull { it.start?.isBefore(now) == true && it.end?.plusSeconds(gracePeriod)?.isAfter(now) == true }
+            ?.slug
+
+        return InteractiveExampleDTO(interactiveExampleSlug)
     }
 
     @Cacheable(value = ["ExampleService.studentHasVisibleExamples"], key="#courseSlug")
@@ -85,7 +94,12 @@ class ExampleService(
             )
     }
 
-    @CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
+    @Caching(
+        evict = [
+            CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug"),
+            CacheEvict(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
+        ]
+    )
     fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
@@ -146,6 +160,7 @@ class ExampleService(
         return example
     }
 
+    @CacheEvict(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
     fun terminateExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
