@@ -12,6 +12,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
@@ -43,6 +44,15 @@ class ExampleController(
         authentication: Authentication
     ): List<TaskOverview> {
         return exampleService.getExamples(course)
+    }
+
+    @GetMapping("/submissions-count")
+    @PreAuthorize("hasRole(#course+'-assistant')")
+    fun getSubmissionsCount(
+        @PathVariable course: String,
+        authentication: Authentication
+    ): ExampleSubmissionsCountDTO {
+        return exampleService.computeSubmissionsCount(course)
     }
 
     @GetMapping("/interactive")
@@ -101,6 +111,7 @@ class ExampleController(
 
     @PostMapping("/{example}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
+    @CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
     fun evaluateExampleSubmission(
         @PathVariable course: String,
         @PathVariable example: String,
@@ -250,7 +261,12 @@ class ExampleController(
 
     @DeleteMapping("/{example}/reset")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    @CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true)
+    @Caching(
+        evict = [
+            CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true),
+            CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
+        ]
+    )
     fun resetExample(
         @PathVariable course: String,
         @PathVariable example: String
