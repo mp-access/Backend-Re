@@ -12,8 +12,8 @@ import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
+import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
