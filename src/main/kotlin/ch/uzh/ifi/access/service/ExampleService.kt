@@ -47,7 +47,7 @@ class ExampleService(
     }
 
     @Cacheable(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
-    fun getInteractiveExampleSlug(courseSlug: String):InteractiveExampleDTO{
+    fun getInteractiveExampleSlug(courseSlug: String): InteractiveExampleDTO {
         val examples = getExamples(courseSlug)
         val now = LocalDateTime.now()
         val interactiveExampleSlug = examples
@@ -57,18 +57,18 @@ class ExampleService(
         return InteractiveExampleDTO(interactiveExampleSlug)
     }
 
-    @Cacheable(value = ["ExampleService.studentHasVisibleExamples"], key="#courseSlug")
-    fun studentHasVisibleExamples(courseSlug: String):Boolean{
-        return getExamples(courseSlug).any{it.start != null}
+    @Cacheable(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
+    fun studentHasVisibleExamples(courseSlug: String): Boolean {
+        return getExamples(courseSlug).any { it.start != null }
     }
 
-    @Cacheable(value = ["ExampleService.supervisorHasVisibleExamples"], key="#courseSlug")
-    fun supervisorHasVisibleExamples(courseSlug: String):Boolean{
+    @Cacheable(value = ["ExampleService.supervisorHasVisibleExamples"], key = "#courseSlug")
+    fun supervisorHasVisibleExamples(courseSlug: String): Boolean {
         return getExamples(courseSlug).isNotEmpty()
     }
 
-    fun hasVisibleExamples(courseSlug: String):Boolean {
-        if(roleService.isSupervisor(courseSlug)){
+    fun hasVisibleExamples(courseSlug: String): Boolean {
+        if (roleService.isSupervisor(courseSlug)) {
             return proxy.supervisorHasVisibleExamples(courseSlug)
         }
 
@@ -225,7 +225,7 @@ class ExampleService(
 
     @Cacheable(value = ["ExampleService.computeSubmissionsCount"], key = "#courseSlug")
     fun computeSubmissionsCount(courseSlug: String): ExampleSubmissionsCountDTO {
-        val res = exampleRepository.getSubmissionsCount(courseSlug)
+        val res = exampleRepository.getSubmissionsCount(courseSlug, gracePeriod)
 
         val submissionsCount: Map<String, Int> = res.associate { row ->
             val userId = row["user_id"] as String
