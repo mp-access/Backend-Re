@@ -54,3 +54,5 @@ logging:
     ch.uzh.ifi.access: debug
     org.flywaydb: debug
 
+caching:
+  eviction-rate: 15m
