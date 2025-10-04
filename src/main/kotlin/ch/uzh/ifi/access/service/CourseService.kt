@@ -19,6 +19,7 @@ import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
+import org.springframework.data.projection.ProjectionFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -26,7 +27,6 @@ import java.nio.file.Path
 import java.time.LocalDateTime
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import org.springframework.data.projection.ProjectionFactory
 
 // TODO: decide properly which parameters should be nullable
 @Service
@@ -126,7 +126,12 @@ class CourseService(
 
     @Cacheable("CourseService.getCoursesOverview", key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
-        val coursesForUser = courseRepository.findCoursesForUser(userId)
+        //val coursesForUser = courseRepository.findCoursesForUser(userId)
+        val candidates = roleService.getRegistrationIDCandidates(userId)
+        val coursesForStudent = courseRepository.findByRegisteredStudentsIn(candidates)
+        val coursesForAssistant = courseRepository.findByAssistantsIn(candidates)
+        val coursesForSupervisor = courseRepository.findBySupervisorsIn(candidates)
+        val coursesForUser = coursesForStudent + coursesForAssistant + coursesForSupervisor
 
         return coursesForUser.map { course ->
             // ProjectionFactory ensures the SpEL expressions are evaluated against the 'course' object, to correctly populate points, maxPoints, etc. which are not part of course itself
@@ -272,7 +277,7 @@ class CourseService(
         )
     }
 
-    @CacheEvict(value=["CourseService.getCoursesOverview"], allEntries = true)
+    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
     fun createCourse(course: CourseDTO): Course {
         return courseLifecycle.createFromRepository(course)
     }

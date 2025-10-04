@@ -7,9 +7,9 @@ import ch.uzh.ifi.access.projections.CourseWorkspace
 import ch.uzh.ifi.access.projections.MemberOverview
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import org.springframework.data.rest.core.config.Projection
 import org.springframework.security.access.prepost.PostFilter
-import org.springframework.data.repository.query.Param
 
 class UserPoints {
     var userId: String? = null
@@ -46,6 +46,10 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
         nativeQuery = true
     )
     fun findCoursesForUser(@Param("userId") userId: String): List<Course>
+
+    fun findByRegisteredStudentsIn(userIds: List<String>): Set<Course>
+    fun findByAssistantsIn(userIds: List<String>): Set<Course>
+    fun findBySupervisorsIn(userIds: List<String>): Set<Course>
 
 
     fun findAllByDeletedFalse(): List<Course>
