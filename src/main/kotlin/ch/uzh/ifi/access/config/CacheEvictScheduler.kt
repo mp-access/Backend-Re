@@ -20,7 +20,7 @@ class CacheEvictScheduler(private val cacheManager: CacheManager) {
     }
 
     @CacheEvict("VisitQueueService.getRecentlyActiveCount", allEntries = true)
-    @Scheduled(fixedRateString = "1m")
+    @Scheduled(fixedRateString = "15s")
     fun evictRecentlyActiveCountCache() {
         logger.info{"Scheduled cache eviction of VisitQueueService.getRecentlyActiveCount" }
     }
