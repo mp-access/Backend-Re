@@ -10,21 +10,21 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.stereotype.Component
 
-
 @Configuration
 @EnableCaching
 class CacheConfig {
-    @Bean
-    fun cacheManager(): CacheManager {
-        return ConcurrentMapCacheManager(
-            "getStudent",
-            "studentWithPoints",
+    companion object {
+        val PERMANENT_CACHES = listOf(
             "RoleService.getRegistrationIDCandidates",
             "RoleService.findUserByAllCriteria",
             "RoleService.getUserResourceById",
-            "VisitQueueService.getRecentlyActiveCount",
             "RoleService.getUserId",
-            "RoleService.isSupervisor",
+            "RoleService.isSupervisor"
+        )
+
+        val TEMPORARY_CACHES = listOf(
+            "getStudent",
+            "studentWithPoints",
             "PointsService.calculateTaskPoints",
             "PointsService.calculateAssignmentPoints",
             "PointsService.getMaxPoints",
@@ -32,11 +32,22 @@ class CacheConfig {
             "PointsService.calculateAssignmentMaxPoints",
             "CourseService.getStudents",
             "CourseService.calculateCoursePoints",
-            "ExampleService.computeSubmissionsCount",
             "CourseService.getCoursesOverview",
             "ExampleService.studentHasVisibleExamples",
             "ExampleService.supervisorHasVisibleExamples",
-            "ExampleService.getInteractiveExampleSlug"
+            "ExampleService.computeSubmissionsCount"
+        )
+
+        val INDIVIDUAL_EVICTION_CACHES = listOf(
+            "ExampleService.getInteractiveExampleSlug",
+            "VisitQueueService.getRecentlyActiveCount"
+        )
+    }
+
+    @Bean
+    fun cacheManager(): CacheManager {
+        return ConcurrentMapCacheManager(
+            *(PERMANENT_CACHES + TEMPORARY_CACHES + INDIVIDUAL_EVICTION_CACHES).toTypedArray()
         )
     }
 }

@@ -1,15 +1,12 @@
 package ch.uzh.ifi.access.service
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
-import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.time.Duration
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
 @Service
 class VisitQueueService {
@@ -57,10 +54,5 @@ class VisitQueueService {
 
             return seen.size
         }
-    }
-
-    @CacheEvict("VisitQueueService.getRecentlyActiveCount", allEntries = true)
-    @Scheduled(fixedRate = 1, timeUnit = TimeUnit.MINUTES)
-    fun evictOnlineCount() {
     }
 }

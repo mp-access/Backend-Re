@@ -42,10 +42,10 @@ llm:
     url: ${CLUSTER_URL:http://localhost:4000}
 
 examples:
-  grace-period: 5
+  grace-period: ${GRACE_PERIOD:5}
   example-queue:
-    cpu-threshold: 0.70
-    max-concurrent-submissions: 20
+    cpu-threshold: ${CPU_THRESHOLD:0.70}
+    max-concurrent-submissions: ${MAX_CONCURRENT_SUBMISSIONS:20}
 
 logging:
   level:
@@ -55,4 +55,4 @@ logging:
     org.flywaydb: debug
 
 caching:
-  eviction-rate: 15m
+  eviction-rate: ${CACHE_EVICTION_RATE:15m}
