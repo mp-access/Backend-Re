@@ -33,24 +33,17 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesByAndDeletedFalse(): List<CourseOverview>
 
-    @Query(
-        value = """
-       SELECT DISTINCT c.*
-        FROM course c
-        JOIN keycloak_role r ON r.name LIKE CONCAT(c.slug, '-%')
-        JOIN user_role_mapping urm ON urm.role_id = r.id
-        JOIN user_entity u ON u.id = urm.user_id
-        WHERE c.deleted = false
-        AND u.email = :userId;
-    """,
-        nativeQuery = true
+    @Query("""
+    SELECT DISTINCT c 
+    FROM Course c 
+    WHERE c.deleted = false 
+    AND (
+        EXISTS (SELECT 1 FROM c.registeredStudents rs WHERE rs IN :userIds)
+        OR EXISTS (SELECT 1 FROM c.assistants a WHERE a IN :userIds)
+        OR EXISTS (SELECT 1 FROM c.supervisors s WHERE s IN :userIds)
     )
-    fun findCoursesForUser(@Param("userId") userId: String): List<Course>
-
-    fun findByRegisteredStudentsIn(userIds: List<String>): Set<Course>
-    fun findByAssistantsIn(userIds: List<String>): Set<Course>
-    fun findBySupervisorsIn(userIds: List<String>): Set<Course>
-
+    """)
+    fun findCoursesForUser(@Param("userIds") userIds: List<String>): Set<CourseOverview>
 
     fun findAllByDeletedFalse(): List<Course>
 

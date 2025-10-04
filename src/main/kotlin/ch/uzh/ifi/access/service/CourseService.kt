@@ -19,7 +19,6 @@ import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
-import org.springframework.data.projection.ProjectionFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -41,8 +40,7 @@ class CourseService(
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
-    private val exampleQueueService: ExampleQueueService,
-    private val projectionFactory: ProjectionFactory
+    private val exampleQueueService: ExampleQueueService
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -126,17 +124,8 @@ class CourseService(
 
     @Cacheable("CourseService.getCoursesOverview", key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
-        //val coursesForUser = courseRepository.findCoursesForUser(userId)
         val candidates = roleService.getRegistrationIDCandidates(userId)
-        val coursesForStudent = courseRepository.findByRegisteredStudentsIn(candidates)
-        val coursesForAssistant = courseRepository.findByAssistantsIn(candidates)
-        val coursesForSupervisor = courseRepository.findBySupervisorsIn(candidates)
-        val coursesForUser = coursesForStudent + coursesForAssistant + coursesForSupervisor
-
-        return coursesForUser.map { course ->
-            // ProjectionFactory ensures the SpEL expressions are evaluated against the 'course' object, to correctly populate points, maxPoints, etc. which are not part of course itself
-            projectionFactory.createProjection(CourseOverview::class.java, course)
-        }
+        return courseRepository.findCoursesForUser(candidates).toList()
     }
 
 
