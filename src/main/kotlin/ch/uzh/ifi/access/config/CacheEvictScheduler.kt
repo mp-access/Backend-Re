@@ -1,33 +1,35 @@
 package ch.uzh.ifi.access.config
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
-class CacheEvictScheduler(private val cacheManager: CacheManager,  @Value("\${caching.eviction-rate}") private val evictionRate: String) {
+class CacheEvictScheduler(private val cacheManager: CacheManager) {
     private val logger = KotlinLogging.logger {}
-    @Scheduled(fixedRateString = "15s", )
+
     @CacheEvict(
         value = ["ExampleService.getInteractiveExampleSlug"],
         allEntries = true
     )
+    @Scheduled(fixedRateString = "15s", )
     fun evictInteractiveExampleSlugCache() {
         logger.info{"Scheduled cache eviction of ExampleService.getInteractiveExampleSlug" }
     }
 
-    @Scheduled(fixedRateString = "\${caching.eviction-rate}")
-    fun evictAllCaches() {
-        logger.info { "Starting global cache eviction..." }
-
-        cacheManager.cacheNames.forEach { cacheName ->
-            cacheManager.getCache(cacheName)?.clear()
-        }
-
-        logger.info{"Finished global cache eviction."}
+    @CacheEvict("VisitQueueService.getRecentlyActiveCount", allEntries = true)
+    @Scheduled(fixedRateString = "15s")
+    fun evictRecentlyActiveCountCache() {
+        logger.info{"Scheduled cache eviction of VisitQueueService.getRecentlyActiveCount" }
     }
 
+    @Scheduled(fixedRateString = "\${caching.eviction-rate}")
+    fun evictTemporaryCaches() {
+        CacheConfig.TEMPORARY_CACHES.forEach { cacheName ->
+            cacheManager.getCache(cacheName)?.clear()
+        }
+        logger.info { "Finished periodic cache eviction (${CacheConfig.TEMPORARY_CACHES.size} caches cleared)." }
+    }
 }
