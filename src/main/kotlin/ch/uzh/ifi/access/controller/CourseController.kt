@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.cache.annotation.CacheEvict
+import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -227,7 +228,10 @@ class CourseController(
     }
 
     @PostMapping("/{course}/participants")
-    @CacheEvict(value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"], key = "#course")
+    @Caching(evict = [
+        CacheEvict(value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"], key = "#course"),
+        CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+    ])
     fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
         return updateRoles(course, registrationIDs, Role.STUDENT)
     }
