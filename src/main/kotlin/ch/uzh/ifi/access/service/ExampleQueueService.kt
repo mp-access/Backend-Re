@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service
 import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.*
+import java.util.concurrent.atomic.AtomicInteger
 
 @Service
 class ExampleQueueService (
@@ -26,6 +27,7 @@ class ExampleQueueService (
     private val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrentSubmissions)
     private lateinit var processorThread: Thread
     private val runningSubmissionsPerExample = ConcurrentHashMap<Pair<String, String>, MutableList<SubmissionDTO>>()
+    val exampleSubmissionsProcessed = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submission: SubmissionDTO, submissionReceivedAt: LocalDateTime) {
         val submissionWithContext = SubmissionWithContext(courseSlug, exampleSlug, submission, submissionReceivedAt, 0)
@@ -69,11 +71,13 @@ class ExampleQueueService (
                     runningSubmissionsPerExample
                         .computeIfAbsent(exampleKey) { Collections.synchronizedList(mutableListOf()) }
                         .add(submissionWithContext.submissionDTO)
+                    val courseSlug = submissionWithContext.courseSlug
+                    val exampleSlug = submissionWithContext.exampleSlug
                     executor.submit {
                         try {
                             val newSubmission = exampleService.processSubmission(
-                                submissionWithContext.courseSlug,
-                                submissionWithContext.exampleSlug,
+                                courseSlug,
+                                exampleSlug,
                                 submissionWithContext.submissionDTO,
                                 submissionWithContext.submissionReceivedAt
                             )
@@ -81,13 +85,26 @@ class ExampleQueueService (
                             val concatenatedSubmissionContent = newSubmission.files
                                 .filter { submissionFile -> submissionFile.taskFile?.editable == true }
                                 .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-                            val example = newSubmission.evaluation!!.task!!
                             embeddingQueueService.addToQueue(
-                                example.course!!.slug!!,
-                                example.slug!!,
+                                courseSlug,
+                                exampleSlug,
                                 newSubmission.id!!,
                                 concatenatedSubmissionContent
                             )
+
+                            increaseSubmissionsProcessedCount(courseSlug, exampleSlug)
+
+                            if (getSubmissionsProcessedCount(courseSlug, exampleSlug) == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)) {
+                                val submissions = exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+                                val submissionsWithoutEmbeddings = submissions.filter { it.embedding.isEmpty() }
+                                if (submissionsWithoutEmbeddings.isNotEmpty()) {
+                                    embeddingQueueService.reAddSubmissionsToQueue(
+                                        courseSlug,
+                                        exampleSlug,
+                                        submissionsWithoutEmbeddings
+                                    )
+                                }
+                            }
                         } catch (e: Exception) {
                             logger.error(e) {
                                 "Error processing submission for ${submissionWithContext.submissionDTO.userId}"
@@ -135,14 +152,7 @@ class ExampleQueueService (
     }
 
     fun areInteractiveExampleSubmissionsFullyProcessed(courseSlug: String, exampleSlug: String): Boolean {
-        return !hasWaitingSubmissions(courseSlug, exampleSlug) &&
-                !runningSubmissionsPerExample.containsKey(Pair(courseSlug, exampleSlug))
-    }
-
-    private fun hasWaitingSubmissions(courseSlug: String, exampleSlug: String): Boolean {
-        return submissionQueue.any {
-            it.courseSlug == courseSlug && it.exampleSlug == exampleSlug
-        }
+        return getSubmissionsProcessedCount(courseSlug, exampleSlug) == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)
     }
 
     fun isSubmissionInTheQueue(courseSlug: String, exampleSlug: String, userId: String?): Boolean {
@@ -195,6 +205,22 @@ class ExampleQueueService (
             }
         }
         return submissionDTO
+    }
+
+    fun increaseSubmissionsProcessedCount(courseSlug: String, exampleSlug: String) {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        val atomicSubmissionCount = exampleSubmissionsProcessed.computeIfAbsent(exampleKey) { AtomicInteger(0) }
+        atomicSubmissionCount.incrementAndGet()
+    }
+
+    fun getSubmissionsProcessedCount(courseSlug: String, exampleSlug: String) : Int {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        return exampleSubmissionsProcessed[exampleKey]?.get() ?: 0;
+    }
+
+    fun resetProcessedSubmissionsCount(courseSlug: String, exampleSlug: String) {
+        val exampleKey = Pair(courseSlug, exampleSlug)
+        exampleSubmissionsProcessed.remove(exampleKey)
     }
 
     @PreDestroy
