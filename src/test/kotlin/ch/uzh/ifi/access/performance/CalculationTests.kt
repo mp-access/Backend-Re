@@ -91,6 +91,4 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(content().contentType("application/json"))
             .andExpect(jsonPath("$.[?(@.email =~ /supervisor.*?/i)].email", `is`(not(empty<Any>()))))
     }
-
-
 }

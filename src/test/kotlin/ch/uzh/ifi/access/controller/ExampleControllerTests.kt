@@ -218,7 +218,7 @@ class ExampleControllerTests(
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.participantsOnline", greaterThanOrEqualTo(0)))
             .andExpect(jsonPath("$.totalParticipants").exists())
-            .andExpect(jsonPath("$.numberOfStudentsWhoSubmitted", greaterThanOrEqualTo(0)))
+            .andExpect(jsonPath("$.numberOfReceivedSubmissions", greaterThanOrEqualTo(0)))
             .andExpect(jsonPath("$.passRatePerTestCase").exists())
             .andExpect(jsonPath("$.avgPoints").exists())
     }

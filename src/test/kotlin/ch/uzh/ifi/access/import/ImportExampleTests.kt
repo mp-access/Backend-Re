@@ -2,7 +2,7 @@ package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.Task
-import ch.uzh.ifi.access.projections.TaskWorkspace
+import ch.uzh.ifi.access.projections.TaskOverview
 import ch.uzh.ifi.access.repository.ExampleRepository
 import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.MatcherAssert
@@ -27,7 +27,7 @@ class ImportExampleTests(
         return exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
     }
 
-    fun getExamples(courseSlug: String = "access-mock-course-lecture-examples"): List<TaskWorkspace> {
+    fun getExamples(courseSlug: String = "access-mock-course-lecture-examples"): List<TaskOverview> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
