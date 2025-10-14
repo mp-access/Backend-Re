@@ -325,7 +325,7 @@ class ExampleService(
         if (example.start == null || example.end == null)
             return emptyList()
 
-        val studentIds = students.map { it.registrationId }
+        val studentIds = students.filter { it.registrationId != null } .map { student -> roleService.getUserId(student.registrationId!!) }
 
         val submissions = submissionRepository.findInteractiveExampleSubmissions(
             example.id,
