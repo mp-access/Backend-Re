@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.EmbeddingWithContext
+import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.dto.EmbeddingRequestBodyDTO
 import ch.uzh.ifi.access.model.dto.EmbeddingResponseBodyDTO
 import ch.uzh.ifi.access.repository.SubmissionRepository
@@ -39,20 +40,17 @@ class EmbeddingQueueService(
         embeddingQueue.offer(embeddingWithContext)
     }
 
-    fun reAddSubmissionsToQueue(courseSlug: String, exampleSlug: String, submissionIds: List<Long>) {
-        submissionIds.forEach { submissionId ->
-            val submission = submissionRepository.findById(submissionId).orElse(null)
-            if (submission != null) {
-                val submissionContent = submission.files
-                    .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                    .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-                val embeddingWithContext = EmbeddingWithContext(courseSlug,
-                    exampleSlug,
-                    EmbeddingRequestBodyDTO(submissionId, submissionContent),
-                    maxRetries,
-                    true)
-                embeddingQueue.offer(embeddingWithContext)
-            }
+    fun reAddSubmissionsToQueue(courseSlug: String, exampleSlug: String, submissions: List<Submission>) {
+        submissions.forEach { submission ->
+            val submissionContent = submission.files
+                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+            val embeddingWithContext = EmbeddingWithContext(courseSlug,
+                exampleSlug,
+                EmbeddingRequestBodyDTO(submission.id!!, submissionContent),
+                maxRetries,
+                true)
+            embeddingQueue.offer(embeddingWithContext)
         }
     }
 
@@ -123,26 +121,13 @@ class EmbeddingQueueService(
                     }
                     logger.info { "Successfully calculated and saved embeddings for a batch of ${batchForRequest.size} submissions." }
 
-                    val courseSlug = submissions[0].courseSlug
-                    val exampleSlug = submissions[0].exampleSlug
-                    if (exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug).size == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)) {
+                    if (submissions.any {it.forceComputation}) {
                         emitterService.sendPayload(
                             EmitterType.SUPERVISOR,
                             submissions[0].courseSlug,
                             "example-information",
                             exampleService.computeExampleInformation(submissions[0].courseSlug, submissions[0].exampleSlug),
                         )
-                        if (!submissions.any {it.forceComputation}) {
-                            val submissionsWithoutEmbeddings =
-                                exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
-                                    .filter { it.embedding.isEmpty() }
-                            if (submissionsWithoutEmbeddings.isNotEmpty()) {
-                                reAddSubmissionsToQueue(
-                                    courseSlug,
-                                    exampleSlug,
-                                    submissionsWithoutEmbeddings.map { it.id!! })
-                            }
-                        }
                     }
                 },
                 { error ->
