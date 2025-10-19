@@ -56,6 +56,6 @@ class CacheConfig {
 class CacheInitListener(val cacheInitService: CacheInitService) : ApplicationListener<ApplicationReadyEvent> {
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         cacheInitService.initCache()
-        //cacheInitService.renameIDs()
+        cacheInitService.renameIDs()
     }
 }
