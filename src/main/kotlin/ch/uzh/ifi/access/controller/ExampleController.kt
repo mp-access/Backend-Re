@@ -152,11 +152,11 @@ class ExampleController(
         @PathVariable example: String,
         @PathVariable user: String
     ): List<SubmissionDTO> {
-        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, user)
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, roleService.getUserId(user)!!)
         if (pendingSubmission != null) {
             return listOf(pendingSubmission)
         }
-        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, user)
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, roleService.getUserId(user)!!)
         if (runningSubmission != null) {
             return listOf(runningSubmission)
         }
