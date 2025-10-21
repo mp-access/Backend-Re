@@ -38,7 +38,8 @@ class SubmissionService(
         } else {
             task.assignment!!.course!!.slug
         }
-        val userRoles = roleService.getUserRoles(listOf(userId))
+        val usernames = roleService.getRegistrationIDCandidates(userId)
+        val userRoles = roleService.getUserRoles(usernames)
         val isAdmin = roleService.isAdmin(userRoles, courseSlug!!)
 
         val submissions = submissionRepository.findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId, userId)
