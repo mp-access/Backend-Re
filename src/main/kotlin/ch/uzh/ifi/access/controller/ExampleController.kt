@@ -118,8 +118,10 @@ class ExampleController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
-        submission.userId = roleService.getUserId(authentication.name)
-        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val userId = roleService.getUserId(authentication.name)!!
+        submission.userId = userId
+        val usernames = roleService.getRegistrationIDCandidates(userId)
+        val userRoles = roleService.getUserRoles(usernames)
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
         if (exampleService.isSubmittedDuringInteractivePeriod(
@@ -170,7 +172,7 @@ class ExampleController(
         @PathVariable course: String,
         @PathVariable example: String,
         @RequestBody body: ExampleDurationDTO,
-    ):ExamplePublicationDTO {
+    ): ExamplePublicationDTO {
         val activeExample = exampleService.getExamples(course).firstOrNull {
             it.status == TaskStatus.Interactive
         }
@@ -188,7 +190,10 @@ class ExampleController(
         val end = updatedExample.end
 
         if (start == null || end == null) {
-            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Published example is missing required start or end time.")
+            throw ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Published example is missing required start or end time."
+            )
         }
 
         emitterService.sendPayload(EmitterType.STUDENT, course, "redirect", "/courses/$course/examples/$example")
