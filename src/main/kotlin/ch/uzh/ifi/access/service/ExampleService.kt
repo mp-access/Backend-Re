@@ -75,13 +75,13 @@ class ExampleService(
         return proxy.studentHasVisibleExamples(courseSlug)
     }
 
-    fun getExample(courseSlug: String, exampleSlug: String, userId: String): TaskWorkspace {
+    fun getExample(courseSlug: String, exampleSlug: String, user: String): TaskWorkspace {
         val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug)
             ?: throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
                 "No example found with the Slug $exampleSlug"
             )
-
+        val userId = roleService.getUserId(user)
         workspace.setUserId(userId)
         return workspace
     }
@@ -193,7 +193,8 @@ class ExampleService(
     ): Submission {
         val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
 
-        val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
+        val usernames = roleService.getRegistrationIDCandidates(submission.userId!!)
+        val userRoles = roleService.getUserRoles(usernames)
         val isAdmin = roleService.isAdmin(userRoles, courseSlug)
 
         if (newSubmission.command == Command.GRADE && !isAdmin) {
@@ -274,7 +275,8 @@ class ExampleService(
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
         // If the user is admin, don't check
-        val userRoles = roleService.getUserRoles(listOf(submissionDTO.userId!!))
+        val usernames = roleService.getRegistrationIDCandidates(submissionDTO.userId!!)
+        val userRoles = roleService.getUserRoles(usernames)
         val isAdmin = roleService.isAdmin(userRoles, courseSlug)
 
         if (!isAdmin) {
