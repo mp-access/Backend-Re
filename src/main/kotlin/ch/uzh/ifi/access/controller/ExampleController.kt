@@ -118,7 +118,7 @@ class ExampleController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
-        submission.userId = authentication.name
+        submission.userId = roleService.getUserId(authentication.name)
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
