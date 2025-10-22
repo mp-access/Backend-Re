@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.CategorizationDTO
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import org.apache.commons.math3.ml.distance.EuclideanDistance
 import org.springframework.stereotype.Service
 import smile.clustering.SpectralClustering
@@ -11,7 +12,8 @@ import kotlin.random.Random
 class ClusteringService(
     private val embeddingQueueService: EmbeddingQueueService,
     private val exampleService: ExampleService,
-    private val exampleQueueService: ExampleQueueService
+    private val exampleQueueService: ExampleQueueService,
+    private val submissionRepository: SubmissionRepository
 ) {
     fun performSpectralClustering(
         courseSlug: String,
@@ -25,7 +27,7 @@ class ClusteringService(
             && exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(courseSlug, exampleSlug)
             && embeddingQueueService.getRunningSubmissions(courseSlug, exampleSlug).isEmpty())
         {
-            embeddingQueueService.reAddSubmissionsToQueue(courseSlug, exampleSlug, submissionsWithoutEmbeddings.map { it.key })
+            embeddingQueueService.reAddSubmissionsToQueue(courseSlug, exampleSlug, submissionRepository.findByIdInList(submissionsWithoutEmbeddings.map { it.key }))
         }
         require(submissionsWithEmbeddings.size >= numClusters) { "For categorization to work, at least $numClusters submissions with embeddings are required. The calculation of embeddings is currently retried. Try again in a minute." }
         val orderedEmbeddingsMap = submissionsWithEmbeddings.sortedBy { it.key }
