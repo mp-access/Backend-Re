@@ -29,7 +29,6 @@ interface SubmissionRepository : JpaRepository<Submission?, Long?> {
         SELECT s FROM Submission s
         JOIN FETCH s.evaluation e
         WHERE s.evaluation.task.id = :taskId
-          AND s.userId IN :userIds
           AND s.command = :command
           AND s.createdAt >= :exampleStart
           AND s.createdAt <= :exampleEnd
@@ -37,7 +36,6 @@ interface SubmissionRepository : JpaRepository<Submission?, Long?> {
     )
     fun findInteractiveExampleSubmissions(
         @Param("taskId") taskId: Long?,
-        @Param("userIds") userIds: List<String?>,
         @Param("command") command: Command,
         @Param("exampleStart") exampleStart: LocalDateTime,
         @Param("exampleEnd") exampleEnd: LocalDateTime
