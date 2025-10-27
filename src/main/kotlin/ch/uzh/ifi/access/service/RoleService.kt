@@ -15,6 +15,7 @@ import org.keycloak.representations.idm.UserRepresentation
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
+import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.security.core.context.SecurityContextHolder
@@ -196,6 +197,7 @@ class RoleService(
     private val semaphore = Semaphore(1)
 
     @Transactional
+    @Cacheable("RoleService.getUserRoles", key = "T(java.lang.String).join(',', #usernames)")
     fun getUserRoles(usernames: List<String>): List<String> {
         return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
             val slug = course.slug
@@ -249,7 +251,12 @@ class RoleService(
         }
     }
 
-    @CacheEvict("RoleService.isSupervisor", allEntries = true)
+    @Caching(
+        evict = [
+            CacheEvict("RoleService.isSupervisor", allEntries = true),
+            CacheEvict("RoleService.getUserRoles", allEntries = true)
+        ]
+    )
     fun updateRoleUsers(course: Course, toRemove: List<String>, toAdd: List<String>, role: Role) {
         val roleName = role.withCourse(course.slug)
         val realmRoleRepresentation = getRoleByName(roleName).toRepresentation()
