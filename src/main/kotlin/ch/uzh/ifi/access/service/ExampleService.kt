@@ -322,16 +322,13 @@ class ExampleService(
 
     fun getInteractiveExampleSubmissions(courseSlug: String, exampleSlug: String): List<Submission> {
         val example = getExampleBySlug(courseSlug, exampleSlug)
-        val students = courseService.getStudents(courseSlug)
 
         if (example.start == null || example.end == null)
             return emptyList()
 
-        val studentIds = students.filter { it.registrationId != null } .map { student -> roleService.getUserId(student.registrationId!!) }
-
+        // Note: For performance reasons, we decided to not check anymore if the interactive example submissions come from students.
         val submissions = submissionRepository.findInteractiveExampleSubmissions(
             example.id,
-            studentIds,
             Command.GRADE,
             example.start!!,
             example.end!!.plusSeconds(gracePeriod)
