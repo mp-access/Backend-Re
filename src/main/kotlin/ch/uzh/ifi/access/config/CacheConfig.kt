@@ -19,7 +19,8 @@ class CacheConfig {
             "RoleService.findUserByAllCriteria",
             "RoleService.getUserResourceById",
             "RoleService.getUserId",
-            "RoleService.isSupervisor"
+            "RoleService.isSupervisor",
+            "RoleService.getUserRoles"
         )
 
         val TEMPORARY_CACHES = listOf(
