@@ -340,6 +340,7 @@ class CourseService(
     }
 
     @Transactional
+    @CacheEvict("RoleService.getUserRoles", allEntries = true)
     fun updateCourseRegistration(
         course: Course,
         registrationIDs: List<String>,
