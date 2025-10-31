@@ -118,7 +118,7 @@ class ExampleController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
-        submission.userId = authentication.name
+        submission.userId = roleService.getUserId(authentication.name)
         val userRoles = roleService.getUserRoles(listOf(submission.userId!!))
         val isAdmin = roleService.isAdmin(userRoles, course)
         val submissionReceivedAt = LocalDateTime.now()
@@ -152,11 +152,11 @@ class ExampleController(
         @PathVariable example: String,
         @PathVariable user: String
     ): List<SubmissionDTO> {
-        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, user)
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, roleService.getUserId(user)!!)
         if (pendingSubmission != null) {
             return listOf(pendingSubmission)
         }
-        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, user)
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, roleService.getUserId(user)!!)
         if (runningSubmission != null) {
             return listOf(runningSubmission)
         }
@@ -170,27 +170,36 @@ class ExampleController(
         @PathVariable course: String,
         @PathVariable example: String,
         @RequestBody body: ExampleDurationDTO,
-    ) {
+    ):ExamplePublicationDTO {
         val activeExample = exampleService.getExamples(course).firstOrNull {
             it.status == TaskStatus.Interactive
         }
 
         if (activeExample != null) {
             throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
+                HttpStatus.CONFLICT,
                 "An interactive example already exists."
             )
         }
 
         val updatedExample = exampleService.publishExampleBySlug(course, example, body.duration)
 
+        val start = updatedExample.start
+        val end = updatedExample.end
+
+        if (start == null || end == null) {
+            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Published example is missing required start or end time.")
+        }
+
         emitterService.sendPayload(EmitterType.STUDENT, course, "redirect", "/courses/$course/examples/$example")
         emitterService.sendPayload(
             EmitterType.EVERYONE,
             course,
             "timer-update",
-            "${updatedExample.start}/${updatedExample.end}"
+            "${start}/${end}"
         )
+
+        return ExamplePublicationDTO(start, end)
     }
 
     // Invoked by the teacher when want to extend the time of an active example by a certain amount of seconds

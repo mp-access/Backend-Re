@@ -69,6 +69,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                 } catch (e: Exception) {
+                    it.value.complete()
                     emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.remove(it.key)
                 }
             }
@@ -79,6 +80,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                 } catch (e: Exception) {
+                    it.value.complete()
                     emitters[EmitterType.STUDENT]?.get(courseSlug)?.remove(it.key)
                 }
             }
