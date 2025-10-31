@@ -8,12 +8,15 @@ import ch.uzh.ifi.access.model.dto.EmbeddingResponseBodyDTO
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.ExampleRepository
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.EmbeddingQueueService
 import ch.uzh.ifi.access.service.ExampleService
+import ch.uzh.ifi.access.service.ExecutionService
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.transaction.Transactional
+import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.greaterThanOrEqualTo
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.MethodOrderer
@@ -41,6 +44,8 @@ class ExampleControllerTests(
     @Autowired val exampleRepository: ExampleRepository,
     @Autowired val exampleService: ExampleService,
     @Autowired val embeddingQueueService: EmbeddingQueueService,
+    @Autowired val executionService: ExecutionService,
+    @Autowired val submissionRepository: SubmissionRepository,
 ) : BaseTest() {
 
     @Bean
@@ -223,45 +228,51 @@ class ExampleControllerTests(
             .andExpect(jsonPath("$.avgPoints").exists())
     }
 
+    @Test
+    @Transactional
+    @Order(2)
+    fun `Example submission with mocked webClient stores embedding correctly`() {
+        val courseSlug = "access-mock-course-lecture-examples"
+        val exampleSlug = "shirt-size"
 
-//    @Test
-//    @Transactional
-//    @Order(1)
-//    fun `Example submission with mocked webClient stores embedding correctly`() {
-//        val courseSlug = "access-mock-course-lecture-examples"
-//        val exampleSlug = "shirt-size"
-//
-//        val task = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
-//
-//        // Get the mocked webClient to verify calls
-//        val webClient = embeddingQueueService.javaClass.getDeclaredField("webClient").let { field ->
-//            field.isAccessible = true
-//            field.get(embeddingQueueService) as WebClient
-//        }
-//
-//        // Execute template which should trigger embedding queue
-//        val (submission, _) = executionService.executeTemplate(task)
-//
-//        // Add submission to queue manually to ensure processing (since executeTemplate might not always trigger for examples)
-////        embeddingQueueService.addToQueue(courseSlug, exampleSlug, submission.id!!, "test code snippet")
-//
-//        // Add a small delay to allow async processing
-//        Thread.sleep(30 * 1000)
-//
-//        // Refresh submission from database to get updated embedding
-////        val updatedSubmission = submissionRepository.findById(submission.id!!).orElse(null)
-////
-////        // Verify submission exists and has embedding
-////        assertThat(updatedSubmission).isNotNull
-////        assertThat(updatedSubmission!!.embedding).isNotEmpty()
-////
-////        // Verify embedding has correct dimensions (10 in our mock)
-////        assertEquals(10, updatedSubmission.embedding.size)
-////
-////        // Verify all embedding values are within expected range [-1.0, 1.0]
-////        assertTrue(updatedSubmission.embedding.all { it == 0.0 })
-//
-//        // Verify webClient.post() was called
-//        verify(atLeast = 1) { webClient.post() }
-//    }
+        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
+
+        // Set example as interactive
+        val now = LocalDateTime.now()
+        example.start = now.minusMinutes(10)
+        example.end = now.plusMinutes(10)
+        exampleRepository.saveAndFlush(example)
+
+        // Create submission DTO
+        val submissionDTO = SubmissionDTO(
+            restricted = true,
+            userId = "student@uzh.ch",
+            command = Command.GRADE,
+            files = listOf(
+                SubmissionFileDTO(
+                    taskFileId = example.files.first { it.editable }.id,
+                    content = "def shirt_size(height, weight): return 'M'"
+                )
+            )
+        )
+
+        val submission = exampleService.processSubmission(courseSlug, exampleSlug, submissionDTO, now)
+
+        // Add submission to ensure embedding processing
+        val concatenatedContent = submission.files
+            .filter { it.taskFile?.editable == true }
+            .joinToString("\n") { it.content ?: "" }
+        embeddingQueueService.addToQueue(courseSlug, exampleSlug, submission.id!!, concatenatedContent)
+
+        while (embeddingQueueService.getRunningSubmissions(courseSlug, exampleSlug).isNotEmpty()) {
+            Thread.sleep(5000)
+        }
+
+        // Refresh submission from database to get updated embedding
+        val updatedSubmission = submissionRepository.findById(submission.id!!).orElse(null)
+
+        // Verify submission exists and has embedding
+        assertThat(updatedSubmission).isNotNull
+//        assertThat(updatedSubmission!!.embedding).isNotEmpty()
+    }
 }

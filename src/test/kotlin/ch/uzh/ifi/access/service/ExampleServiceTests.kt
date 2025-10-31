@@ -11,12 +11,9 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.transaction.Transactional
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Order
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
@@ -48,6 +45,51 @@ class ExampleServiceTests(
     )
     @Transactional
     @Order(0)
+    fun `Submission blocked if example not published`() {
+        // Get an example and set it as past due
+        val example = exampleRepository.getByCourse_SlugAndSlug(
+            "access-mock-course-lecture-examples",
+            "power-function"
+        )!!
+
+        example.start = null
+        example.end = null
+        exampleRepository.saveAndFlush(example)
+
+        // Create a new submission DTO
+        val submissionDTO = SubmissionDTO(
+            restricted = true,
+            userId = "student@uzh.ch",
+            command = Command.GRADE,
+            files = listOf(
+                SubmissionFileDTO(
+                    taskFileId = example.files.first { it.editable }.id,
+                    content = "def power(x, n): return x ** n"
+                )
+            )
+        )
+
+        // Try to submit again - should be blocked due to 2-hour wait period
+        val exception = assertThrows(ResponseStatusException::class.java) {
+            exampleService.createExampleSubmission(
+                "access-mock-course-lecture-examples",
+                "power-function",
+                submissionDTO,
+                LocalDateTime.now()
+            )
+        }
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.statusCode)
+        assertThat(exception.reason).contains("not published yet")
+    }
+
+    @Test
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-lecture-examples-student", "access-mock-course-lecture-examples"]
+    )
+    @Transactional
+    @Order(1)
     fun `Submission blocked for 2 hours after previous submission`() {
         // Get an example and set it as past due
         val example = exampleRepository.getByCourse_SlugAndSlug(
@@ -96,8 +138,51 @@ class ExampleServiceTests(
     }
 
     @Test
+    @AccessUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-lecture-examples-supervisor", "access-mock-course-lecture-examples"]
+    )
     @Transactional
-    @Order(1)
+    @Order(2)
+    fun `Submission successful for supervisor under any circumstance`() {
+        // Get an example and set it as past due
+        val example = exampleRepository.getByCourse_SlugAndSlug(
+            "access-mock-course-lecture-examples",
+            "power-function"
+        )!!
+
+        val now = LocalDateTime.now()
+        example.start = now.minusHours(3)
+        example.end = now.minusHours(1) // Example ended 1 hour ago
+        exampleRepository.saveAndFlush(example)
+
+        // Create a new submission DTO
+        val submissionDTO = SubmissionDTO(
+            restricted = true,
+            userId = "supervisor@uzh.ch",
+            command = Command.GRADE,
+            files = listOf(
+                SubmissionFileDTO(
+                    taskFileId = example.files.first { it.editable }.id,
+                    content = "def power(x, n): return x ** n"
+                )
+            )
+        )
+
+        // Try to submit - should NOT be blocked
+        assertDoesNotThrow {
+            exampleService.createExampleSubmission(
+                "access-mock-course-lecture-examples",
+                "power-function",
+                submissionDTO,
+                now
+            )
+        }
+    }
+
+    @Test
+    @Transactional
+    @Order(3)
     fun `Test pass rate computed correctly`() {
         // Create mock submissions with different test results
         val submissions = listOf(
@@ -137,7 +222,7 @@ class ExampleServiceTests(
 
     @Test
     @Transactional
-    @Order(2)
+    @Order(4)
     fun `Calculate average points correctly`() {
         val submissions = listOf(
             createMockSubmission("student1@uzh.ch", listOf(1, 1, 0, 1), 0.75),
@@ -154,7 +239,7 @@ class ExampleServiceTests(
 
     @Test
     @Transactional
-    @Order(3)
+    @Order(5)
     fun `Calculate average points with empty list returns 0`() {
         val avgPoints = exampleService.calculateAvgPoints(emptyList())
         assertEquals(0.0, avgPoints, 0.001)
@@ -162,7 +247,7 @@ class ExampleServiceTests(
 
     @Test
     @Transactional
-    @Order(4)
+    @Order(6)
     fun `Example is interactive check works correctly`() {
         val example = exampleRepository.getByCourse_SlugAndSlug(
             "access-mock-course-lecture-examples",
@@ -201,6 +286,67 @@ class ExampleServiceTests(
             "circle-square-rect"
         )
         assertThat(isInteractive3).isFalse
+    }
+
+    @Test
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-lecture-examples-student", "access-mock-course-lecture-examples"]
+    )
+    @Transactional
+    @Order(7)
+    fun `Resetting example works correctly`() {
+        // Get an example and set it as past due
+        var example = exampleRepository.getByCourse_SlugAndSlug(
+            "access-mock-course-lecture-examples",
+            "circle-square-rect"
+        )!!
+
+        val now = LocalDateTime.now()
+        example.start = now.minusHours(1)
+        example.end = now.plusHours(1) // Example ended 1 hour ago
+        exampleRepository.saveAndFlush(example)
+
+        // Create a new submission DTO
+        val submissionDTO = SubmissionDTO(
+            restricted = true,
+            userId = "student@uzh.ch",
+            command = Command.GRADE,
+            files = listOf(
+                SubmissionFileDTO(
+                    taskFileId = example.files.first { it.editable }.id,
+                    content = "def power(x, n): return x ** n"
+                )
+            )
+        )
+
+        exampleService.createExampleSubmission(
+            "access-mock-course-lecture-examples",
+            "circle-square-rect",
+            submissionDTO,
+            LocalDateTime.now()
+        )
+
+        // Give it some time
+        Thread.sleep(15000)
+
+        exampleService.resetExampleBySlug(
+            "access-mock-course-lecture-examples",
+            "circle-square-rect"
+        )
+
+        example = exampleRepository.getByCourse_SlugAndSlug(
+            "access-mock-course-lecture-examples",
+            "circle-square-rect"
+        )!!
+        val submissionsCount = exampleService.getExampleSubmissionCount(
+            "access-mock-course-lecture-examples",
+            "circle-square-rect"
+        )
+
+        assertNull(example.start)
+        assertNull(example.end)
+        assertEquals(0, submissionsCount)
     }
 
     private fun createMockSubmission(userId: String, testsPassed: List<Int>, points: Double): Submission {
