@@ -38,7 +38,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/123456789@eduid.ch")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -54,7 +54,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -69,7 +69,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -86,7 +86,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=0&includeGrade=false&includeTest=true")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -101,7 +101,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch?submissionLimit=1&includeGrade=false&includeRun=true")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -120,14 +120,14 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         val res = mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         ).andReturn()
 
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -148,7 +148,7 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics/tasks/for-testing?submissionLimit=0")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -157,6 +157,20 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(jsonPath(path, hasItem(containsString("a=1;b=2;c=3;d=0"))))
             .andExpect(jsonPath(path, hasItem(containsString("a=0;b=2;c=3;d=4"))))
             .andExpect(jsonPath(path, hasItem(containsString("a=1;b=0;c=0;d=0"))))
+    }
+
+    @Test
+    @Order(0)
+    fun `Task submissions should not have tests_passed field set`() {
+        mvc.perform(
+            get("/courses/access-mock-course/participants/not_email@uzh.ch/assignments/basics/tasks/for-testing?submissionLimit=0")
+                .contentType("application/json")
+                .header("X-API-Key", BaseTest.API_KEY)
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().contentType("application/json"))
+            .andExpect(jsonPath("$.submissions[*].testsPassed").doesNotExist())
     }
 
 }
