@@ -10,87 +10,89 @@ import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.EmbeddingQueueService
+import ch.uzh.ifi.access.service.ExampleQueueService
 import ch.uzh.ifi.access.service.ExampleService
 import ch.uzh.ifi.access.service.ExecutionService
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import jakarta.transaction.Transactional
 import org.assertj.core.api.Assertions.assertThat
 import org.hamcrest.Matchers.greaterThanOrEqualTo
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Order
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestMethodOrder
+import org.junit.jupiter.api.*
+import org.junit.jupiter.api.Assertions.assertNull
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
 import org.springframework.http.HttpStatus
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.test.context.TestPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.reactive.function.client.WebClient
 import org.springframework.web.server.ResponseStatusException
 import reactor.core.Disposable
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
+import kotlin.test.assertEquals
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
+@TestPropertySource(properties = ["examples.grace-period=1", "llm.service.batch-size=1"])
+@org.springframework.context.annotation.Import(ExampleControllerTests.TestConfig::class)
+@AutoConfigureMockMvc
 class ExampleControllerTests(
     @Autowired val mvc: MockMvc,
     @Autowired val exampleRepository: ExampleRepository,
     @Autowired val exampleService: ExampleService,
+    @Autowired val exampleQueueService: ExampleQueueService,
     @Autowired val embeddingQueueService: EmbeddingQueueService,
     @Autowired val executionService: ExecutionService,
     @Autowired val submissionRepository: SubmissionRepository,
+    @Autowired val transactionTemplate: TransactionTemplate,
 ) : BaseTest() {
 
-    @Bean
-    @Primary
-    fun mockWebClient(): WebClient {
-        val webClient = mockk<WebClient>()
-        val requestBodyUriSpec = mockk<WebClient.RequestBodyUriSpec>()
-        val requestBodySpec = mockk<WebClient.RequestBodySpec>()
-        val responseSpec = mockk<WebClient.ResponseSpec>()
-        val mono = mockk<Mono<Array<EmbeddingResponseBodyDTO>>>()
+    @org.springframework.boot.test.context.TestConfiguration
+    class TestConfig {
+        @Bean
+        @Primary
+        fun mockWebClient(): WebClient {
+            val webClient = mockk<WebClient>()
+            val builder = mockk<WebClient.Builder>()
+            val requestBodyUriSpec = mockk<WebClient.RequestBodyUriSpec>()
+            val requestBodySpec = mockk<WebClient.RequestBodySpec>()
+            val requestHeadersSpec = mockk<WebClient.RequestHeadersSpec<*>>()
+            val responseSpec = mockk<WebClient.ResponseSpec>()
+            val mono = mockk<Mono<Array<EmbeddingResponseBodyDTO>>>()
 
-        every { webClient.post() } returns requestBodyUriSpec
-        every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
-        every { requestBodySpec.retrieve() } returns responseSpec
-        every { responseSpec.bodyToMono(Array<EmbeddingResponseBodyDTO>::class.java) } returns mono
+            every { webClient.mutate() } returns builder
+            every { builder.baseUrl(any()) } returns builder
+            every { builder.clientConnector(any()) } returns builder
+            every { builder.codecs(any()) } returns builder
+            every { builder.build() } returns webClient
+            every { webClient.post() } returns requestBodyUriSpec
+            every { requestBodyUriSpec.uri(any<String>()) } returns requestBodySpec
+            every { requestBodySpec.bodyValue(any<List<EmbeddingRequestBodyDTO>>()) } returns requestHeadersSpec
+            every { requestHeadersSpec.retrieve() } returns responseSpec
+            every { responseSpec.bodyToMono(Array<EmbeddingResponseBodyDTO>::class.java) } returns mono
 
-        // Capture the request body to get submission IDs
-        var capturedRequestBody: List<EmbeddingRequestBodyDTO>? = null
-        every { requestBodySpec.bodyValue(any()) } answers {
-            capturedRequestBody = firstArg<List<EmbeddingRequestBodyDTO>>()
-            requestBodySpec
+            every { mono.subscribe(any(), any()) } answers {
+                val success = firstArg<java.util.function.Consumer<Array<EmbeddingResponseBodyDTO>>>()
+                success.accept(
+                    arrayOf(
+                        EmbeddingResponseBodyDTO(1, List(10) { 0.0 }),
+                    )
+                )
+                mockk<Disposable>(relaxed = true)
+            }
+
+            return webClient
         }
-
-        // Mock the subscribe method to immediately call the success callback
-        every { mono.subscribe(any(), any()) } answers {
-            val successCallback = firstArg<(Array<EmbeddingResponseBodyDTO>) -> Unit>()
-
-            // Generate mock responses for all submission IDs in the request
-            val mockResponses = capturedRequestBody?.map { request ->
-                val mockEmbedding = generateEmptyEmbedding()
-                EmbeddingResponseBodyDTO(request.submissionId, mockEmbedding)
-            }?.toTypedArray() ?: arrayOf()
-
-            // Call the success callback immediately to simulate successful async response
-            successCallback(mockResponses)
-
-            // Return a mock disposable
-            mockk<Disposable>(relaxed = true)
-        }
-
-        return webClient
-    }
-
-    private fun generateEmptyEmbedding(): List<Double> {
-        return (1..10).map { 0.0 }
     }
 
     @Test
@@ -98,7 +100,6 @@ class ExampleControllerTests(
         username = "supervisor@uzh.ch",
         authorities = ["supervisor", "access-mock-course-lecture-examples-supervisor", "access-mock-course-lecture-examples"]
     )
-    @Transactional
     @Order(0)
     fun `Endpoint returns only submissions made when example was interactive`() {
         val webClient = embeddingQueueService.javaClass.getDeclaredField("webClient").let { field ->
@@ -106,76 +107,85 @@ class ExampleControllerTests(
             field.get(embeddingQueueService) as WebClient
         }
 
-        // Get an example and publish it
-        val example = exampleRepository.getByCourse_SlugAndSlug(
-            "access-mock-course-lecture-examples",
-            "power-function"
-        )!!
-
+        val courseSlug = "access-mock-course-lecture-examples"
+        val exampleSlug = "power-function"
         val now = LocalDateTime.now()
-        example.start = now.minusMinutes(5)
-        example.end = now.plusMinutes(5)
-        exampleRepository.saveAndFlush(example)
 
-        // Create submission during interactive phase
+        transactionTemplate.execute {
+            val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
+            example.start = now.minusMinutes(10)
+            example.end = now.minusMinutes(1)
+            exampleRepository.saveAndFlush(example)
+        }!!
+
+        val taskFileId = transactionTemplate.execute {
+            val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
+            example.files.first { it.editable }.id
+        }!!
+
         val interactiveSubmission = SubmissionDTO(
             restricted = true,
             userId = "student@uzh.ch",
             command = Command.GRADE,
             files = listOf(
                 SubmissionFileDTO(
-                    taskFileId = example.files.first { it.editable }.id,
+                    taskFileId = taskFileId,
                     content = "def power(x, n): return x ** n"
                 )
             )
         )
 
-        exampleService.processSubmission(
-            "access-mock-course-lecture-examples",
-            "power-function",
+        exampleQueueService.addToQueue(
+            courseSlug,
+            exampleSlug,
             interactiveSubmission,
-            now.minusMinutes(2) // During interactive phase
+            now.minusMinutes(2)
         )
 
-        // End the example
-        example.end = now.minusMinutes(1)
-        exampleRepository.saveAndFlush(example)
+        while (exampleQueueService.isSubmissionInTheQueue(courseSlug, exampleSlug, "student@uzh.ch")
+            || exampleQueueService.getRunningSubmission(courseSlug, exampleSlug, "student@uzh.ch") != null
+        ) {
+            Thread.sleep(1_000)
+        }
 
-        // Create submission after interactive phase
+        Thread.sleep(5_000)
+        while (
+            embeddingQueueService.embeddingQueue.isNotEmpty() || embeddingQueueService.getRunningSubmissions(
+                courseSlug,
+                exampleSlug
+            ).isNotEmpty()
+        ) {
+            Thread.sleep(1_000)
+        }
+
+        verify(atLeast = 1) { webClient.post() }
+
         val nonInteractiveSubmission = SubmissionDTO(
             restricted = true,
             userId = "student2@uzh.ch",
             command = Command.GRADE,
             files = listOf(
                 SubmissionFileDTO(
-                    taskFileId = example.files.first { it.editable }.id,
+                    taskFileId = taskFileId,
                     content = "def power(x, n): return x * n"
                 )
             )
         )
 
-        // Try to submit after interactive phase - should fail
-        val exception = assertThrows(ResponseStatusException::class.java) {
+        val exception = assertThrows<ResponseStatusException> {
             exampleService.processSubmission(
-                "access-mock-course-lecture-examples",
-                "power-function",
+                courseSlug,
+                exampleSlug,
                 nonInteractiveSubmission,
-                now.plusMinutes(2) // After interactive phase
+                now.plusMinutes(10)
             )
         }
 
-        // Verify the exception details
         assert(exception.statusCode == HttpStatus.BAD_REQUEST) { "Expected BAD_REQUEST but got ${exception.statusCode}" }
         assert(exception.reason?.contains("late") == true) { "Expected message to contain 'late' but got: ${exception.reason}" }
 
-        // Wait for embedding generation to complete
-        Thread.sleep(30000) // 30 seconds
-//        TODO: Check for embedding calls
-//        verify(atLeast = 1) { webClient.post() }
-
-        // Test that getExampleSubmissions only returns interactive submissions (non-interactive submission failed)
         val result = mvc.perform(
-            get("/courses/access-mock-course-lecture-examples/examples/power-function/submissions")
+            get("/courses/$courseSlug/examples/$exampleSlug/submissions")
                 .contentType("application/json")
                 .with(csrf())
         )
@@ -183,15 +193,17 @@ class ExampleControllerTests(
             .andExpect(status().isOk)
             .andReturn()
 
+        exampleService.resetExampleBySlug(courseSlug, exampleSlug)
+
         val responseContent = result.response.contentAsString
         val response = ObjectMapper().readValue(responseContent, Map::class.java) as Map<String, Any>
 
-        // Should only return the successful submission made during interactive phase
         val submissions = response["submissions"] as List<*>
         assert(submissions.size == 1) { "Expected 1 submission, but got ${submissions.size}" }
 
         val submission = submissions.first() as Map<*, *>
         assert(submission["studentId"] == "student@uzh.ch") { "Expected student@uzh.ch but got ${submission["studentId"]}" }
+        assert((submission["content"] as Map<*, *>)["script.py"] == "def power(x, n): return x ** n") { "Expected student@uzh.ch but got ${submission["studentId"]}" }
     }
 
     @Test
@@ -202,18 +214,16 @@ class ExampleControllerTests(
     @Transactional
     @Order(1)
     fun `Example information endpoint returns correct statistics`() {
-        // Get an example and ensure it has submissions
         val example = exampleRepository.getByCourse_SlugAndSlug(
             "access-mock-course-lecture-examples",
             "circle-square-rect"
         )!!
-
         val now = LocalDateTime.now()
+
         example.start = now.minusMinutes(10)
         example.end = now.minusMinutes(1)
         exampleRepository.saveAndFlush(example)
 
-        // Test the information endpoint
         mvc.perform(
             get("/courses/access-mock-course-lecture-examples/examples/circle-square-rect/information")
                 .contentType("application/json")
@@ -221,58 +231,103 @@ class ExampleControllerTests(
         )
             .andDo(logResponse)
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.participantsOnline", greaterThanOrEqualTo(0)))
-            .andExpect(jsonPath("$.totalParticipants").exists())
-            .andExpect(jsonPath("$.numberOfReceivedSubmissions", greaterThanOrEqualTo(0)))
-            .andExpect(jsonPath("$.passRatePerTestCase").exists())
+            .andExpect(jsonPath("$.totalParticipants", greaterThanOrEqualTo(1)))
+            .andExpect(
+                jsonPath(
+                    "$.passRatePerTestCase.length()",
+                    greaterThanOrEqualTo(12)
+                )
+            )
             .andExpect(jsonPath("$.avgPoints").exists())
     }
 
     @Test
-    @Transactional
     @Order(2)
-    fun `Example submission with mocked webClient stores embedding correctly`() {
+    fun `Example submission processed and added to the database correctly`() {
+        val webClient = embeddingQueueService.javaClass.getDeclaredField("webClient").let { field ->
+            field.isAccessible = true
+            field.get(embeddingQueueService) as WebClient
+        }
+
         val courseSlug = "access-mock-course-lecture-examples"
         val exampleSlug = "shirt-size"
 
-        val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
-
-        // Set example as interactive
+        val example = exampleService.publishExampleBySlug(courseSlug, exampleSlug, 600)
         val now = LocalDateTime.now()
-        example.start = now.minusMinutes(10)
-        example.end = now.plusMinutes(10)
-        exampleRepository.saveAndFlush(example)
 
-        // Create submission DTO
+        val taskFileId = transactionTemplate.execute {
+            val example = exampleRepository.getByCourse_SlugAndSlug(courseSlug, exampleSlug)!!
+            example.files.first { it.editable }.id
+        }!!
+
         val submissionDTO = SubmissionDTO(
             restricted = true,
             userId = "student@uzh.ch",
             command = Command.GRADE,
             files = listOf(
                 SubmissionFileDTO(
-                    taskFileId = example.files.first { it.editable }.id,
+                    taskFileId = taskFileId,
                     content = "def shirt_size(height, weight): return 'M'"
                 )
             )
         )
 
-        val submission = exampleService.processSubmission(courseSlug, exampleSlug, submissionDTO, now)
+        exampleQueueService.addToQueue(courseSlug, exampleSlug, submissionDTO, now)
 
-        // Add submission to ensure embedding processing
-        val concatenatedContent = submission.files
-            .filter { it.taskFile?.editable == true }
-            .joinToString("\n") { it.content ?: "" }
-        embeddingQueueService.addToQueue(courseSlug, exampleSlug, submission.id!!, concatenatedContent)
-
-        while (embeddingQueueService.getRunningSubmissions(courseSlug, exampleSlug).isNotEmpty()) {
-            Thread.sleep(5000)
+        while (exampleQueueService.isSubmissionInTheQueue(courseSlug, exampleSlug, "student@uzh.ch")
+            || exampleQueueService.getRunningSubmission(courseSlug, exampleSlug, "student@uzh.ch") != null
+        ) {
+            Thread.sleep(1_000)
         }
 
-        // Refresh submission from database to get updated embedding
-        val updatedSubmission = submissionRepository.findById(submission.id!!).orElse(null)
+        Thread.sleep(5_000)
+        while (
+            embeddingQueueService.embeddingQueue.isNotEmpty() || embeddingQueueService.getRunningSubmissions(
+                courseSlug,
+                exampleSlug
+            ).isNotEmpty()
+        ) {
+            Thread.sleep(1_000)
+        }
 
-        // Verify submission exists and has embedding
-        assertThat(updatedSubmission).isNotNull
-//        assertThat(updatedSubmission!!.embedding).isNotEmpty()
+        val retrievedSubmissions = submissionRepository.findInteractiveExampleSubmissions(
+            example.id,
+            Command.GRADE,
+            example.start!!,
+            example.end!!
+        )
+
+        exampleService.resetExampleBySlug(courseSlug, exampleSlug)
+
+        assertEquals(1, retrievedSubmissions.size)
+        assertThat(retrievedSubmissions[0]).isNotNull
+        assertEquals(submissionDTO.userId, retrievedSubmissions[0].userId)
+        assertEquals(submissionDTO.command, retrievedSubmissions[0].command)
+
+        verify(atLeast = 1) { webClient.post() }
+    }
+
+    @Test
+    @AccessUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-lecture-examples-supervisor", "access-mock-course-lecture-examples"]
+    )
+    @Transactional
+    @Order(3)
+    fun `Example termination works correctly`() {
+        exampleService.publishExampleBySlug("access-mock-course-lecture-examples", "circle-square-rect", 600)
+
+        mvc.perform(
+            put("/courses/access-mock-course-lecture-examples/examples/circle-square-rect/terminate")
+                .contentType("application/json")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+
+        Thread.sleep(6_000)
+
+        val interactiveExample = exampleService.getInteractiveExampleSlug("access-mock-course-lecture-examples")
+        assertNull(interactiveExample.exampleSlug)
     }
 }

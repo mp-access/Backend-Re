@@ -11,9 +11,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
 import java.util.*
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.LinkedBlockingQueue
 
 @Service
 class EmbeddingQueueService(
@@ -26,16 +26,18 @@ class EmbeddingQueueService(
 ) {
     private val logger = KotlinLogging.logger {}
     private val maxRetries = 2
-    private val embeddingQueue: BlockingQueue<EmbeddingWithContext> = LinkedBlockingQueue()
+    val embeddingQueue: BlockingQueue<EmbeddingWithContext> = LinkedBlockingQueue()
     private lateinit var processorThread: Thread
     private val embeddingCurrentlyComputedForSubmissions = ConcurrentHashMap<Pair<String, String>, MutableList<Long>>()
 
     fun addToQueue(courseSlug: String, exampleSlug: String, submissionId: Long, codeSnippet: String) {
-        val embeddingWithContext = EmbeddingWithContext(courseSlug,
-                                                        exampleSlug,
-                                                        EmbeddingRequestBodyDTO(submissionId, codeSnippet),
-                                                        0,
-                                                        false)
+        val embeddingWithContext = EmbeddingWithContext(
+            courseSlug,
+            exampleSlug,
+            EmbeddingRequestBodyDTO(submissionId, codeSnippet),
+            0,
+            false
+        )
         embeddingQueue.offer(embeddingWithContext)
     }
 
@@ -46,11 +48,13 @@ class EmbeddingQueueService(
                 val submissionContent = submission.files
                     .filter { submissionFile -> submissionFile.taskFile?.editable == true }
                     .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-                val embeddingWithContext = EmbeddingWithContext(courseSlug,
+                val embeddingWithContext = EmbeddingWithContext(
+                    courseSlug,
                     exampleSlug,
                     EmbeddingRequestBodyDTO(submissionId, submissionContent),
                     maxRetries,
-                    true)
+                    true
+                )
                 embeddingQueue.offer(embeddingWithContext)
             }
         }
@@ -65,7 +69,7 @@ class EmbeddingQueueService(
     fun startBatchProcessor() {
         processorThread = Thread {
             try {
-                outer@while (!Thread.currentThread().isInterrupted) {
+                outer@ while (!Thread.currentThread().isInterrupted) {
                     val batchWithContext = mutableListOf<EmbeddingWithContext>()
 
                     val firstItem = embeddingQueue.take()
@@ -125,14 +129,21 @@ class EmbeddingQueueService(
 
                     val courseSlug = submissions[0].courseSlug
                     val exampleSlug = submissions[0].exampleSlug
-                    if (exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug).size == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)) {
+                    if (exampleService.getInteractiveExampleSubmissions(
+                            courseSlug,
+                            exampleSlug
+                        ).size == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)
+                    ) {
                         emitterService.sendPayload(
                             EmitterType.SUPERVISOR,
                             submissions[0].courseSlug,
                             "example-information",
-                            exampleService.computeExampleInformation(submissions[0].courseSlug, submissions[0].exampleSlug),
+                            exampleService.computeExampleInformation(
+                                submissions[0].courseSlug,
+                                submissions[0].exampleSlug
+                            ),
                         )
-                        if (!submissions.any {it.forceComputation}) {
+                        if (!submissions.any { it.forceComputation }) {
                             val submissionsWithoutEmbeddings =
                                 exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
                                     .filter { it.embedding.isEmpty() }

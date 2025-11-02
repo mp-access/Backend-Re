@@ -14,6 +14,8 @@ import org.junit.jupiter.api.TestMethodOrder
 import org.junit.jupiter.api.assertNull
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.transaction.annotation.Transactional
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class ImportExampleTests(
@@ -55,24 +57,21 @@ class ImportExampleTests(
 
         val example = getExample(courseSlug, exampleSlug)
 
-        // Link to course, no link to assignment
         assertThat(example.course).isNotNull
         assertThat(example.course!!.slug).isEqualTo(courseSlug)
         assertNull(example.assignment, "Example should not be linked to an assignment")
 
-        // No start or end date initially
         assertNull(example.start, "Example should not have a start date initially")
         assertNull(example.end, "Example should not have an end date initially")
 
-        // No test command
         assertNull(example.testCommand, "Example should not have a test command")
 
-        // Max points = 1, max attempts = 1
         assertEquals(1.0, example.maxPoints, "Example max points should be 1")
         assertEquals(1, example.maxAttempts, "Example max attempts should be 1")
 
-        // Should be enabled
-        assertThat(example.enabled).isTrue
+        assertTrue(example.enabled)
+
+        assertFalse(example.testNames.any { it.isEmpty() })
     }
 
     @Test
