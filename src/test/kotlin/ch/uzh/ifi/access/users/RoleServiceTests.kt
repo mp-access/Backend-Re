@@ -149,7 +149,7 @@ class RoleServiceTests(
             mvc.perform(
                 post("/courses/$it/participants")
                     .contentType("application/json")
-                    .header("X-API-Key", "1234")
+                    .header("X-API-Key", BaseTest.API_KEY)
                     .with(csrf())
                     .content(payload)
             )
@@ -168,7 +168,7 @@ class RoleServiceTests(
             mvc.perform(
                 post("/courses/$it/participants")
                     .contentType("application/json")
-                    .header("X-API-Key", "1234")
+                    .header("X-API-Key", BaseTest.API_KEY)
                     .with(csrf())
                     .content(payload)
             )

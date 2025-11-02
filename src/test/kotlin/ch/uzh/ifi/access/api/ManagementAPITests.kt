@@ -26,7 +26,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             post("/courses/access-mock-course/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
                 .content(payload)
         )
@@ -39,7 +39,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/summary")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -54,7 +54,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             post("/courses/access-mock-course/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
                 .content(payload)
         )
@@ -68,7 +68,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             post("/courses/access-mock-course-lecture-examples/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
                 .content(payload)
         )
@@ -81,7 +81,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -101,7 +101,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/summary")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -115,7 +115,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/access-mock-course/participants/student@uzh.ch")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -140,7 +140,7 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             post("/courses/access-mock-course/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
                 .content(payload)
         )

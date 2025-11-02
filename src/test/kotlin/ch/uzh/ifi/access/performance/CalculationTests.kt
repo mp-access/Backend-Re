@@ -50,7 +50,7 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
         mvc.perform(
             get("/courses/info1-hs24/participants")
                 .contentType("application/json")
-                .header("X-API-Key", "1234")
+                .header("X-API-Key", BaseTest.API_KEY)
                 .with(csrf())
         )
             .andExpect(status().isOk)
@@ -91,6 +91,4 @@ class CalculationTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(content().contentType("application/json"))
             .andExpect(jsonPath("$.[?(@.email =~ /supervisor.*?/i)].email", `is`(not(empty<Any>()))))
     }
-
-
 }
