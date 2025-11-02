@@ -101,6 +101,7 @@ class ExampleControllerTests(
         authorities = ["supervisor", "access-mock-course-lecture-examples-supervisor", "access-mock-course-lecture-examples"]
     )
     @Order(0)
+    // Integration Test
     fun `Endpoint returns only submissions made when example was interactive`() {
         val webClient = embeddingQueueService.javaClass.getDeclaredField("webClient").let { field ->
             field.isAccessible = true
@@ -148,7 +149,7 @@ class ExampleControllerTests(
             Thread.sleep(1_000)
         }
 
-        Thread.sleep(5_000)
+        Thread.sleep(1_000)
         while (
             embeddingQueueService.embeddingQueue.isNotEmpty() || embeddingQueueService.getRunningSubmissions(
                 courseSlug,
@@ -213,6 +214,7 @@ class ExampleControllerTests(
     )
     @Transactional
     @Order(1)
+    // Integration Test
     fun `Example information endpoint returns correct statistics`() {
         val example = exampleRepository.getByCourse_SlugAndSlug(
             "access-mock-course-lecture-examples",
@@ -243,6 +245,7 @@ class ExampleControllerTests(
 
     @Test
     @Order(2)
+    // Integration Test
     fun `Example submission processed and added to the database correctly`() {
         val webClient = embeddingQueueService.javaClass.getDeclaredField("webClient").let { field ->
             field.isAccessible = true
@@ -280,7 +283,7 @@ class ExampleControllerTests(
             Thread.sleep(1_000)
         }
 
-        Thread.sleep(5_000)
+        Thread.sleep(1_000)
         while (
             embeddingQueueService.embeddingQueue.isNotEmpty() || embeddingQueueService.getRunningSubmissions(
                 courseSlug,
@@ -314,6 +317,7 @@ class ExampleControllerTests(
     )
     @Transactional
     @Order(3)
+    // Integration Test
     fun `Example termination works correctly`() {
         exampleService.publishExampleBySlug("access-mock-course-lecture-examples", "circle-square-rect", 600)
 
@@ -325,7 +329,7 @@ class ExampleControllerTests(
             .andDo(logResponse)
             .andExpect(status().isOk)
 
-        Thread.sleep(6_000)
+        Thread.sleep(1_000)
 
         val interactiveExample = exampleService.getInteractiveExampleSlug("access-mock-course-lecture-examples")
         assertNull(interactiveExample.exampleSlug)
