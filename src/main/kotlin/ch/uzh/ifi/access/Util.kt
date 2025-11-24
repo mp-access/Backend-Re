@@ -9,9 +9,9 @@ object Util {
     fun bytesToString(bytes: Long): String {
         return when {
             bytes < KILOBYTE -> "$bytes B"
-            bytes < MEGABYTE -> String.format("%.2f KB", bytes / KILOBYTE)
-            bytes < GIGABYTE -> String.format("%.2f MB", bytes / MEGABYTE)
-            else -> String.format("%.2f GB", bytes / GIGABYTE)
+            bytes < MEGABYTE -> String.format("%.2f KB", bytes.toDouble() / KILOBYTE)
+            bytes < GIGABYTE -> String.format("%.2f MB", bytes.toDouble() / MEGABYTE)
+            else -> String.format("%.2f GB", bytes.toDouble() / GIGABYTE)
         }
     }
 }
