@@ -42,10 +42,11 @@ class FileService(val tika: Tika) {
         fileData.name = path.fileName.toString()
         // because Tika actually cannot detect python3 scripts, we trust the file extension for now
         val extension = PathUtils.getExtension(path).lowercase(Locale.getDefault())
-        if (listOf("py", "r", "sh", "bash").contains(extension)) {
+        if (listOf("py", "r", "sh", "bash", "json").contains(extension)) {
             fileData.mimeType = when (extension) {
                 "py" -> "text/x-python"
                 "r" -> "text/plain"
+                "json" -> "application/json"
                 else -> "text/x-sh"
             }
             fileData.content = Files.readString(path)
@@ -55,7 +56,7 @@ class FileService(val tika: Tika) {
         val mimeType = tika.detect(path)
         fileData.mimeType = mimeType.toString()
         // if the mimeType is text, we store as text
-        if (mimeType.startsWith("text/")) {
+        if (mimeType.startsWith("text/") || mimeType == "application/json") {
             fileData.content = Files.readString(path)
             return fileData.validated()
         }

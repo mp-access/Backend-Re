@@ -4,11 +4,7 @@ import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.hamcrest.Matchers.*
-import org.junit.jupiter.api.MethodOrderer
-import org.junit.jupiter.api.Order
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
-import org.junit.jupiter.api.TestMethodOrder
+import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
@@ -85,7 +81,7 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         val taskWorkspace: Map<String, Any> =
             ObjectMapper().readValue(responseContent, Map::class.java) as Map<String, Any>
         val fileMap = (taskWorkspace.get("files")!! as ArrayList<LinkedHashMap<String, Any>>).filter {
-            it.get("editable") as Boolean==true
+            it.get("editable") as Boolean == true
         }.map {
             it.get("id") as Int to prefix + it.get("path")
         }.toMap()
@@ -305,4 +301,33 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(jsonPath("$.deadline", `is`("2028-01-01T13:00:00")))
     }
 
+
+    @Test
+    @AccessUser(
+        username = "not_email@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
+    @Disabled
+    @Order(0)
+    fun `Can submit 500 submissions and they all persist`() {
+        repeat(250) {
+            submissionTest("run", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        }
+        repeat(245) {
+            submissionTest("test", `is`(nullValue()), "a=0;b=0;c=0;d=0", "not_email@uzh.ch", "testing")
+        }
+        repeat(5) {
+            submissionTest("grade", `is`(3.0), "a=1;b=2;c=3;d=0", "not_email@uzh.ch", "testing")
+        }
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/basics/tasks/for-testing/users/not_email@uzh.ch")
+                .contentType("application/json")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.submissions[0].command", `is`("grade")))
+            .andExpect(jsonPath("$.submissions[0].points", `is`(3.0)))
+            .andExpect(jsonPath("$.points", `is`(3.0)))
+    }
 }
