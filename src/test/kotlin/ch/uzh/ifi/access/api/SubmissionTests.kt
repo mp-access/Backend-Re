@@ -114,6 +114,30 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         authorities = ["student", "access-mock-course-student", "access-mock-course"]
     )
     @Order(0)
+    fun `Execution docker containers do not have internet access`() {
+        submissionTest(
+            "run", nullValue(), """
+            import urllib.request
+            with urllib.request.urlopen('https://python.org/') as response:
+               x = response.read()""".trimIndent().replace("\n", "\\n")
+        )
+        mvc.perform(
+            get("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/users/student@uzh.ch")
+                .contentType("application/json")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.submissions[0].output", containsString("Temporary failure in name resolution")))
+
+    }
+
+    @Test
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
+    @Order(0)
     fun `Can run code template to receive null points`() {
         submissionTest("run", nullValue(), "x = 0")
     }
@@ -330,4 +354,6 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(jsonPath("$.submissions[0].points", `is`(3.0)))
             .andExpect(jsonPath("$.points", `is`(3.0)))
     }
+
+
 }

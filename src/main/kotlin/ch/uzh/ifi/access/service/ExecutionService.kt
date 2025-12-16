@@ -143,6 +143,7 @@ class ExecutionService(
                 .withCmd("/bin/bash", "-c", command)
                 .withHostConfig(
                     HostConfig()
+                        .withNetworkMode("none")
                         .withTmpFs(tmpfs)
                         .withMemory(memoryLimit)
                         .withBinds(Bind.parse("$submissionDir:/submission"))
@@ -258,13 +259,12 @@ class ExecutionService(
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
                     if (isExample(task)) {
-                        if(task.testNames.size == results.hints.size){
+                        if (task.testNames.size == results.hints.size) {
                             submission.testsPassed = results.hints.map { hint ->
                                 if (hint == null) 1 else 0
-                                }
                             }
-                        else {
-                            submission.testsPassed = List(task.testNames.size){0}
+                        } else {
+                            submission.testsPassed = List(task.testNames.size) { 0 }
                         }
                     }
 

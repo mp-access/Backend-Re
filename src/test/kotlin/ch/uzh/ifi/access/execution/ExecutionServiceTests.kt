@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.execution
 
 import ch.uzh.ifi.access.BaseTest
+import ch.uzh.ifi.access.Util
 import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.TaskRepository
 import ch.uzh.ifi.access.service.ExecutionService
@@ -37,6 +38,20 @@ class ExecutionServiceTests(
         assertEquals(0.0, results.points)
         assertThat(10 < results.hints.size)
         assertThat(10 < results.tests.size)
+    }
+
+    @Test
+    @Transactional
+    @Order(0)
+    fun `Correct bytesToString implementation`() {
+        val b = Util.bytesToString(513)
+        val kb = Util.bytesToString(1513)
+        val mb = Util.bytesToString(1513000)
+        val gb = Util.bytesToString(1513000000)
+        assertEquals("513 B", b)
+        assertEquals("1.48 KB", kb)
+        assertEquals("1.44 MB", mb)
+        assertEquals("1.41 GB", gb)
     }
 
 }
