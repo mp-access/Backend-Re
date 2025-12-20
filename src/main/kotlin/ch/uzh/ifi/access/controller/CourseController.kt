@@ -6,6 +6,7 @@ import ch.uzh.ifi.access.projections.*
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpHeaders
@@ -18,6 +19,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.nio.charset.StandardCharsets
 
 
 @RestController
@@ -187,6 +189,48 @@ class CourseController(
         return courseService.getStudentsWithPoints(courseSlug)
     }
 
+    @GetMapping("/{courseSlug}/assignmentPoints", produces = ["text/csv"])
+    @PreAuthorize("hasRole(#courseSlug + '-assistant')")
+    fun getStudentsWithAssignmentPoints(
+        @PathVariable courseSlug: String,
+        response: HttpServletResponse
+    ) {
+        val pointsData = courseService.getStudentsWithAssignmentPoints(courseSlug)
+        response.apply {
+            setHeader("Content-Disposition", "attachment; filename=access_points_${courseSlug}.csv")
+            contentType = "text/csv"
+        }
+        response.outputStream.writer(StandardCharsets.UTF_8).use { writer ->
+            val pointsByUser = pointsData.groupBy { it.userId }
+            val assignments = pointsData
+                .map { it.ordinalNum }
+                .distinct()
+                .sortedBy { ordinalNum ->
+                    pointsData
+                        .filter { it.ordinalNum == ordinalNum }
+                        .minByOrNull { it.ordinalNum ?: Long.MAX_VALUE }
+                        ?.ordinalNum ?: Long.MAX_VALUE
+                }
+            val header = listOf("user_id") + assignments.map { "as${it}" } + listOf("total")
+            writer.write(header.joinToString(",") { (it.toString()) })
+            writer.appendLine()
+            pointsByUser.forEach { (userId, userAssignmentPoints) ->
+                val row = mutableListOf(userId)
+                assignments.forEach { ordinalNum ->
+                    val points = userAssignmentPoints
+                        .find { it.ordinalNum == ordinalNum }
+                        ?.totalPoints
+                        ?: 0.0
+                    row.add(points.toString())
+                }
+                row.add(userAssignmentPoints.sumOf { it.totalPoints ?: 0.0 }.toString())
+                writer.write(row.joinToString(","))
+                writer.appendLine()
+            }
+            writer.flush()
+        }
+    }
+
     @GetMapping("/{courseSlug}/users")
     @PreAuthorize("hasRole(#courseSlug + '-assistant')")
     fun getUsersWithPoints(@PathVariable courseSlug: String): List<StudentDTO> {
@@ -228,10 +272,15 @@ class CourseController(
     }
 
     @PostMapping("/{course}/participants")
-    @Caching(evict = [
-        CacheEvict(value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"], key = "#course"),
-        CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
-    ])
+    @Caching(
+        evict = [
+            CacheEvict(
+                value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"],
+                key = "#course"
+            ),
+            CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+        ]
+    )
     fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
         return updateRoles(course, registrationIDs, Role.STUDENT)
     }

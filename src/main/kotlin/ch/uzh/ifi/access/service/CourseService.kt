@@ -96,6 +96,34 @@ class CourseService(
         }
     }
 
+    // TODO: avoid duplication with previous function
+    fun getStudentsWithAssignmentPoints(
+        courseSlug: String,
+        withAssistants: Boolean = false
+    ): List<AssignmentPointsDTO> {
+        val course = getCourseBySlug(courseSlug)
+        val names = if (withAssistants) {
+            course.registeredStudents + course.assistants + course.supervisors
+        } else {
+            course.registeredStudents
+        }
+        val users = names.associateWith { roleService.findUserByAllCriteria(it) }
+        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+        val userIdsInverse = userIds.map { (k, v) -> v to k }.toMap()
+        val userNames = users.map { (k, v) -> k to v?.username }.toMap()
+        return courseRepository.getParticipantsAssignmentPoints(
+            courseSlug,
+            userIds.values.filterNotNull().toTypedArray()
+        ).map {
+            val registrationID = userIdsInverse.getOrDefault(it.userId!!, it.userId!!)
+            AssignmentPointsDTO(
+                userNames.getOrElse(registrationID, { it.userId }),
+                it.ordinalNum,
+                it.totalPoints,
+            )
+        }
+    }
+
     fun getCourseBySlug(courseSlug: String): Course {
         return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,

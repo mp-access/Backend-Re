@@ -22,6 +22,19 @@ interface UserPointsProjection {
     val totalPoints: Double?
 }
 
+class UserAssignmentPoints {
+    val userId: String? = null
+    val ordinalNum: Long? = null
+    val totalPoints: Double? = null
+}
+
+@Projection(types = [UserAssignmentPoints::class])
+interface UserAssignmentPointsProjection {
+    var userId: String?
+    val ordinalNum: Long?
+    val totalPoints: Double?
+}
+
 interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getBySlug(courseSlug: String?): Course?
     fun findBySlug(courseSlug: String?): CourseWorkspace?
@@ -33,7 +46,8 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesByAndDeletedFalse(): List<CourseOverview>
 
-    @Query("""
+    @Query(
+        """
     SELECT DISTINCT c 
     FROM Course c 
     WHERE c.deleted = false 
@@ -42,7 +56,8 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
         OR EXISTS (SELECT 1 FROM c.assistants a WHERE a IN :userIds)
         OR EXISTS (SELECT 1 FROM c.supervisors s WHERE s IN :userIds)
     )
-    """)
+    """
+    )
     fun findCoursesForUser(@Param("userIds") userIds: List<String>): Set<CourseOverview>
 
     fun findAllByDeletedFalse(): List<Course>
@@ -95,5 +110,33 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     // Bypasses role restrictions, use only if preventing leaks by other means.
     // Necessary for retrieving user roles upon first login.
     fun findAllUnrestrictedByDeletedFalse(): List<Course>
+
+    @Query(
+        nativeQuery = true,
+        value = """
+        SELECT 
+            e.user_id AS userId, 
+            a.id AS assignmentId,
+            a.ordinal_num AS ordinalNum,
+            SUM(e.best_score) AS totalPoints
+        FROM evaluation e
+        JOIN (
+            SELECT user_id, task_id, MAX(id) AS max_id
+            FROM evaluation
+            WHERE user_id = ANY(:userIds)
+            GROUP BY user_id, task_id
+        ) latest_eval ON e.id = latest_eval.max_id
+        JOIN task t ON e.task_id = t.id
+        JOIN assignment a ON t.assignment_id = a.id
+        JOIN course c ON a.course_id = c.id
+        WHERE c.slug = :courseSlug
+        GROUP BY e.user_id, a.id
+        ORDER BY e.user_id, a.id
+    """
+    )
+    fun getParticipantsAssignmentPoints(
+        courseSlug: String,
+        userIds: Array<String>
+    ): List<UserAssignmentPointsProjection>
 
 }
