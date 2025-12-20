@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.api
 
+import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
@@ -157,6 +158,24 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(jsonPath(path, hasItem(containsString("a=1;b=2;c=3;d=0"))))
             .andExpect(jsonPath(path, hasItem(containsString("a=0;b=2;c=3;d=4"))))
             .andExpect(jsonPath(path, hasItem(containsString("a=1;b=0;c=0;d=0"))))
+    }
+
+    @Test
+    @Order(0)
+    @AccessUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-supervisor", "access-mock-course"]
+    )
+    fun `Can download CSV with assignment points`() {
+        mvc.perform(
+            get("/courses/access-mock-course/assignmentPoints")
+                .contentType("text/csv")
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().contentType("text/csv"))
+            .andExpect(content().string(containsString("username,registered_as,other_ids,")))
+            .andExpect(content().string(containsString("student@uzh.ch,,2.0,2.0")))
     }
 
 }

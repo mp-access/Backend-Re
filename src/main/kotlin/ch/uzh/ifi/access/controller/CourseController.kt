@@ -195,36 +195,14 @@ class CourseController(
         @PathVariable courseSlug: String,
         response: HttpServletResponse
     ) {
-        val pointsData = courseService.getStudentsWithAssignmentPoints(courseSlug)
+        val rows = courseService.getStudentsWithAssignmentPoints(courseSlug)
         response.apply {
             setHeader("Content-Disposition", "attachment; filename=access_points_${courseSlug}.csv")
             contentType = "text/csv"
         }
         response.outputStream.writer(StandardCharsets.UTF_8).use { writer ->
-            val pointsByUser = pointsData.groupBy { it.userId }
-            val assignments = pointsData
-                .map { it.ordinalNum }
-                .distinct()
-                .sortedBy { ordinalNum ->
-                    pointsData
-                        .filter { it.ordinalNum == ordinalNum }
-                        .minByOrNull { it.ordinalNum ?: Long.MAX_VALUE }
-                        ?.ordinalNum ?: Long.MAX_VALUE
-                }
-            val header = listOf("user_id") + assignments.map { "as${it}" } + listOf("total")
-            writer.write(header.joinToString(",") { (it.toString()) })
-            writer.appendLine()
-            pointsByUser.forEach { (userId, userAssignmentPoints) ->
-                val row = mutableListOf(userId)
-                assignments.forEach { ordinalNum ->
-                    val points = userAssignmentPoints
-                        .find { it.ordinalNum == ordinalNum }
-                        ?.totalPoints
-                        ?: 0.0
-                    row.add(points.toString())
-                }
-                row.add(userAssignmentPoints.sumOf { it.totalPoints ?: 0.0 }.toString())
-                writer.write(row.joinToString(","))
+            rows.forEach { row ->
+                writer.write(row.joinToString(",") { (it.toString()) })
                 writer.appendLine()
             }
             writer.flush()

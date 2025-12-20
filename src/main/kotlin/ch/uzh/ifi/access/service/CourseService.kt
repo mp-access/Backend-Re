@@ -100,7 +100,7 @@ class CourseService(
     fun getStudentsWithAssignmentPoints(
         courseSlug: String,
         withAssistants: Boolean = false
-    ): List<AssignmentPointsDTO> {
+    ): MutableList<List<String?>> {
         val course = getCourseBySlug(courseSlug)
         val names = if (withAssistants) {
             course.registeredStudents + course.assistants + course.supervisors
@@ -111,7 +111,7 @@ class CourseService(
         val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
         val userIdsInverse = userIds.map { (k, v) -> v to k }.toMap()
         val userNames = users.map { (k, v) -> k to v?.username }.toMap()
-        return courseRepository.getParticipantsAssignmentPoints(
+        val pointsData = courseRepository.getParticipantsAssignmentPoints(
             courseSlug,
             userIds.values.filterNotNull().toTypedArray()
         ).map {
@@ -122,6 +122,40 @@ class CourseService(
                 it.totalPoints,
             )
         }
+        val pointsByUser = pointsData.groupBy { it.userId }
+        val assignments = pointsData
+            .map { it.ordinalNum }
+            .distinct()
+            .sortedBy { ordinalNum ->
+                pointsData
+                    .filter { it.ordinalNum == ordinalNum }
+                    .minByOrNull { it.ordinalNum ?: Long.MAX_VALUE }
+                    ?.ordinalNum ?: Long.MAX_VALUE
+            }
+        val rows = mutableListOf(
+            mutableListOf<String?>(
+                "username",
+                "registered_as",
+                "other_ids"
+            ) + assignments.map { "as${it}" } + listOf("total"))
+        pointsByUser.forEach { (userId, userAssignmentPoints) ->
+            val registrationID = userIdsInverse.getOrDefault(userId!!, userId)
+            val row = mutableListOf(
+                userId,
+                registrationID,
+                roleService.getRegistrationIDCandidates(userId).minus(setOf(userId, registrationID)).joinToString(" ")
+            )
+            assignments.forEach { ordinalNum ->
+                val points = userAssignmentPoints
+                    .find { it.ordinalNum == ordinalNum }
+                    ?.totalPoints
+                    ?: 0.0
+                row.add(points.toString())
+            }
+            row.add(userAssignmentPoints.sumOf { it.totalPoints ?: 0.0 }.toString())
+            rows.add(row)
+        }
+        return rows
     }
 
     fun getCourseBySlug(courseSlug: String): Course {
