@@ -455,6 +455,7 @@ class CourseService(
         val onlyLatestGraded = submissionLimit == 1 && includeGrade && !includeTest && !includeRun
         val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
         val evaluation = evaluationService.getEvaluationSummary(task, userId)
+        val evaluationEntity = evaluationService.getEvaluation(task, userId)
         logger.debug { "Evaluation for username $username (uniqueId: $userId): $evaluation" }
         if (evaluation == null) {
             return TaskProgressDTO(
@@ -495,10 +496,17 @@ class CourseService(
                     (it.command == Command.RUN && includeRun)
                 }
                 .let { submissions ->
-                    if (onlyLatestGraded) listOf(
-                        submissions.first { it.points == evaluation.bestScore }
-                    )
-                    else if (submissionLimit == 0) submissions
+                    if (submissions.isEmpty()) {
+                        submissions
+                    } else if (onlyLatestGraded) {
+                        val best = submissions.firstOrNull { it.points == evaluation.bestScore }
+                        // if there are only late submissions, best will be null
+                        if (best == null) {
+                            listOf()
+                        } else {
+                            listOf(best)
+                        }
+                    } else if (submissionLimit == 0) submissions
                     else submissions.take(submissionLimit)
                 }
         )
