@@ -56,3 +56,11 @@ logging:
 
 caching:
   eviction-rate: ${CACHE_EVICTION_RATE:15m}
+
+docker:
+  pool:
+    enabled: ${DOCKER_POOL_ENABLED:false}
+    image: ${DOCKER_POOL_IMAGE:}
+    size: ${DOCKER_POOL_SIZE:8}
+    maxReuse: ${DOCKER_POOL_MAX_REUSE:100}
+    borrowTimeoutSeconds: ${DOCKER_POOL_BORROW_TIMEOUT_SECONDS:30}
