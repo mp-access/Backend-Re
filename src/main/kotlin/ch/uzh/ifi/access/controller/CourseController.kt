@@ -17,9 +17,15 @@ import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.context.request.async.StandardServletAsyncWebRequest
+import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeUnit
+import java.util.zip.ZipOutputStream
 
 
 @RestController
@@ -75,12 +81,34 @@ class WebhooksController(
 @EnableAsync
 class CourseController(
     private val courseService: CourseService,
+    private val dumpService: DumpService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val submissionService: SubmissionService,
     private val visitQueueService: VisitQueueService
 ) {
     private val logger = KotlinLogging.logger {}
+
+    @GetMapping("/{course}/dump")
+    @PreAuthorize("(hasRole(#course+'-supervisor')) or (hasRole('supervisor'))")
+    fun getDump(
+        @PathVariable course: String,
+        request: HttpServletRequest,
+        response: HttpServletResponse
+    ): ResponseEntity<StreamingResponseBody> {
+        val asyncWebRequest = StandardServletAsyncWebRequest(request, response)
+        asyncWebRequest.setTimeout(TimeUnit.MINUTES.toMillis(60))
+        WebAsyncUtils.getAsyncManager(request).setAsyncWebRequest(asyncWebRequest)
+        return ResponseEntity
+            .ok()
+            .header("Content-Disposition", "attachment; filename=data.zip")
+            .header("Content-Type", "application/zip")
+            .body(StreamingResponseBody { out: OutputStream ->
+                val zipOutputStream = ZipOutputStream(out)
+                dumpService.getCourseDump(course, zipOutputStream)
+            })
+    }
+
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
