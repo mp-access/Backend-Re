@@ -26,6 +26,7 @@ class SubmissionService(
     private val roleService: RoleService,
     private val dockerService: ExecutionService,
     private val evaluationService: EvaluationService,
+    private val aggregateEvaluationService: AggregateEvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
         if (userId == null) {
@@ -146,7 +147,17 @@ class SubmissionService(
                 "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         } finally {
             submissionRepository.save(submission)
-            evaluationRepository.save(evaluation)
+            // Save the evaluation and, if this graded run produced a verdict
+            // (the only case where best_score can change), refresh the
+            // student's two aggregate rows in the SAME transaction: a crash
+            // between save and recompute cannot leave a fresh best_score
+            // with a stale aggregate. RUN/TEST and no-verdict runs keep the
+            // plain save: nothing changed, nothing to recompute.
+            if (submission.command == Command.GRADE && submission.points != null) {
+                aggregateEvaluationService.saveWithAggregates(evaluation, task.assignment?.id, course.id)
+            } else {
+                evaluationRepository.save(evaluation)
+            }
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
             pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         }

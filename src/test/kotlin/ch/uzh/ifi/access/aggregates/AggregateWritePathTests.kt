@@ -3,6 +3,8 @@ package ch.uzh.ifi.access.aggregates
 import ch.uzh.ifi.access.performance.DumpAvailabilityCondition
 import ch.uzh.ifi.access.repository.AssignmentEvaluationRepository
 import ch.uzh.ifi.access.repository.CourseEvaluationRepository
+import ch.uzh.ifi.access.repository.EvaluationRepository
+import ch.uzh.ifi.access.service.AggregateEvaluationService
 import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -23,6 +25,8 @@ class AggregateWritePathTests(
     @Autowired val assignmentEvaluationRepository: AssignmentEvaluationRepository,
     @Autowired val courseEvaluationRepository: CourseEvaluationRepository,
     @Autowired val entityManager: EntityManager,
+    @Autowired val aggregateEvaluationService: AggregateEvaluationService,
+    @Autowired val evaluationRepository: EvaluationRepository,
 ) {
 
     // a real (user, assignment) pair from the dump, the one with most evaluations
@@ -93,5 +97,29 @@ class AggregateWritePathTests(
             "SELECT points FROM course_evaluation WHERE user_id = :u AND course_id = :c"
         ).setParameter("u", userId).setParameter("c", courseId).singleResult as Number).toDouble()
         assertEquals(assignmentPoints, coursePoints, 1e-9)
+    }
+
+    @Test
+    fun `saveWithAggregates refreshes both aggregate rows`() {
+        val (userId, assignmentId) = sampleUserAndAssignment()
+        val courseId = (entityManager.createNativeQuery(
+            "SELECT course_id FROM assignment WHERE id = :a"
+        ).setParameter("a", assignmentId).singleResult as Number).toLong()
+        val evaluationId = (entityManager.createNativeQuery("""
+            SELECT MAX(e.id) FROM evaluation e
+            JOIN task t ON e.task_id = t.id
+            WHERE e.user_id = :u AND t.assignment_id = :a
+        """).setParameter("u", userId).setParameter("a", assignmentId)
+            .singleResult as Number).toLong()
+        val evaluation = evaluationRepository.findById(evaluationId).orElseThrow()!!
+        aggregateEvaluationService.saveWithAggregates(evaluation, assignmentId, courseId)
+        val assignmentRows = entityManager.createNativeQuery(
+            "SELECT points FROM assignment_evaluation WHERE user_id = :u AND assignment_id = :a"
+        ).setParameter("u", userId).setParameter("a", assignmentId).resultList
+        val courseRows = entityManager.createNativeQuery(
+            "SELECT points FROM course_evaluation WHERE user_id = :u AND course_id = :c"
+        ).setParameter("u", userId).setParameter("c", courseId).resultList
+        assertEquals(1, assignmentRows.size)
+        assertEquals(1, courseRows.size)
     }
 }
