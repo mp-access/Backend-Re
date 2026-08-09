@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access
 
+import ch.uzh.ifi.access.aggregates.AggregateConcurrencyTests
 import ch.uzh.ifi.access.aggregates.AggregateEvaluationMappingTests
 import ch.uzh.ifi.access.aggregates.AggregateWritePathTests
 import ch.uzh.ifi.access.performance.CalculationTests
@@ -12,6 +13,7 @@ import org.junit.platform.suite.api.Suite
 @SelectClasses(
     AggregateEvaluationMappingTests::class,
     AggregateWritePathTests::class,
+    AggregateConcurrencyTests::class,
     CalculationTests::class,
 )
 @TestClassOrder(ClassOrderer.OrderAnnotation::class)
