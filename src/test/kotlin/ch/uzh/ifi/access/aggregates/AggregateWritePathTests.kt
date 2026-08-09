@@ -1,0 +1,97 @@
+package ch.uzh.ifi.access.aggregates
+
+import ch.uzh.ifi.access.performance.DumpAvailabilityCondition
+import ch.uzh.ifi.access.repository.AssignmentEvaluationRepository
+import ch.uzh.ifi.access.repository.CourseEvaluationRepository
+import jakarta.persistence.EntityManager
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.transaction.annotation.Transactional
+
+// Tests for the two-step write path (upsert-and-lock + recompute), run
+// against the dump and rolled back. A full stored-vs-facts sweep will come
+// with the backfill work; here we prove the mechanics: one row per (user,
+// assignment) no matter how many upserts, version bumps on conflict, and
+// the recompute writes the sum we can compute by hand.
+@ExtendWith(DumpAvailabilityCondition::class)
+@SpringBootTest
+@Transactional
+class AggregateWritePathTests(
+    @Autowired val assignmentEvaluationRepository: AssignmentEvaluationRepository,
+    @Autowired val courseEvaluationRepository: CourseEvaluationRepository,
+    @Autowired val entityManager: EntityManager,
+) {
+
+    // a real (user, assignment) pair from the dump, the one with most evaluations
+    private fun sampleUserAndAssignment(): Pair<String, Long> {
+        val row = entityManager.createNativeQuery("""
+            SELECT e.user_id, t.assignment_id
+            FROM evaluation e JOIN task t ON e.task_id = t.id
+            WHERE t.assignment_id IS NOT NULL AND e.best_score IS NOT NULL
+            GROUP BY e.user_id, t.assignment_id
+            ORDER BY COUNT(*) DESC, e.user_id LIMIT 1
+        """).singleResult as Array<*>
+        return row[0] as String to (row[1] as Number).toLong()
+    }
+
+    @Test
+    fun `upsert creates one row and bumps version on conflict`() {
+        val (userId, assignmentId) = sampleUserAndAssignment()
+        assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        val rows = entityManager.createNativeQuery("""
+            SELECT version FROM assignment_evaluation
+            WHERE user_id = :u AND assignment_id = :a
+        """).setParameter("u", userId).setParameter("a", assignmentId).resultList
+        assertEquals(1, rows.size) // ON CONFLICT means still ONE row
+        assertEquals(1L, (rows.single() as Number).toLong()) // 0 on insert, +1 on conflict
+    }
+
+    @Test
+    fun `recompute writes the sum computed by hand`() {
+        val (userId, assignmentId) = sampleUserAndAssignment()
+        val expected = (entityManager.createNativeQuery("""
+            SELECT COALESCE(SUM(e.best_score), 0)
+            FROM evaluation e
+            WHERE e.user_id = :u AND e.id IN (
+                SELECT MAX(e2.id) FROM evaluation e2
+                JOIN task t2 ON e2.task_id = t2.id
+                WHERE e2.user_id = :u AND t2.assignment_id = :a
+                GROUP BY e2.task_id
+            )
+        """).setParameter("u", userId).setParameter("a", assignmentId)
+            .singleResult as Number).toDouble()
+        assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        assignmentEvaluationRepository.recomputePoints(userId, assignmentId)
+        val stored = (entityManager.createNativeQuery("""
+            SELECT points FROM assignment_evaluation
+            WHERE user_id = :u AND assignment_id = :a
+        """).setParameter("u", userId).setParameter("a", assignmentId)
+            .singleResult as Number).toDouble()
+        assertEquals(expected, stored, 1e-9)
+    }
+
+    @Test
+    fun `course recompute sums the assignment aggregates`() {
+        val (userId, assignmentId) = sampleUserAndAssignment()
+        val courseId = (entityManager.createNativeQuery(
+            "SELECT course_id FROM assignment WHERE id = :a"
+        ).setParameter("a", assignmentId).singleResult as Number).toLong()
+        assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        assignmentEvaluationRepository.recomputePoints(userId, assignmentId)
+        courseEvaluationRepository.upsertAndLock(userId, courseId)
+        courseEvaluationRepository.recomputePoints(userId, courseId)
+        // the aggregate tables were empty before this test (and are rolled
+        // back after), so the course total must equal the single assignment row
+        val assignmentPoints = (entityManager.createNativeQuery(
+            "SELECT points FROM assignment_evaluation WHERE user_id = :u AND assignment_id = :a"
+        ).setParameter("u", userId).setParameter("a", assignmentId).singleResult as Number).toDouble()
+        val coursePoints = (entityManager.createNativeQuery(
+            "SELECT points FROM course_evaluation WHERE user_id = :u AND course_id = :c"
+        ).setParameter("u", userId).setParameter("c", courseId).singleResult as Number).toDouble()
+        assertEquals(assignmentPoints, coursePoints, 1e-9)
+    }
+}

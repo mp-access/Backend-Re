@@ -2,6 +2,45 @@ package ch.uzh.ifi.access.repository
 
 import ch.uzh.ifi.access.model.CourseEvaluation
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
-// Intentionally empty for now, same reasoning as AssignmentEvaluationRepository.
-interface CourseEvaluationRepository : JpaRepository<CourseEvaluation, Long>
+interface CourseEvaluationRepository : JpaRepository<CourseEvaluation, Long> {
+
+    // Same two-step write as AssignmentEvaluationRepository. Lock ORDER
+    // rule: every writer takes the assignment row FIRST and the course row
+    // SECOND — bulk recompute included — so that two writers can never
+    // deadlock on the same pair of rows.
+    @Modifying
+    @Query(
+        value = """
+            INSERT INTO course_evaluation (id, user_id, course_id, points, version)
+            VALUES (nextval('course_evaluation_seq'), :userId, :courseId, 0, 0)
+            ON CONFLICT (user_id, course_id)
+            DO UPDATE SET version = course_evaluation.version + 1
+        """,
+        nativeQuery = true,
+    )
+    fun upsertAndLock(@Param("userId") userId: String, @Param("courseId") courseId: Long): Int
+
+    // The course total sums the (already recomputed, already locked)
+    // assignment aggregates of the course: inside the transaction we read
+    // our own fresh assignment row, so the two levels cannot disagree.
+    @Modifying
+    @Query(
+        value = """
+            UPDATE course_evaluation ce
+            SET points = (
+                SELECT COALESCE(SUM(ae.points), 0)
+                FROM assignment_evaluation ae
+                JOIN assignment a ON ae.assignment_id = a.id
+                WHERE ae.user_id = ce.user_id
+                  AND a.course_id = ce.course_id
+            )
+            WHERE ce.user_id = :userId AND ce.course_id = :courseId
+        """,
+        nativeQuery = true,
+    )
+    fun recomputePoints(@Param("userId") userId: String, @Param("courseId") courseId: Long): Int
+}
