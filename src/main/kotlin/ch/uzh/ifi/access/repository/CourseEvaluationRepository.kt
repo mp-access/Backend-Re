@@ -43,4 +43,41 @@ interface CourseEvaluationRepository : JpaRepository<CourseEvaluation, Long> {
         nativeQuery = true,
     )
     fun recomputePoints(@Param("userId") userId: String, @Param("courseId") courseId: Long): Int
+
+    // Course-scoped backfill for the bulk refresh: every user who has
+    // assignment aggregates in this course gets a course row if missing.
+    @Modifying
+    @Query(
+        value = """
+            INSERT INTO course_evaluation (id, user_id, course_id, points, version)
+            SELECT nextval('course_evaluation_seq'), f.user_id, :courseId, 0, 0
+            FROM (
+                SELECT DISTINCT ae.user_id
+                FROM assignment_evaluation ae
+                JOIN assignment a ON ae.assignment_id = a.id
+                WHERE a.course_id = :courseId
+            ) f
+            ON CONFLICT (user_id, course_id) DO NOTHING
+        """,
+        nativeQuery = true,
+    )
+    fun backfillMissingForCourse(@Param("courseId") courseId: Long): Int
+
+    // Bulk variant of the recompute, one statement for a whole course.
+    @Modifying
+    @Query(
+        value = """
+            UPDATE course_evaluation ce
+            SET points = (
+                SELECT COALESCE(SUM(ae.points), 0)
+                FROM assignment_evaluation ae
+                JOIN assignment a ON ae.assignment_id = a.id
+                WHERE ae.user_id = ce.user_id AND a.course_id = ce.course_id
+            ),
+            version = version + 1
+            WHERE ce.course_id = :courseId
+        """,
+        nativeQuery = true,
+    )
+    fun recomputeAllForCourse(@Param("courseId") courseId: Long): Int
 }

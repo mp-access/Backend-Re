@@ -42,16 +42,24 @@ class AggregateWritePathTests(
     }
 
     @Test
-    fun `upsert creates one row and bumps version on conflict`() {
+    fun `upsert keeps one row and bumps version on conflict`() {
         val (userId, assignmentId) = sampleUserAndAssignment()
+        // state-independent on purpose: the row may or may not exist already
+        // (since the backfill it does), so we measure the DELTA between two
+        // upserts instead of assuming a fresh insert
         assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        val versionAfterFirst = (entityManager.createNativeQuery("""
+            SELECT version FROM assignment_evaluation
+            WHERE user_id = :u AND assignment_id = :a
+        """).setParameter("u", userId).setParameter("a", assignmentId)
+            .singleResult as Number).toLong()
         assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
         val rows = entityManager.createNativeQuery("""
             SELECT version FROM assignment_evaluation
             WHERE user_id = :u AND assignment_id = :a
         """).setParameter("u", userId).setParameter("a", assignmentId).resultList
         assertEquals(1, rows.size) // ON CONFLICT means still ONE row
-        assertEquals(1L, (rows.single() as Number).toLong()) // 0 on insert, +1 on conflict
+        assertEquals(versionAfterFirst + 1, (rows.single() as Number).toLong())
     }
 
     @Test
@@ -88,15 +96,18 @@ class AggregateWritePathTests(
         assignmentEvaluationRepository.recomputePoints(userId, assignmentId)
         courseEvaluationRepository.upsertAndLock(userId, courseId)
         courseEvaluationRepository.recomputePoints(userId, courseId)
-        // the aggregate tables were empty before this test (and are rolled
-        // back after), so the course total must equal the single assignment row
-        val assignmentPoints = (entityManager.createNativeQuery(
-            "SELECT points FROM assignment_evaluation WHERE user_id = :u AND assignment_id = :a"
-        ).setParameter("u", userId).setParameter("a", assignmentId).singleResult as Number).toDouble()
+        // the invariant, valid in ANY database state (backfilled or not):
+        // the course row equals the sum of the user's assignment rows in it
+        val expectedCourse = (entityManager.createNativeQuery("""
+            SELECT COALESCE(SUM(ae.points), 0) FROM assignment_evaluation ae
+            JOIN assignment a ON ae.assignment_id = a.id
+            WHERE ae.user_id = :u AND a.course_id = :c
+        """).setParameter("u", userId).setParameter("c", courseId)
+            .singleResult as Number).toDouble()
         val coursePoints = (entityManager.createNativeQuery(
             "SELECT points FROM course_evaluation WHERE user_id = :u AND course_id = :c"
         ).setParameter("u", userId).setParameter("c", courseId).singleResult as Number).toDouble()
-        assertEquals(assignmentPoints, coursePoints, 1e-9)
+        assertEquals(expectedCourse, coursePoints, 1e-9)
     }
 
     @Test
@@ -121,5 +132,30 @@ class AggregateWritePathTests(
         ).setParameter("u", userId).setParameter("c", courseId).resultList
         assertEquals(1, assignmentRows.size)
         assertEquals(1, courseRows.size)
+    }
+
+    @Test
+    fun `bulk course recompute repairs corrupted rows`() {
+        val (userId, assignmentId) = sampleUserAndAssignment()
+        val courseId = (entityManager.createNativeQuery(
+            "SELECT course_id FROM assignment WHERE id = :a"
+        ).setParameter("a", assignmentId).singleResult as Number).toLong()
+        // make sure the rows exist and are correct, remember the truth
+        assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+        assignmentEvaluationRepository.recomputePoints(userId, assignmentId)
+        courseEvaluationRepository.upsertAndLock(userId, courseId)
+        courseEvaluationRepository.recomputePoints(userId, courseId)
+        val truth = (entityManager.createNativeQuery(
+            "SELECT points FROM assignment_evaluation WHERE user_id = :u AND assignment_id = :a"
+        ).setParameter("u", userId).setParameter("a", assignmentId).singleResult as Number).toDouble()
+        // corrupt the row on purpose, then let the bulk repair it
+        entityManager.createNativeQuery(
+            "UPDATE assignment_evaluation SET points = points + 99 WHERE user_id = :u AND assignment_id = :a"
+        ).setParameter("u", userId).setParameter("a", assignmentId).executeUpdate()
+        aggregateEvaluationService.recomputeAggregatesForCourse(courseId)
+        val repaired = (entityManager.createNativeQuery(
+            "SELECT points FROM assignment_evaluation WHERE user_id = :u AND assignment_id = :a"
+        ).setParameter("u", userId).setParameter("a", assignmentId).singleResult as Number).toDouble()
+        assertEquals(truth, repaired, 1e-9)
     }
 }

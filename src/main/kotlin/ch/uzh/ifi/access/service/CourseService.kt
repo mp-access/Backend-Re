@@ -41,6 +41,7 @@ class CourseService(
     private val exampleQueueService: ExampleQueueService,
     private val mapper: ObjectMapper,
     private val exampleRepository: ExampleRepository,
+    private val aggregateEvaluationService: AggregateEvaluationService,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -385,13 +386,21 @@ class CourseService(
     )
     fun updateCourse(courseSlug: String): Course {
         val existingCourse = getCourseBySlug(courseSlug)
-        return courseLifecycle.updateFromRepository(existingCourse)
+        val updated = courseLifecycle.updateFromRepository(existingCourse)
+        // A structure update can change what every student's sums should be
+        // (task points edited, tasks moved or removed): refresh the whole
+        // course's aggregate rows in the same transaction as the update.
+        aggregateEvaluationService.recomputeAggregatesForCourse(updated.id!!)
+        return updated
     }
 
     @Transactional
     fun updateCourseFromDirectory(courseSlug: String, directory: Path): Course {
         val existingCourse = getCourseBySlug(courseSlug)
-        return courseLifecycle.updateFromDirectory(existingCourse, directory)
+        val updated = courseLifecycle.updateFromDirectory(existingCourse, directory)
+        // same reasoning as updateCourse: structure changed, refresh the sums
+        aggregateEvaluationService.recomputeAggregatesForCourse(updated.id!!)
+        return updated
     }
 
     @Transactional

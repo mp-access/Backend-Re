@@ -36,4 +36,19 @@ class AggregateEvaluationService(
         courseEvaluationRepository.upsertAndLock(userId, courseId)
         courseEvaluationRepository.recomputePoints(userId, courseId)
     }
+
+    // Bulk refresh for one whole course, hooked to the course update flow
+    // (webhook/pull): a structure change (task points edited, tasks moved
+    // or removed) can change what every student's sums should be. Missing
+    // rows are backfilled first (a task moved into another assignment
+    // creates pairs that never had a row), then everything is recomputed
+    // from the facts. Same order as the per-student writer: assignment
+    // level first, course level second.
+    @Transactional
+    fun recomputeAggregatesForCourse(courseId: Long) {
+        assignmentEvaluationRepository.backfillMissingForCourse(courseId)
+        assignmentEvaluationRepository.recomputeAllForCourse(courseId)
+        courseEvaluationRepository.backfillMissingForCourse(courseId)
+        courseEvaluationRepository.recomputeAllForCourse(courseId)
+    }
 }
