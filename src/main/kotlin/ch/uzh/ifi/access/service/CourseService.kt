@@ -74,7 +74,9 @@ class CourseService(
         val registrationIDs = course.registeredStudents.associateWith { roleService.getRegistrationIDCandidates(it) }
         val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
         val hasPoints =
-            courseRepository.getParticipantsWithPoints(courseSlug, userIds.values.filterNotNull().toTypedArray())
+            // pre-summed course totals from the aggregate table: one indexed
+            // read instead of a SUM over every student's evaluations
+            aggregateEvaluationService.coursePointsForUsers(courseSlug, userIds.values.filterNotNull())
                 .filter { it.userId != null && it.totalPoints != null }
                 .associate { it.userId to it.totalPoints }
         val hasNoPoints = (userIds.values.filterNotNull() - hasPoints.keys).associateWith { 0.00 }
@@ -299,6 +301,11 @@ class CourseService(
     }
 
     fun calculateAssignmentPoints(tasks: List<Task>, userId: String): Double {
+        // NOTE kept on the per-task path on purpose: the workspace answer is
+        // task-granular (TaskOverview queries every task's points anyway),
+        // so summing the already-cached task points costs no extra query,
+        // while an aggregate-row read here would only ADD one per assignment
+        // (measured: +11 queries on useCourse with zero time gain).
         return tasks.stream().mapToDouble { task: Task -> pointsService.calculateTaskPoints(task.id, userId) }.sum()
     }
 
@@ -310,7 +317,9 @@ class CourseService(
 
     @Cacheable(value = ["CourseService.calculateCoursePoints"], key = "#slug + '-' + #userId")
     fun calculateCoursePoints(slug: String, userId: String): Double {
-        return courseRepository.getTotalPoints(slug, userId) ?: 0.0
+        // the pre-summed course total, one row lookup instead of a SUM
+        // over the student's evaluations
+        return aggregateEvaluationService.coursePoints(userId, slug)
     }
 
     fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {

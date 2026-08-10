@@ -80,4 +80,17 @@ interface CourseEvaluationRepository : JpaRepository<CourseEvaluation, Long> {
         nativeQuery = true,
     )
     fun recomputeAllForCourse(@Param("courseId") courseId: Long): Int
+
+    // Read side: the pre-summed course total of one student, resolved by
+    // course slug. Null when the row does not exist yet (sparse rows):
+    // callers read that as 0.
+    @Query("SELECT ce.points FROM CourseEvaluation ce WHERE ce.userId = :userId AND ce.course.slug = :courseSlug")
+    fun findPointsByCourseSlug(@Param("userId") userId: String, @Param("courseSlug") courseSlug: String): Double?
+
+    // Read side for the staff pages: every requested student's pre-summed
+    // course total in one indexed read — the aggregate replacement for the
+    // big SUM over evaluations (CourseRepository.getParticipantsWithPoints).
+    // Same projection type, so callers cannot tell the difference.
+    @Query("SELECT ce.userId AS userId, ce.points AS totalPoints FROM CourseEvaluation ce WHERE ce.course.slug = :courseSlug AND ce.userId IN :userIds")
+    fun findPointsByCourse(@Param("courseSlug") courseSlug: String, @Param("userIds") userIds: List<String>): List<UserPointsProjection>
 }

@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.model.Evaluation
 import ch.uzh.ifi.access.repository.AssignmentEvaluationRepository
 import ch.uzh.ifi.access.repository.CourseEvaluationRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
+import ch.uzh.ifi.access.repository.UserPointsProjection
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -35,6 +36,26 @@ class AggregateEvaluationService(
         if (courseId == null) return
         courseEvaluationRepository.upsertAndLock(userId, courseId)
         courseEvaluationRepository.recomputePoints(userId, courseId)
+    }
+
+    // Read side: pre-summed points as single row lookups. A missing row
+    // (sparse design: no graded submission yet) reads as 0.
+
+    // CURRENTLY UNUSED, kept as documentation of a measured experiment:
+    // wiring this into calculateAssignmentPoints only ADDED one query per
+    // assignment (+11 on useCourse, no time gain), because the workspace
+    // answer is task-granular and every TaskOverview card queries its own
+    // points anyway. Becomes useful the day a reader wants assignment
+    // totals WITHOUT task details.
+    fun assignmentPoints(userId: String, assignmentId: Long): Double =
+        assignmentEvaluationRepository.findPoints(userId, assignmentId) ?: 0.0
+
+    fun coursePoints(userId: String, courseSlug: String): Double =
+        courseEvaluationRepository.findPointsByCourseSlug(userId, courseSlug) ?: 0.0
+
+    fun coursePointsForUsers(courseSlug: String, userIds: List<String>): List<UserPointsProjection> {
+        if (userIds.isEmpty()) return emptyList() // JPQL IN () is not valid
+        return courseEvaluationRepository.findPointsByCourse(courseSlug, userIds)
     }
 
     // Bulk refresh for one whole course, hooked to the course update flow

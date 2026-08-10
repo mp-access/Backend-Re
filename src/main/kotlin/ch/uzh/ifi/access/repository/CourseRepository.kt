@@ -69,6 +69,11 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getTeamMemberName(email: String?): MemberOverview?
     fun findCourseBySlug(courseSlug: String?): CourseSummary?
 
+    // CURRENTLY UNUSED: superseded by the pre-summed course_evaluation
+    // read (CourseService.calculateCoursePoints). Kept as the reference
+    // implementation of the total's semantics — sum of best_score over the
+    // MAX(id) canonical evaluation per task — which the aggregate tables
+    // must always agree with (the consistency tests check exactly that).
     @Query(
         nativeQuery = true, value = """
             SELECT sum(e.best_score) AS total_points
@@ -87,6 +92,10 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
         """
     )
     fun getTotalPoints(courseSlug: String, userId: String): Double?
+
+    // Still used by DumpService; for the staff pages it has been superseded
+    // by the pre-summed course_evaluation read
+    // (CourseEvaluationRepository.findPointsByCourse).
 
     @Query(
         nativeQuery = true, value = """

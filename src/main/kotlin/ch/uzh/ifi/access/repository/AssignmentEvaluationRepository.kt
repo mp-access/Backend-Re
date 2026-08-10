@@ -104,4 +104,10 @@ interface AssignmentEvaluationRepository : JpaRepository<AssignmentEvaluation, L
         nativeQuery = true,
     )
     fun recomputeAllForCourse(@Param("courseId") courseId: Long): Int
+
+    // Read side. CURRENTLY UNUSED (see AggregateEvaluationService
+    // .assignmentPoints for the measured reason): a single row lookup for
+    // one student's assignment total, for future total-level readers.
+    @Query("SELECT ae.points FROM AssignmentEvaluation ae WHERE ae.userId = :userId AND ae.assignment.id = :assignmentId")
+    fun findPoints(@Param("userId") userId: String, @Param("assignmentId") assignmentId: Long): Double?
 }
