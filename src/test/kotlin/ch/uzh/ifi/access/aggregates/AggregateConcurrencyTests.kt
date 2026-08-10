@@ -72,17 +72,24 @@ class AggregateConcurrencyTests(
         }
     }
 
-    // no free rollback here: undo our score bumps and drop the aggregate
-    // rows. Guarded so that a failure in the setup (before userId exists)
-    // does not blow up the cleanup too.
+    // no free rollback here: undo our score bumps, then recompute the
+    // touched aggregate rows back to the truth. Since the backfill, the
+    // aggregate rows are part of the dataset — deleting them would poke
+    // holes the consistency tests rightly complain about. Guarded so that
+    // a failure in the setup (before userId exists) does not blow up the
+    // cleanup too.
     @AfterEach
     fun restoreDumpState() {
         if (!::userId.isInitialized) return
         originalScores.forEach { (id, score) ->
             jdbc.update("UPDATE evaluation SET best_score = ? WHERE id = ?", score, id)
         }
-        jdbc.update("DELETE FROM course_evaluation WHERE user_id = ?", userId)
-        jdbc.update("DELETE FROM assignment_evaluation WHERE user_id = ?", userId)
+        tx.execute {
+            assignmentEvaluationRepository.upsertAndLock(userId, assignmentId)
+            assignmentEvaluationRepository.recomputePoints(userId, assignmentId)
+            courseEvaluationRepository.upsertAndLock(userId, courseId)
+            courseEvaluationRepository.recomputePoints(userId, courseId)
+        }
     }
 
     @Test
