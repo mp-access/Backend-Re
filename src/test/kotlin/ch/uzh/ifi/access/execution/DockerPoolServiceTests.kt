@@ -194,8 +194,12 @@ class DockerPoolServiceTests(
             // both containers are now healthy and borrowable
             val a = pool.borrow(); assertNotNull(a)
             val b = pool.borrow(); assertNotNull(b)
-            assertTrue(a!!.isHealthy() && b!!.isHealthy())
-            pool.release(a); pool.release(b)
+            // separate !! statements so both a and b are smart-cast non-null (an && would
+            // short-circuit and leave b nullable for the release call below)
+            assertTrue(a!!.isHealthy())
+            assertTrue(b!!.isHealthy())
+            pool.release(a)
+            pool.release(b)
         } finally {
             pool.drain()
         }
