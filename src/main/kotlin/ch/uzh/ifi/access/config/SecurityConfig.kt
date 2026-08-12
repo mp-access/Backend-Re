@@ -68,7 +68,8 @@ class SecurityConfig(private val env: Environment) {
                     "/courses/{course}/participants/**",
                     "/courses/{course}/assistants/**",
                     "/courses/{course}/supervisors/**",
-                    "/webhooks/**"
+                    "/webhooks/**",
+                    "/courses/pool/**"
                 )
             }
             .authorizeHttpRequests { authorize ->
@@ -84,7 +85,8 @@ class SecurityConfig(private val env: Environment) {
                         "/courses/{course}/assistants/**",
                         "/courses/{course}/supervisors/**",
                         "/courses/{course}/summary",
-                        "/pruneSubmissions"
+                        "/pruneSubmissions",
+                        "/courses/pool/**"
                     ).access { _, context ->
                         AuthorityAuthorizationDecision(
                             isAuthorizedAPIKey(context),

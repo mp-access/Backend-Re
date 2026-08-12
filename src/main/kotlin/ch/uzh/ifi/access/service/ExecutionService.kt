@@ -29,7 +29,8 @@ class ExecutionService(
     private val fileService: FileService,
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
-    private val jsonMapper: JsonMapper
+    private val jsonMapper: JsonMapper,
+    private val dockerPoolService: DockerPoolService
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -56,30 +57,35 @@ class ExecutionService(
         course: Course,
         submission: Submission,
         task: Task,
-        evaluation: Evaluation
+        evaluation: Evaluation,
+        timer: BenchTimer? = null
     ): Pair<Submission, Results> {
         var results = Results()
         val image = task.dockerImage!!
         // inspect the image to check whether it's local, and pull it if necessary
-        try {
-            dockerClient.inspectImageCmd(image).exec()
-        } catch (e: NotFoundException) {
-            dockerClient.pullImageCmd(image)
-                .exec(PullImageResultCallback())
-                .awaitCompletion()
+        timer.measure("image_inspect_pull") {
+            try {
+                dockerClient.inspectImageCmd(image).exec()
+            } catch (e: NotFoundException) {
+                dockerClient.pullImageCmd(image)
+                    .exec(PullImageResultCallback())
+                    .awaitCompletion()
+            }
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
-            // add submission files (supplied by the frontend) to the container
-            submission.files.forEach { file -> writeSubmissionFile(submissionDir, file) }
-            // add visible but non-editable files (these are not part of the submission files, but part of the task)
-            getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
-            // add grading and course global files if submission is graded
-            if (submission.isGraded) {
-                getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
-                course.globalFiles.forEach { file -> writeGlobalFile(submissionDir, file) }
+            timer.measure("file_setup") {
+                // add submission files (supplied by the frontend) to the container
+                submission.files.forEach { file -> writeSubmissionFile(submissionDir, file) }
+                // add visible but non-editable files (these are not part of the submission files, but part of the task)
+                getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
+                // add grading and course global files if submission is graded
+                if (submission.isGraded) {
+                    getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
+                    course.globalFiles.forEach { file -> writeGlobalFile(submissionDir, file) }
+                }
             }
             // student code is run on a tmpfs so we can enforce a disk quota
             val tmpfs: Map<String, String> = mapOf(
@@ -138,16 +144,18 @@ class ExecutionService(
             )
             // create the container
             val memoryLimit = 250 * Util.MEGABYTE
-            val container = containerCmd
-                .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
-                .withCmd("/bin/bash", "-c", command)
-                .withHostConfig(
-                    HostConfig()
-                        .withNetworkMode("none")
-                        .withTmpFs(tmpfs)
-                        .withMemory(memoryLimit)
-                        .withBinds(Bind.parse("$submissionDir:/submission"))
-                ).exec()
+            val container = timer.measure("container_create") {
+                containerCmd
+                    .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
+                    .withCmd("/bin/bash", "-c", command)
+                    .withHostConfig(
+                        HostConfig()
+                            .withNetworkMode("none")
+                            .withTmpFs(tmpfs)
+                            .withMemory(memoryLimit)
+                            .withBinds(Bind.parse("$submissionDir:/submission"))
+                    ).exec()
+            }
             // Set up a scheduler to kill the container forcefully after the specified task timeout (or 180 seconds at
             // most). This is necessary if the submission is in an endless loop or similar lock-up.
             val scheduler = Executors.newScheduledThreadPool(1)
@@ -163,28 +171,37 @@ class ExecutionService(
                 }
             }, timeout, TimeUnit.SECONDS)
             // start the container
-            dockerClient.startContainerCmd(container.id).exec()
-            // wait for the container to terminate
-            val statusCode = dockerClient.waitContainerCmd(container.id)
-                .exec(WaitContainerResultCallback())
-                .awaitStatusCode()
+            timer.measure("container_start") {
+                dockerClient.startContainerCmd(container.id).exec()
+            }
+            // wait for the container to terminate (this span is the actual user-code execution time)
+            val statusCode = timer.measure("container_wait") {
+                dockerClient.waitContainerCmd(container.id)
+                    .exec(WaitContainerResultCallback())
+                    .awaitStatusCode()
+            }
             // we can get rid of the scheduler now, because the container is dead for sure
-            dockerClient.removeContainerCmd(container.id).exec()
+            timer.measure("container_remove") {
+                dockerClient.removeContainerCmd(container.id).exec()
+            }
             scheduler.shutdown()
             logger.debug { "Submission $submissionDir finished with statusCode $statusCode" }
             // time to collect the execution results
-            submission.logs = readLogsFile(submissionDir)
+            submission.logs = timer.measure("read_logs") { readLogsFile(submissionDir) }
             val persistentResultFileErrors: MutableList<String> = mutableListOf()
-            task.persistentResultFilePaths.forEach { path ->
-                try {
-                    val resultFile = fileService.storeFile(submissionDir.resolve(path), ResultFile())
-                    resultFile.path = path
-                    resultFile.submission = submission
-                    submission.persistentResultFiles.add(resultFile)
-                } catch (e: Exception) {
-                    persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
+            timer.measure("collect_result_files") {
+                task.persistentResultFilePaths.forEach { path ->
+                    try {
+                        val resultFile = fileService.storeFile(submissionDir.resolve(path), ResultFile())
+                        resultFile.path = path
+                        resultFile.submission = submission
+                        submission.persistentResultFiles.add(resultFile)
+                    } catch (e: Exception) {
+                        persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
+                    }
                 }
             }
+            val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
             if (submission.isGraded) {
                 results = when (statusCode) {
                     // out of memory
@@ -273,9 +290,168 @@ class ExecutionService(
                     evaluation.update(submission.points)
                 }
             }
-            FileUtils.deleteQuietly(submissionDir.toFile())
+            timer?.record("evaluate_results", evalMark.elapsedNow().inWholeMicroseconds)
+            timer.measure("cleanup") { FileUtils.deleteQuietly(submissionDir.toFile()) }
         }
         return Pair(submission, results)
+    }
+
+    /**
+     * Pool-based counterpart to executeSubmission (Variant A). Kept as a SEPARATE public
+     * entry point on purpose: the one-shot executeSubmission stays pristine as the baseline,
+     * so you can A/B compare and roll back by simply not calling this one.
+     *
+     * SKELETON: mirrors the one-shot phases but against a reused container via docker exec.
+     * Reuse the existing write / readLogsFile / result-collection helpers when filling this in
+     * (ideally extract a shared collectResults so both paths grade identically).
+     */
+    fun executePooledSubmission(
+        course: Course,
+        submission: Submission,
+        task: Task,
+        evaluation: Evaluation,
+        timer: BenchTimer? = null
+    ): Pair<Submission, Results> {
+        // If the pool can't hand out a container in time, fall back to one-shot so a submission
+        // is never stuck. For a clean A/B measurement, size the pool >= peak concurrency so this
+        // fallback effectively never triggers.
+        val container = timer.measure("pool_borrow") { dockerPoolService.borrow() }
+            ?: return executeSubmission(course, submission, task, evaluation, timer)
+        try {
+            var results = Results()
+            val workDir = container.hostWorkDir
+            // write the submission + task + grading + global files into the container's bound /submission dir
+            timer.measure("file_setup") {
+                submission.files.forEach { file -> writeSubmissionFile(workDir, file) }
+                getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
+                if (submission.isGraded) {
+                    getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
+                    course.globalFiles.forEach { file -> writeGlobalFile(workDir, file) }
+                }
+            }
+            val resultFileSizeLimit = 100 * Util.KILOBYTE
+            val persistentFileCopyCommands = task.persistentResultFilePaths.joinToString("\n") { path ->
+                """
+                # Check if results file exceeds permissible size limit
+                if [[ -f "$path" ]]; then
+                    actual_size=${'$'}(stat -c%s "$path")
+                    if [[ ! ${'$'}actual_size -lt $resultFileSizeLimit ]]; then
+                        exit 202
+                    fi
+                fi
+                # Copy the result file to the correct directory in the submission volume
+                file_dir=${'$'}(dirname "$path")
+                mkdir -p "/submission/${'$'}file_dir"
+                cp "$path" "/submission/${'$'}file_dir"
+                """
+            }
+            // Same script as the one-shot path — but run via `docker exec` in a reused container
+            // instead of as the container's start command.
+            val command = (
+            """
+                # copy submitted files to tmpfs
+                /bin/cp -R /submission/* /workspace/
+                # run command (the cwd is set to /workspace already)
+                ${task.formCommand(submission.command!!)} &> logs.txt
+                # remember the command's exit code
+                exit_code=${'$'}?;
+                # write results and logs to submission volume
+                /bin/cp /workspace/grade_results.json /submission/
+                /bin/cp /workspace/logs.txt /submission/
+                # check if the tmpfs is full and if so, return 201
+                USAGE=${'$'}(df -h | grep /workspace | awk '{print ${'$'}5}' | sed 's/%//')
+                if [ "${'$'}USAGE" -eq 100 ]; then
+                    exit 201
+                fi
+                # otherwise check and copy persistent results and return command status code
+                $persistentFileCopyCommands
+                exit ${'$'}exit_code;
+                """.trimIndent()
+            )
+            val memoryLimit = 250 * Util.MEGABYTE
+            val timeout = task.timeLimit.coerceAtMost(180).toLong()
+            // this span is the actual user-code execution time (analogous to container_wait)
+            val exec = timer.measure("container_exec") { container.exec(command, timeout) }
+            val statusCode = exec.exitCode
+            logger.debug { "Pooled submission ${container.id} finished with statusCode $statusCode" }
+            submission.logs = timer.measure("read_logs") { readLogsFile(workDir) }
+            val persistentResultFileErrors: MutableList<String> = mutableListOf()
+            timer.measure("collect_result_files") {
+                task.persistentResultFilePaths.forEach { path ->
+                    try {
+                        val resultFile = fileService.storeFile(workDir.resolve(path), ResultFile())
+                        resultFile.path = path
+                        resultFile.submission = submission
+                        submission.persistentResultFiles.add(resultFile)
+                    } catch (e: Exception) {
+                        persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
+                    }
+                }
+            }
+            val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
+            if (submission.isGraded) {
+                results = when (statusCode) {
+                    // out of memory OR timeout (both surface as 137); exec.timedOut disambiguates
+                    137 -> {
+                        if (exec.timedOut) {
+                            Results(
+                                0.0,
+                                mutableListOf("Your solution ran out of time (taking more than $timeout seconds). Check for infinite loops and ensure your solution is sufficiently fast even for challenging problem parameters.")
+                            )
+                        } else {
+                            Results(
+                                0.0,
+                                mutableListOf("Your solution ran out of memory (using more than ${bytesToString(memoryLimit)}). Make sure you aren't creating gigantic data structures.")
+                            )
+                        }
+                    }
+                    // out of tmpfs disk space
+                    201 -> Results(
+                        0.0,
+                        mutableListOf("Your solution wrote too much data (more than ${bytesToString(resultFileSizeLimit)}), either to files, or by printing to the command line. Are you printing in an infinite loop?")
+                    )
+                    // persistent result file too large
+                    202 -> Results(
+                        0.0,
+                        mutableListOf("One or more files you're supposed to write exceeds the file size limit of ${bytesToString(resultFileSizeLimit)}")
+                    )
+                    // None of the above — expect grading results
+                    else -> {
+                        try {
+                            jsonMapper.readValue(
+                                Files.readString(workDir.resolve("grade_results.json")),
+                                Results::class.java
+                            )
+                        } catch (e: NoSuchFileException) {
+                            logger.debug { "Pooled submission ${container.id} no grade_results.json" }
+                            Results(
+                                null,
+                                mutableListOf("No grading results. Please report this to the course organizers or teaching assistants and provide as much detail as possible.")
+                            )
+                        }
+                    }
+                }
+                results.hints.addAll(persistentResultFileErrors)
+                submission.output = results.hints.filterNotNull().firstOrNull()
+                if (results.points != null) {
+                    submission.valid = true
+                    if (isExample(task)) {
+                        if (task.testNames.size == results.hints.size) {
+                            submission.testsPassed = results.hints.map { hint -> if (hint == null) 1 else 0 }
+                        } else {
+                            submission.testsPassed = List(task.testNames.size) { 0 }
+                        }
+                    }
+                    submission.points = minOf(results.points!!, submission.maxPoints!!)
+                    evaluation.update(submission.points)
+                }
+            }
+            timer?.record("evaluate_results", evalMark.elapsedNow().inWholeMicroseconds)
+            return Pair(submission, results)
+        } finally {
+            // reset() inside release() wipes /workspace + /submission — no manual cleanup here
+            timer.measure("pool_release") { dockerPoolService.release(container) }
+        }
     }
 
     private fun writeFileData(filePath: Path, data: String?, binaryData: ByteArray?) {

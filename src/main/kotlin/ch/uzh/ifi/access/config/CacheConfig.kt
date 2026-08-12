@@ -20,7 +20,8 @@ class CacheConfig {
             "RoleService.getUserResourceById",
             "RoleService.getUserId",
             "RoleService.isSupervisor",
-            "RoleService.getUserRoles"
+            "RoleService.getUserRoles",
+            "TaskLookupService.resolveTaskId"
         )
 
         val TEMPORARY_CACHES = listOf(
