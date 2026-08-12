@@ -27,6 +27,7 @@ class SubmissionService(
     private val dockerService: ExecutionService,
     private val evaluationService: EvaluationService,
     private val dockerPoolService: DockerPoolService,
+    private val taskLookupService: TaskLookupService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
         if (userId == null) {
@@ -180,6 +181,7 @@ class SubmissionService(
         submissionRepository.saveAndFlush(submission)
     }
 
+    // TODO: Speed influence?
     fun getCourseBySlug(courseSlug: String): Course {
         return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
@@ -187,6 +189,19 @@ class SubmissionService(
         )
     }
 
+    // The slug -> id resolution is cached in TaskLookupService (a separate bean so Spring's caching
+    // proxy actually engages). We then load a FRESH managed entity by primary key: caching the Task
+    // entity itself is unsafe here because createSubmission mutates it (task.createEvaluation) and its
+    // lazy collections depend on the open request session.
+    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
+        val taskId = taskLookupService.resolveTaskId(courseSlug, assignmentSlug, taskSlug)
+        val task = taskId?.let { taskRepository.findById(it).orElse(null) }
+        return task ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
+        )
+    }
+    /*
+    Original Function:
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
         return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
             courseSlug,
@@ -196,6 +211,7 @@ class SubmissionService(
             HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
         )
     }
+    */
 
     fun getTaskFileById(fileId: Long): TaskFile {
         return taskFileRepository.findById(fileId).get()

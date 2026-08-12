@@ -11,12 +11,18 @@ import java.util.concurrent.TimeUnit
 /**
  * docker-java backed [DockerContainer]. Wraps exactly one long-lived container that was
  * started with `sleep infinity`; submissions run inside it via `docker exec`.
+ *
+ * Student workloads are executed as [execUser] (a non-root UID, e.g. "1000:1000"), while
+ * maintenance execs (reset / process kill) intentionally run as the container's default
+ * user (root) so they can always clean up files and processes the workload left behind.
  */
 class DockerContainerInstance(
     private val dockerClient: DockerClient,
     override val id: String,
     override val hostWorkDir: Path,
     val image: String,
+    /** Non-root user the student workload runs as (docker `--user` syntax, e.g. "1000:1000"). */
+    private val execUser: String,
 ) : DockerContainer {
 
     private val logger = KotlinLogging.logger {}
@@ -25,7 +31,14 @@ class DockerContainerInstance(
     override var reuseCount: Int = 0
 
     override fun exec(script: String, timeoutSeconds: Long): ExecResult {
+        // Make everything under the bound /submission writable by the non-root workload — including
+        // directories the file-setup step pre-created as root (e.g. a persistent-result path that
+        // shares a directory with input files). Runs as root; reset() wipes /submission afterwards,
+        // so this never persists across submissions.
+        runOneOff("chmod -R 0777 /submission 2>/dev/null || true")
         val execId = dockerClient.execCreateCmd(id)
+            // SECURITY: run student code as a non-root user, never as root.
+            .withUser(execUser)
             .withWorkingDir("/workspace")
             .withCmd("/bin/bash", "-c", script)
             .withAttachStdout(true)
@@ -51,8 +64,8 @@ class DockerContainerInstance(
     override fun reset() {
         // 1) kill anything the previous submission left running (never pid 1 = sleep infinity)
         killWorkloadProcesses()
-        // 2) wipe the tmpfs workspace and the bound submission dir. Done inside the container
-        //    (as its user) so files created by student code — possibly root-owned — are removable.
+        // 2) wipe the tmpfs workspace and the bound submission dir. Runs as root (default user),
+        //    so it can remove files the non-root workload — or any stray root-owned files — created.
         runOneOff("rm -rf /workspace/* /workspace/.[!.]* /submission/* /submission/.[!.]* 2>/dev/null || true")
         // 3) best-effort host-side cleanup of the bound dir
         hostWorkDir.toFile().listFiles()?.forEach { FileUtils.deleteQuietly(it) }
@@ -62,6 +75,25 @@ class DockerContainerInstance(
         dockerClient.inspectContainerCmd(id).exec().state?.running == true
     } catch (e: Exception) {
         false
+    }
+
+    override fun effectiveUid(): Int {
+        val out = StringBuilder()
+        val execId = dockerClient.execCreateCmd(id)
+            // evaluate as the SAME user student code runs as, so the check reflects reality
+            .withUser(execUser)
+            .withCmd("/bin/sh", "-c", "id -u")
+            .withAttachStdout(true)
+            .withAttachStderr(true)
+            .exec()
+            .id
+        dockerClient.execStartCmd(execId).exec(object : ResultCallback.Adapter<Frame>() {
+            override fun onNext(frame: Frame) {
+                out.append(String(frame.payload))
+            }
+        }).awaitCompletion()
+        return out.toString().trim().toIntOrNull()
+            ?: throw IllegalStateException("Could not determine effective uid for container $id (output was '$out')")
     }
 
     override fun destroy() {
@@ -88,7 +120,7 @@ class DockerContainerInstance(
         )
     }
 
-    /** Run a short maintenance command inside the container and block until it finishes. */
+    /** Run a short maintenance command inside the container (as root) and block until it finishes. */
     private fun runOneOff(script: String) {
         try {
             val execId = dockerClient.execCreateCmd(id)

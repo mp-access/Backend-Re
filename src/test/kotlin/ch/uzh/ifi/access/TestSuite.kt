@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.api.AfterSubmissionTests
 import ch.uzh.ifi.access.api.ManagementAPITests
 import ch.uzh.ifi.access.api.SubmissionTests
 import ch.uzh.ifi.access.execution.ExecutionServiceTests
+import ch.uzh.ifi.access.execution.DockerPoolServiceTests
 import ch.uzh.ifi.access.import.ImportAssignmentTests
 import ch.uzh.ifi.access.import.ImportCourseTests
 import ch.uzh.ifi.access.import.ImportRepoTests
@@ -39,6 +40,7 @@ import java.util.concurrent.TimeUnit
     ImportTaskTests::class,
     ManagementAPITests::class,
     ExecutionServiceTests::class,
+    DockerPoolServiceTests::class,
     SubmissionTests::class,
     AfterSubmissionTests::class,
     RoleServiceTests::class,

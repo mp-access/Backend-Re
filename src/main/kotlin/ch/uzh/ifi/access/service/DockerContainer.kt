@@ -36,7 +36,8 @@ interface DockerContainer {
 
     /**
      * Run [script] inside the container via `docker exec`, wrapped so it is force-killed
-     * after [timeoutSeconds]. Returns the command's exit code (same semantics as the
+     * after [timeoutSeconds]. Student code is executed as a NON-ROOT user (see the pool's
+     * `docker.pool.user`). Returns the command's exit code (same semantics as the
      * one-shot path: 137 = OOM/timeout, 201/202 = quota, else grading exit code).
      */
     fun exec(script: String, timeoutSeconds: Long): ExecResult
@@ -50,6 +51,13 @@ interface DockerContainer {
 
     /** Cheap liveness check (e.g. `docker inspect` → state.running == true). */
     fun isHealthy(): Boolean
+
+    /**
+     * Sanity check: the effective UID that student workloads run as inside this container
+     * (i.e. `id -u` evaluated as the configured exec user). The pool refuses to serve any
+     * container whose workload resolves to uid 0, so student code is never executed as root.
+     */
+    fun effectiveUid(): Int
 
     /** Stop and remove the underlying container and clean up its host workdir. */
     fun destroy()
