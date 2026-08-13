@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.constants.Visibility
 import ch.uzh.ifi.access.repository.AssignmentRepository
-import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.TaskRepository
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -21,7 +20,6 @@ import java.util.zip.ZipOutputStream
 @Service
 @Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class DumpService(
-    private val courseRepository: CourseRepository,
     private val courseService: CourseService,
     private val courseLifecycle: CourseLifecycle,
     private val assignmentRepository: AssignmentRepository,
@@ -221,15 +219,10 @@ class DumpService(
 
         // write submissions and participant metadata
         val users = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it) }
-        val registrationIDs = course.registeredStudents.associateWith { roleService.getRegistrationIDCandidates(it) }
         val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
-        val points =
-            courseRepository.getParticipantsWithPoints(course.slug!!, userIds.values.filterNotNull().toTypedArray())
-                .filter { it.userId != null && it.totalPoints != null }
-                .associate { it.userId to it.totalPoints }
 
-        val participants = mutableListOf<List<String>>()
-        participants.add(
+        val participants = courseService.getStudentsWithPoints(course.slug!!)
+        val participantsHeader =
             listOf(
                 "registrationId",
                 "username",
@@ -239,29 +232,28 @@ class DumpService(
                 "points",
                 "otherIds",
             )
-        )
 
-        users.forEach { (registrationId, user) ->
-            val otherIds = (registrationIDs[registrationId]?.minus(registrationId))?.joinToString(" ") ?: ""
-            participants.add(
-                listOf(
-                    registrationId,
-                    user?.username ?: "",
-                    user?.firstName ?: "",
-                    user?.lastName ?: "",
-                    user?.email ?: "",
-                    points[userIds[registrationId]]?.toString() ?: "",
-                    otherIds,
-                )
-            )
+        // write members
+        writeZipData(zip, "supervisors.txt", course.supervisors.joinToString("\n"))
+        writeZipData(zip, "assistants.txt", course.assistants.joinToString("\n"))
+        writeZipData(zip, "participants.txt", (participantsHeader + participants.map {
+            listOf(
+                it.registrationId,
+                it.username,
+                it.firstName,
+                it.lastName,
+                it.email,
+                it.points,
+                it.otherId
+            ).joinToString(",")
+        }).joinToString("\n"))
 
+        users.forEach { (registrationId, _) ->
             // create subdir for each participant
             val participantDir = "participants/${registrationId}"
             assignments.forEach { assignment ->
-                val assignmentPadding = assignments.size.toString().length
                 val tasks = assignment.tasks
                 tasks!!.forEach { task ->
-                    val taskPadding = tasks.size.toString().length
                     val evaluation = evaluationService.getEvaluation(task!!.id, userIds[registrationId])
                     evaluation?.submissions?.sortedBy { it.createdAt }?.forEachIndexed { index, s ->
                         val submissionPadding = evaluation.submissions.size.toString().length
@@ -324,11 +316,6 @@ class DumpService(
                 }
             }
         }
-
-        // write members
-        writeZipData(zip, "supervisors.txt", course.supervisors.joinToString("\n"))
-        writeZipData(zip, "assistants.txt", course.assistants.joinToString("\n"))
-        writeZipData(zip, "participants.txt", participants.map { it.joinToString(",") }.joinToString("\n"))
 
         // write git repository (if possible)
         try {
