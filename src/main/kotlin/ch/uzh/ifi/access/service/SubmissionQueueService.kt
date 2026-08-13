@@ -2,6 +2,8 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
@@ -34,7 +36,8 @@ private class QueuedSubmission(
 class SubmissionQueueService(
     private val submissionService: SubmissionService,
     @Value("\${submission.queue.capacity:2000}") private val capacity: Int,
-    @Value("\${submission.queue.workers:8}") private val workers: Int,
+    @Value("\${submission.queue.workers:10}") private val workers: Int,
+    private val meterRegistry: MeterRegistry,
 ) {
     private val logger = KotlinLogging.logger {}
     private val running = AtomicBoolean(false)
@@ -44,6 +47,8 @@ class SubmissionQueueService(
     @PostConstruct
     fun start() {
         queue = LinkedBlockingQueue(capacity)
+        // Expose how many submissions are waiting to be graded (for the burst/backpressure runs).
+        Gauge.builder("submission.queue.depth", this) { it.queueDepth().toDouble() }.register(meterRegistry)
         running.set(true)
         repeat(workers) { i ->
             val thread = Thread({ workLoop() }, "submission-worker-$i")

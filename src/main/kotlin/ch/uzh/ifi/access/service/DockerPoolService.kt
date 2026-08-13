@@ -8,6 +8,10 @@ import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.Capability
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.Gauge
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
@@ -84,8 +88,26 @@ class DockerPoolService(
      * One core is enought because the python tests run single threaded.
      */
     @Value("\${docker.pool.cpuLimit:1.0}") private val cpuLimit: Double,
+
+    /**
+     * Optional metrics registry. Null when the pool is built by hand (e.g. in tests); Spring injects
+     * the real one at runtime. Exposes borrow-wait time, fallback + recycle counts, and idle/busy/total
+     * gauges — the observability behind "the fallback rate must be observable".
+     */
+    private val meterRegistry: MeterRegistry? = null,
 ) {
     private val logger = KotlinLogging.logger {}
+
+    // Metrics (no-ops when meterRegistry is null, e.g. in tests).
+    private val borrowWaitTimer: Timer? by lazy {
+        meterRegistry?.let { Timer.builder("docker.pool.borrow.wait").register(it) }
+    }
+    private val fallbackCounter: Counter? by lazy {
+        meterRegistry?.let { Counter.builder("docker.pool.borrow.fallback").register(it) }
+    }
+    private val recycleCounter: Counter? by lazy {
+        meterRegistry?.let { Counter.builder("docker.pool.recycle").register(it) }
+    }
 
     /** Ready-to-use containers (backpressure: borrow() blocks on this queue). */
     private val idle = LinkedBlockingDeque<DockerContainer>()
@@ -103,7 +125,17 @@ class DockerPoolService(
             logger.info { "Docker pool disabled — using one-shot execution path" }
             return
         }
+        if (meterRegistry != null) registerGauges()
+        else logger.warn { "No MeterRegistry injected — pool metrics are disabled" }
         fill()
+    }
+
+    /** idle / busy / total container counts, sampled live off the pool's own collections. */
+    private fun registerGauges() {
+        val reg = meterRegistry ?: return
+        Gauge.builder("docker.pool.idle", idle) { it.size.toDouble() }.register(reg)
+        Gauge.builder("docker.pool.busy", all) { (it.size - idle.size).toDouble() }.register(reg)
+        Gauge.builder("docker.pool.total", all) { it.size.toDouble() }.register(reg)
     }
 
     /** Create containers until the pool holds [poolSize] of them. Safe to call repeatedly (tops up). */
@@ -169,13 +201,22 @@ class DockerPoolService(
      */
     fun borrow(): DockerContainer? {
         if (!enabled) return null
-        val deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(borrowTimeoutSeconds)
+        val startNanos = System.nanoTime()
+        val deadlineNanos = startNanos + TimeUnit.SECONDS.toNanos(borrowTimeoutSeconds)
         while (true) {
             val remaining = deadlineNanos - System.nanoTime()
-            if (remaining <= 0) return null
-            val c = idle.poll(remaining, TimeUnit.NANOSECONDS) ?: return null
+            if (remaining <= 0) {
+                fallbackCounter?.increment()   // enabled but saturated -> caller falls back to one-shot
+                return null
+            }
+            val c = idle.poll(remaining, TimeUnit.NANOSECONDS)
+            if (c == null) {
+                fallbackCounter?.increment()
+                return null
+            }
             if (c.isHealthy()) {
                 c.state = ContainerState.BUSY
+                borrowWaitTimer?.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
                 return c
             }
             // Availability check: don't hand out a dead container — recycle it and keep looking.
@@ -231,6 +272,7 @@ class DockerPoolService(
 
     /** Destroy a spent/broken container and replace it, keeping the pool at [poolSize]. */
     private fun recycle(container: DockerContainer) {
+        recycleCounter?.increment()
         container.state = ContainerState.DEAD
         all.remove(container)
         runCatching { container.destroy() }

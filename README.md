@@ -114,3 +114,9 @@ The pooled containers (`DockerPoolService.createContainer`) now run with the fol
 **Not addressed (shared-kernel ceiling):** a real breakout via a kernel exploit remains possible with standard containers regardless of the above. For true isolation of untrusted code, the next step is a sandboxed runtime — gVisor (`runsc`) or a microVM (Kata / Firecracker).
 
 TODO: dry-run real course images under read-only rootfs — watch for images that need `$HOME` or other writable paths (e.g. Python cache dirs), which the mock `python:latest` tasks won't surface.
+
+## Serious Bug fix on 12. August
+
+To prepare for the launch to the staging server I found a bug in the pipeline where the pipeline would default back to 
+the previous docker system when 200+ concurrent submissions where reached. This was due to a limitation of Tomcat that
+I was not aware of. It is fixed and there is an upper limit of 2000 concurrent submissions now.

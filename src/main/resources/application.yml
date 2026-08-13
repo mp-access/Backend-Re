@@ -67,6 +67,9 @@ submission:
     requestTimeoutSeconds: ${SUBMISSION_QUEUE_REQUEST_TIMEOUT_SECONDS:120}
 
 docker:
+  # Hard ceiling on task execution time in seconds; caps each task's configured timeLimit
+  # to min(task.timeLimit, timeoutLimit). Read by ExecutionService for both execution paths.
+  timeoutLimit: ${DOCKER_TIMEOUT_LIMIT:10}
   pool:
     enabled: ${DOCKER_POOL_ENABLED:false}
     image: ${DOCKER_POOL_IMAGE:}
@@ -83,3 +86,16 @@ docker:
     pidsLimit: ${DOCKER_POOL_PIDS_LIMIT:128}
     # Per-container CPU ceiling in cores (CFS quota).
     cpuLimit: ${DOCKER_POOL_CPU_LIMIT:1.0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  metrics:
+    distribution:
+      # publish a histogram + percentiles for borrow-wait so the tail (recycle-wave dips) is visible
+      percentiles-histogram:
+        docker.pool.borrow.wait: true
+      percentiles:
+        docker.pool.borrow.wait: 0.5, 0.95, 0.99
