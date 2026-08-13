@@ -43,20 +43,47 @@ class DockerPoolService(
     private val workingDir: Path,
     @Value("\${docker.pool.enabled:false}") val enabled: Boolean,
     @Value("\${docker.pool.image:}") private val image: String,
-    @Value("\${docker.pool.size:8}") private val poolSize: Int,
+
+    /**
+     * Modify the pool size if necessary. Default will be 10
+     * TODO: Maybe higher?
+     */
+    @Value("\${docker.pool.size:10}") private val poolSize: Int,
+
+    /**
+     * For container health and simple security measure.
+     * TODO: Maybe lower?
+     */
     @Value("\${docker.pool.maxReuse:100}") private val maxReuse: Int,
+
+    /**
+     * How long an individual container can be borrowed until the system realizes something is wrong.
+     */
     @Value("\${docker.pool.borrowTimeoutSeconds:30}") private val borrowTimeoutSeconds: Long,
-    // Non-root user student workloads run as (docker `--user` syntax). Numeric so it works on
-    // any image without a matching /etc/passwd entry (e.g. stock python:latest, which is root-only).
+
+    /**
+     * Non-root user student workloads run as (docker `--user` syntax). Numeric so it works on
+     * any image without a matching /etc/passwd entry (e.g. stock python:latest, which is root-only).
+     */
     @Value("\${docker.pool.user:1000:1000}") private val execUser: String,
-    // Read-only container root filesystem. With this on, the only writable surfaces are the tmpfs
-    // mounts and the bound /submission — all wiped by reset() — so nothing a student writes can leak
-    // into the next borrower's submission. Toggle off if a grading image needs to write elsewhere.
+
+    /**
+     * Read-only container root filesystem. With this on, the only writable surfaces are the tmpfs
+     * mounts and the bound /submission — all wiped by reset() — so nothing a student writes can leak
+     * into the next borrower's submission. Toggle off if a grading image needs to write elsewhere.
+     */
     @Value("\${docker.pool.readOnlyRootfs:true}") private val readOnlyRootfs: Boolean,
-    // Max processes/threads a container may spawn — fork-bomb DoS guard.
+
+    /**
+     * Max processes/threads a container may spawn — fork-bomb DoS guard.
+     */
     @Value("\${docker.pool.pidsLimit:256}") private val pidsLimit: Long,
-    // Per-container CPU ceiling in cores (CFS quota) — stops one submission pegging every host core.
-    @Value("\${docker.pool.cpuLimit:2.0}") private val cpuLimit: Double,
+
+    /**
+     * Per-container CPU ceiling in cores (CFS quota) — stops one submission pegging every host core.
+     * One core is enought because the python tests run single threaded.
+     */
+    @Value("\${docker.pool.cpuLimit:1.0}") private val cpuLimit: Double,
 ) {
     private val logger = KotlinLogging.logger {}
 

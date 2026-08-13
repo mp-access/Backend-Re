@@ -14,10 +14,12 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.EnableAsync
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.nio.charset.StandardCharsets
 import kotlin.time.measureTimedValue
@@ -80,7 +82,9 @@ class CourseController(
     private val emitterService: EmitterService,
     private val submissionService: SubmissionService,
     private val visitQueueService: VisitQueueService,
-    private val dockerPoolService: DockerPoolService
+    private val dockerPoolService: DockerPoolService,
+    private val submissionQueueService: SubmissionQueueService,
+    @Value("\${submission.queue.requestTimeoutSeconds:120}") private val requestTimeoutSeconds: Long,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -157,11 +161,34 @@ class CourseController(
         @PathVariable task: String?,
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication,
-    ) {
+    ): DeferredResult<ResponseEntity<Void>> {
         val userId = roleService.getUserId(authentication.name)
         submission.userId = userId
 
-        submissionService.createTaskSubmission(course, assignment, task!!, submission)
+        // Non-blocking: drop the submission on the queue and free the request thread. A worker grades
+        // it and completes the DeferredResult, at which point Spring writes the response -- the same
+        // "empty 200 when grading is done" contract as before, minus one parked Tomcat thread per call.
+        val deferred = DeferredResult<ResponseEntity<Void>>(requestTimeoutSeconds * 1000)
+        val future = submissionQueueService.enqueue(course, assignment, task!!, submission)
+        if (future == null) {
+            // Backpressure: the queue is full -- shed load politely instead of accepting unbounded work.
+            deferred.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build())
+            return deferred
+        }
+        future.whenComplete { _, ex ->
+            if (ex == null) {
+                deferred.setResult(ResponseEntity.ok().build())
+            } else {
+                // Preserve the original error semantics (e.g. 403 no-attempts, 404 unknown task) by
+                // handing the real exception, unwrapped, to Spring's async exception handling.
+                val cause = if (ex is java.util.concurrent.CompletionException && ex.cause != null) ex.cause!! else ex
+                deferred.setErrorResult(cause)
+            }
+        }
+        deferred.onTimeout {
+            deferred.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build())
+        }
+        return deferred
     }
 
     // TODO: Just for testing - Remove before flight
@@ -193,13 +220,6 @@ class CourseController(
         // (these are a breakdown *within* create_submission, not additional time)
         phases.putAll(timer.phases)
         return phases
-    }
-
-    // TODO: Just for testing - starts / tops up the container pool (no-op if already full)
-    @PostMapping("/pool/warmup")
-    fun warmupPool(): Map<String, Any> {
-        dockerPoolService.fill()
-        return dockerPoolService.status()
     }
 
     // A text event endpoint to publish events to clients

@@ -11,6 +11,7 @@ import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
@@ -73,6 +74,9 @@ class SubmissionService(
         return task.course != null
     }
 
+    // @Transactional so grading works when invoked from a SubmissionQueueService worker thread
+    // (no open-session-in-view off the request thread); still reached cross-bean, so @CacheEvict fires.
+    @Transactional
     @CacheEvict(value = ["CourseService.getCoursesOverview"], key = "#submissionDTO.userId")
     fun createTaskSubmission(
         courseSlug: String,
@@ -156,6 +160,7 @@ class SubmissionService(
                 if (dockerPoolService.enabled)
                     dockerService.executePooledSubmission(course, submission, task, evaluation, timer)
                 else
+                    // TODO: When does this fallback? If the pooled submission fails...
                     dockerService.executeSubmission(course, submission, task, evaluation, timer)
             }
         } catch (e: Exception) {

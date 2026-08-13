@@ -15,6 +15,7 @@ import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.HostConfig
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.apache.commons.io.FileUtils
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.nio.charset.Charset
 import java.nio.file.Files
@@ -30,7 +31,8 @@ class ExecutionService(
     private val workingDir: Path,
     private val taskFileRepository: TaskFileRepository,
     private val jsonMapper: JsonMapper,
-    private val dockerPoolService: DockerPoolService
+    private val dockerPoolService: DockerPoolService,
+    @Value("\${docker.timeoutLimit:10}") private val timeOutLimit: Int
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -88,6 +90,7 @@ class ExecutionService(
                 }
             }
             // student code is run on a tmpfs so we can enforce a disk quota
+            // tmpfs hard coded to 50M
             val tmpfs: Map<String, String> = mapOf(
                 "/workspace" to "size=50M",
             )
@@ -159,7 +162,7 @@ class ExecutionService(
             // Set up a scheduler to kill the container forcefully after the specified task timeout (or 180 seconds at
             // most). This is necessary if the submission is in an endless loop or similar lock-up.
             val scheduler = Executors.newScheduledThreadPool(1)
-            val timeout = task.timeLimit.coerceAtMost(180).toLong()
+            val timeout = task.timeLimit.coerceAtMost(timeOutLimit).toLong()
             var killedContainer = false
             scheduler.schedule({
                 try {
@@ -369,7 +372,7 @@ class ExecutionService(
                 """.trimIndent()
             )
             val memoryLimit = 250 * Util.MEGABYTE
-            val timeout = task.timeLimit.coerceAtMost(180).toLong()
+            val timeout = task.timeLimit.coerceAtMost(timeOutLimit).toLong()
             // this span is the actual user-code execution time (analogous to container_wait)
             val exec = timer.measure("container_exec") { container.exec(command, timeout) }
             val statusCode = exec.exitCode

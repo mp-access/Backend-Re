@@ -31,13 +31,14 @@ class DockerContainerInstance(
     override var reuseCount: Int = 0
 
     override fun exec(script: String, timeoutSeconds: Long): ExecResult {
-        // Make everything under the bound /submission writable by the non-root workload — including
-        // directories the file-setup step pre-created as root (e.g. a persistent-result path that
-        // shares a directory with input files). Runs as root; reset() wipes /submission afterwards,
-        // so this never persists across submissions.
+        /**
+         * Make everything under the bound /submission writable by the non-root workload — including
+         * directories the file-setup step pre-created as root (e.g. a persistent-result path that
+         * shares a directory with input files). Runs as root; reset() wipes /submission afterwards,
+         * so this never persists across submissions.
+         */
         runOneOff("chmod -R 0777 /submission 2>/dev/null || true")
         val execId = dockerClient.execCreateCmd(id)
-            // SECURITY: run student code as a non-root user, never as root.
             .withUser(execUser)
             .withWorkingDir("/workspace")
             .withCmd("/bin/bash", "-c", script)
@@ -80,7 +81,6 @@ class DockerContainerInstance(
     override fun effectiveUid(): Int {
         val out = StringBuilder()
         val execId = dockerClient.execCreateCmd(id)
-            // evaluate as the SAME user student code runs as, so the check reflects reality
             .withUser(execUser)
             .withCmd("/bin/sh", "-c", "id -u")
             .withAttachStdout(true)

@@ -66,7 +66,8 @@ class PooledGradingTests(
             cpuLimit = 2.0,
         )
         val executionService = ExecutionService(
-            dockerClient, fileService, workingDir, taskFileRepository, jsonMapper, pool
+            dockerClient, fileService, workingDir, taskFileRepository, jsonMapper, pool,
+            timeOutLimit = 30,
         )
         try {
             pool.fill()
