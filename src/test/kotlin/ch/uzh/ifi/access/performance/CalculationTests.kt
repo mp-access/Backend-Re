@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtensionContext
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.cache.CacheManager
+import ch.uzh.ifi.access.config.CacheConfig
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.RequestBuilder
@@ -124,7 +125,7 @@ class CalculationTests(
     //  Endpoint: GET courses/$COURSE_SLUG/participants/$userId -> CourseController.getCourseProgress
     //   Returns CourseProgressDTO = one student's progress across the WHOLE course (every assignment/task
     //   with points/status). Per-student + traverses the full course tree -> prime N+1 candidate.
-    //   in two passes — COLD (caches cleared: pays the one-off Keycloak resolution) then WARM (steady
+    //   in two passes — COLD then WARM (steady
     //   state: isolates the endpoint's DB cost). Compare cold vs warm time, and min vs max queries (N+1 spot).
     @Test
     @Order(3)
@@ -135,13 +136,13 @@ class CalculationTests(
             return
         }
 
-        // Deterministic cold baseline: clear all Spring caches so per-user Keycloak resolution
-        // (RoleService.getUserId / findUserByAllCriteria) starts cold and is not silently warmed
+        // Deterministic cold baseline: evict the TEMPORARY caches (points/lists), as production does every 15 minutes; identities stay warm as in production.
+        // The cold pass then warms the caches for the warm pass.
         // by earlier @Order tests. The cold pass then warms the caches for the warm pass.
         clearApplicationCaches()
         val cold = measurePass(sample, "cold")
         // Steady state: user resolution is now cached, so this isolates the per-request DB cost of
-        // getCourseProgress from one-off Keycloak lookup latency. Compare `time (ms)` cold vs warm.
+        // Steady state: points caches are now warm, so this isolates the per-request DB cost of getCourseProgress. Compare time (ms) cold vs warm..
         val warm = measurePass(sample, "warm")
 
         logger.info { formatBenchmarkReport("getCourseProgress cold (caches cleared)", cold) }
@@ -292,7 +293,7 @@ class CalculationTests(
      * Hibernate `prepareStatementCount` (a proxy for JDBC round-trips that also includes Spring Security /
      * auth SQL, not only the endpoint under test) and the wall-clock time. Requests that don't return 200
      * are skipped instead of failing the whole run. When [clearCacheEachRequest] is true, all Spring
-     * caches are evicted before each request so every one pays the full cold price (repeated cold passes).
+     * caches are evicted before each request.
      */
     private fun measure(
         requests: List<Pair<String, RequestBuilder>>,
@@ -329,14 +330,20 @@ class CalculationTests(
         return measure(requests, label)
     }
 
+    /** "Cold" = production cold: only the TEMPORARY caches (points, lists) are evicted, exactly what
+     *  CacheEvictScheduler does every 15 minutes. The PERMANENT caches (Keycloak identity resolution)
+     *  are pre-warmed at boot by CacheInitService and never evicted in production: clearing them here
+     *  would measure the boot state, not a request. */
     private fun clearApplicationCaches() {
-        cacheManager.cacheNames.forEach { cacheManager.getCache(it)?.clear() }
+        // ACCESS_BENCHMARK_BOOT_COLD=true reproduces the boot state (all caches, Keycloak identities included)
+        val bootCold = System.getenv("ACCESS_BENCHMARK_BOOT_COLD") == "true"
+        val caches = if (bootCold) cacheManager.cacheNames else CacheConfig.TEMPORARY_CACHES
+        caches.forEach { cacheManager.getCache(it)?.clear() }
     }
 
     /**
      * Benchmarks a per-course / per-user endpoint by hitting the fixed COURSE_SLUG BENCHMARK_SAMPLE_SIZE
-     * times (these endpoints return everything in one request, so there is no per-student sample). The
-     * COLD pass clears all caches before every request (each pays full price); the WARM pass reuses the
+     * times (these endpoints return everything in one request, so there is no per-student sample). the WARM pass reuses the
      * now-warm caches for steady-state numbers.
      */
     private fun benchmarkRepeated(label: String, path: String, useApiKey: Boolean, asStudent: String? = null) {
