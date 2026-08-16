@@ -41,12 +41,9 @@ class AggregateEvaluationService(
     // Read side: pre-summed points as single row lookups. A missing row
     // (sparse design: no graded submission yet) reads as 0.
 
-    // CURRENTLY UNUSED, kept as documentation of a measured experiment:
-    // wiring this into calculateAssignmentPoints only ADDED one query per
-    // assignment (+11 on useCourse, no time gain), because the workspace
-    // answer is task-granular and every TaskOverview card queries its own
-    // points anyway. Becomes useful the day a reader wants assignment
-    // totals WITHOUT task details.
+    // Used by the course page (AssignmentCourseView.points): one row lookup per assignment.
+    // Reading it while keeping the per-task cards was measured to only ADD queries (+11 on useCourse),
+    // so it serves readers without task details.
     fun assignmentPoints(userId: String, assignmentId: Long): Double =
         assignmentEvaluationRepository.findPoints(userId, assignmentId) ?: 0.0
 
