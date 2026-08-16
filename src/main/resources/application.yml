@@ -57,3 +57,46 @@ logging:
 
 caching:
   eviction-rate: ${CACHE_EVICTION_RATE:15m}
+
+submission:
+  queue:
+    # Max submissions buffered before backpressure kicks in (HTTP 503).
+    capacity: ${SUBMISSION_QUEUE_CAPACITY:2000}
+    # Worker threads that grade from the queue -- keep roughly equal to docker.pool.size.
+    workers: ${SUBMISSION_QUEUE_WORKERS:10}
+    # How long the async request waits for a grade before returning 503.
+    requestTimeoutSeconds: ${SUBMISSION_QUEUE_REQUEST_TIMEOUT_SECONDS:120}
+
+docker:
+  # Hard ceiling on task execution time in seconds; caps each task's configured timeLimit
+  # to min(task.timeLimit, timeoutLimit). Read by ExecutionService for both execution paths.
+  timeoutLimit: ${DOCKER_TIMEOUT_LIMIT:10}
+  pool:
+    enabled: ${DOCKER_POOL_ENABLED:false}
+    image: ${DOCKER_POOL_IMAGE:}
+    size: ${DOCKER_POOL_SIZE:10}
+    maxReuse: ${DOCKER_POOL_MAX_REUSE:100}
+    borrowTimeoutSeconds: ${DOCKER_POOL_BORROW_TIMEOUT_SECONDS:30}
+    # Non-root user student workloads run as inside pooled containers (docker --user syntax).
+    user: "${DOCKER_POOL_USER:1000:1000}"
+    # How often the reaper checks idle containers for liveness and refills the pool.
+    healthCheckRate: ${DOCKER_POOL_HEALTH_CHECK_RATE:30s}
+    # Read-only container root filesystem; only the tmpfs mounts and /submission stay writable.
+    readOnlyRootfs: ${DOCKER_POOL_READONLY_ROOTFS:true}
+    # Max processes per container (fork-bomb guard).
+    pidsLimit: ${DOCKER_POOL_PIDS_LIMIT:128}
+    # Per-container CPU ceiling in cores (CFS quota).
+    cpuLimit: ${DOCKER_POOL_CPU_LIMIT:1.0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  metrics:
+    distribution:
+      # publish a histogram + percentiles for borrow-wait so the tail (recycle-wave dips) is visible
+      percentiles-histogram:
+        docker.pool.borrow.wait: true
+      percentiles:
+        docker.pool.borrow.wait: 0.5, 0.95, 0.99

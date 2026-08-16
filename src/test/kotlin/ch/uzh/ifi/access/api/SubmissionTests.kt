@@ -12,8 +12,10 @@ import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.ResultActions
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.request
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.io.File
 import java.nio.file.Files
@@ -87,13 +89,16 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
         }.toMap()
         val payload = submissionPayload(command, fileMap).replace(toReplace, edit)
 
-        // create a submission
-        mvc.perform(
+        // create a submission (async endpoint: wait out the DeferredResult, then read the final response)
+        val submitResult = mvc.perform(
             post("/courses/access-mock-course/assignments/$url/submit")
                 .contentType("application/json")
                 .with(csrf())
                 .content(payload)
         )
+            .andExpect(request().asyncStarted())
+            .andReturn()
+        mvc.perform(asyncDispatch(submitResult))
             .andDo(logResponse)
             .andExpect(status().isOk)
         // get the submission history
@@ -202,12 +207,15 @@ class SubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
                 19 to "02_basics/variable_assignment/task/tests.py",
             )
         )
-        mvc.perform(
+        val submitResult = mvc.perform(
             post("/courses/access-mock-course/assignments/basics/tasks/variable-assignment/submit")
                 .contentType("application/json")
                 .with(csrf())
                 .content(payload)
         )
+            .andExpect(request().asyncStarted())
+            .andReturn()
+        mvc.perform(asyncDispatch(submitResult))
             .andDo(logResponse)
             .andExpect(status().isForbidden)
             .andExpect(status().reason(containsString("Submission rejected - no remaining attempts")))

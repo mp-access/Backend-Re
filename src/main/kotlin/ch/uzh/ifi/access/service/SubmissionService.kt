@@ -11,6 +11,7 @@ import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
@@ -26,6 +27,8 @@ class SubmissionService(
     private val roleService: RoleService,
     private val dockerService: ExecutionService,
     private val evaluationService: EvaluationService,
+    private val dockerPoolService: DockerPoolService,
+    private val taskLookupService: TaskLookupService,
     private val aggregateEvaluationService: AggregateEvaluationService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
@@ -72,19 +75,24 @@ class SubmissionService(
         return task.course != null
     }
 
+    // @Transactional so grading works when invoked from a SubmissionQueueService worker thread
+    // (no open-session-in-view off the request thread); still reached cross-bean, so @CacheEvict fires.
+    @Transactional
     @CacheEvict(value = ["CourseService.getCoursesOverview"], key = "#submissionDTO.userId")
     fun createTaskSubmission(
         courseSlug: String,
         assignmentSlug: String,
         taskSlug: String,
-        submissionDTO: SubmissionDTO
+        submissionDTO: SubmissionDTO,
+        timer: BenchTimer? = null
     ): Submission {
         return createSubmission(
             courseSlug,
             taskSlug,
-            getTaskBySlug(courseSlug, assignmentSlug, taskSlug),
+            timer.measure("get_task_by_slug") { getTaskBySlug(courseSlug, assignmentSlug, taskSlug) },
             submissionDTO,
-            null
+            null,
+            timer
         )
     }
 
@@ -100,7 +108,8 @@ class SubmissionService(
         taskSlug: String,
         task: Task,
         submissionDTO: SubmissionDTO,
-        submissionReceivedAt: LocalDateTime?
+        submissionReceivedAt: LocalDateTime?,
+        timer: BenchTimer? = null
     ): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
@@ -115,12 +124,14 @@ class SubmissionService(
                 "Submission rejected - missing userId"
             )
         }
-        pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-        pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
-        val evaluation =
-            evaluationService.getEvaluation(task.id, submissionDTO.userId)
+        val evaluation = timer.measure("prepare_evaluation") {
+            pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+            pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
+            val eval = evaluationService.getEvaluation(task.id, submissionDTO.userId)
                 ?: task.createEvaluation(submissionDTO.userId)
-        evaluationRepository.saveAndFlush(evaluation)
+            evaluationRepository.saveAndFlush(eval)
+            eval
+        }
         // the controller prevents regular users from even submitting with restricted = false
         // meaning for regular users, restricted is always true
         if (submissionDTO.restricted && submissionDTO.command == Command.GRADE) {
@@ -131,35 +142,48 @@ class SubmissionService(
                 )
         }
         // at this point, all restrictions have passed, and we can create the submission
-        val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
-        if (submissionReceivedAt != null) submission.createdAt = submissionReceivedAt
-        submissionRepository.saveAndFlush(submission)
-        submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
-            .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(submission, fileDTO) }
+        val submission = timer.measure("persist_submission") {
+            val sub = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
+            if (submissionReceivedAt != null) sub.createdAt = submissionReceivedAt
+            submissionRepository.saveAndFlush(sub)
+            submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
+                .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(sub, fileDTO) }
+            sub
+        }
         // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
         submission.valid = !submission.isGraded
-        val course = getCourseBySlug(courseSlug)
+        val course = timer.measure("get_course_by_slug") { getCourseBySlug(courseSlug) }
         // execute the submission
         try {
-            dockerService.executeSubmission(course, submission, task, evaluation)
+            timer.measure("execute") {
+                // A/B switch: pooled path when docker.pool.enabled=true, else the one-shot
+                // baseline. Roll back by deleting this if/else (keep the executeSubmission call).
+                if (dockerPoolService.enabled)
+                    dockerService.executePooledSubmission(course, submission, task, evaluation, timer)
+                else
+                    // TODO: When does this fallback? If the pooled submission fails...
+                    dockerService.executeSubmission(course, submission, task, evaluation, timer)
+            }
         } catch (e: Exception) {
             submission.output =
                 "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         } finally {
-            submissionRepository.save(submission)
-            // Save the evaluation and, if this graded run produced a verdict
-            // (the only case where best_score can change), refresh the
-            // student's two aggregate rows in the SAME transaction: a crash
-            // between save and recompute cannot leave a fresh best_score
-            // with a stale aggregate. RUN/TEST and no-verdict runs keep the
-            // plain save: nothing changed, nothing to recompute.
-            if (submission.command == Command.GRADE && submission.points != null) {
-                aggregateEvaluationService.saveWithAggregates(evaluation, task.assignment?.id, course.id)
-            } else {
-                evaluationRepository.save(evaluation)
+            timer.measure("finalize") {
+                submissionRepository.save(submission)
+                // Save the evaluation and, if this graded run produced a verdict
+                // (the only case where best_score can change), refresh the
+                // student's two aggregate rows in the SAME transaction: a crash
+                // between save and recompute cannot leave a fresh best_score
+                // with a stale aggregate. RUN/TEST and no-verdict runs keep the
+                // plain save: nothing changed, nothing to recompute.
+                if (submission.command == Command.GRADE && submission.points != null) {
+                    aggregateEvaluationService.saveWithAggregates(evaluation, task.assignment?.id, course.id)
+                } else {
+                    evaluationRepository.save(evaluation)
+                }
+                pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+                pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
             }
-            pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-            pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         }
         return submission
     }
@@ -173,6 +197,7 @@ class SubmissionService(
         submissionRepository.saveAndFlush(submission)
     }
 
+    // TODO: Speed influence?
     fun getCourseBySlug(courseSlug: String): Course {
         return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
             HttpStatus.NOT_FOUND,
@@ -180,6 +205,19 @@ class SubmissionService(
         )
     }
 
+    // The slug -> id resolution is cached in TaskLookupService (a separate bean so Spring's caching
+    // proxy actually engages). We then load a FRESH managed entity by primary key: caching the Task
+    // entity itself is unsafe here because createSubmission mutates it (task.createEvaluation) and its
+    // lazy collections depend on the open request session.
+    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
+        val taskId = taskLookupService.resolveTaskId(courseSlug, assignmentSlug, taskSlug)
+        val task = taskId?.let { taskRepository.findById(it).orElse(null) }
+        return task ?: throw ResponseStatusException(
+            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
+        )
+    }
+    /*
+    Original Function:
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
         return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
             courseSlug,
@@ -189,6 +227,7 @@ class SubmissionService(
             HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
         )
     }
+    */
 
     fun getTaskFileById(fileId: Long): TaskFile {
         return taskFileRepository.findById(fileId).get()

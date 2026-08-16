@@ -14,16 +14,19 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.EnableAsync
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.context.request.async.StandardServletAsyncWebRequest
 import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import kotlin.time.measureTimedValue
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipOutputStream
 
@@ -85,7 +88,10 @@ class CourseController(
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val submissionService: SubmissionService,
-    private val visitQueueService: VisitQueueService
+    private val visitQueueService: VisitQueueService,
+    private val dockerPoolService: DockerPoolService,
+    private val submissionQueueService: SubmissionQueueService,
+    @Value("\${submission.queue.requestTimeoutSeconds:120}") private val requestTimeoutSeconds: Long,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -183,11 +189,65 @@ class CourseController(
         @PathVariable task: String?,
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication,
-    ) {
+    ): DeferredResult<ResponseEntity<Void>> {
         val userId = roleService.getUserId(authentication.name)
         submission.userId = userId
 
-        submissionService.createTaskSubmission(course, assignment, task!!, submission)
+        // Non-blocking: drop the submission on the queue and free the request thread. A worker grades
+        // it and completes the DeferredResult, at which point Spring writes the response -- the same
+        // "empty 200 when grading is done" contract as before, minus one parked Tomcat thread per call.
+        val deferred = DeferredResult<ResponseEntity<Void>>(requestTimeoutSeconds * 1000)
+        val future = submissionQueueService.enqueue(course, assignment, task!!, submission)
+        if (future == null) {
+            // Backpressure: the queue is full -- shed load politely instead of accepting unbounded work.
+            deferred.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build())
+            return deferred
+        }
+        future.whenComplete { _, ex ->
+            if (ex == null) {
+                deferred.setResult(ResponseEntity.ok().build())
+            } else {
+                // Preserve the original error semantics (e.g. 403 no-attempts, 404 unknown task) by
+                // handing the real exception, unwrapped, to Spring's async exception handling.
+                val cause = if (ex is java.util.concurrent.CompletionException && ex.cause != null) ex.cause!! else ex
+                deferred.setErrorResult(cause)
+            }
+        }
+        deferred.onTimeout {
+            deferred.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build())
+        }
+        return deferred
+    }
+
+    // TODO: Just for testing - Remove before flight
+    @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit/benchmark")
+    @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
+    fun evaluateTaskSubmissionBenchmark(
+        @PathVariable course: String,
+        @PathVariable assignment: String,
+        @PathVariable task: String?,
+        @RequestBody submission: SubmissionDTO,
+        authentication: Authentication,
+    ): Map<String, Any> {
+        val phases = LinkedHashMap<String, Double>()
+
+        val (userId, tUser) = measureTimedValue { roleService.getUserId(authentication.name) }
+        phases["get_user_id"] = tUser.inWholeMicroseconds / 1000.0
+        submission.userId = userId
+
+        val timer = BenchTimer()
+        val (_, tSubmit) = measureTimedValue {
+            submissionService.createTaskSubmission(course, assignment, task!!, submission, timer)
+        }
+        // coarse phase total (includes Spring/cache overhead around the nested spans)
+        phases["create_submission"] = tSubmit.inWholeMicroseconds / 1000.0
+        // server total from the coarse phases only, computed BEFORE adding the nested
+        // spans below so they aren't double-counted in the sum
+        phases["server_total_ms"] = phases.values.sum()
+        // fine-grained spans collected across the service/execution layers
+        // (these are a breakdown *within* create_submission, not additional time)
+        phases.putAll(timer.phases)
+        return phases
     }
 
     // A text event endpoint to publish events to clients

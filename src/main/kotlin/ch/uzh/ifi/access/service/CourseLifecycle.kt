@@ -63,7 +63,7 @@ class CourseLifecycle(
     }
 
     @Transactional
-    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+    @CacheEvict(value = ["CourseService.getCoursesOverview", "TaskLookupService.resolveTaskId"], allEntries = true)
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
         logger.debug { "Updating course ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
