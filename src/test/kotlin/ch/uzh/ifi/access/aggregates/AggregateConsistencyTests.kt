@@ -66,7 +66,11 @@ class AggregateConsistencyTests(
               ON ae.user_id = facts.user_id AND ae.assignment_id = facts.assignment_id
             WHERE ae.id IS NULL
         """, Long::class.java)!!
-        assertEquals(0L, missing)
+        assertEquals(0L, missing) {
+            "$missing (user, assignment) pairs with graded evaluations have no assignment_evaluation row " +
+            "(facts written by code without the aggregate hook? re-run V3_8 or recomputeAggregatesForCourse). First ones:\n" +
+            describeMissingAssignmentRows()
+        }
     }
 
     @Test
@@ -100,5 +104,29 @@ class AggregateConsistencyTests(
             WHERE ce.id IS NULL
         """, Long::class.java)!!
         assertEquals(0L, missing)
+    }
+
+    // Lists the offending (course, user, assignment) triples for a failure message,
+    // so the diagnosis is in the test log instead of a manual psql session.
+    private fun describeMissingAssignmentRows(limit: Int = 10): String {
+        val rows = jdbc.queryForList("""
+            SELECT c.slug AS course, facts.user_id, facts.assignment_id
+            FROM (
+                SELECT e.user_id, t.assignment_id
+                FROM evaluation e
+                JOIN task t ON e.task_id = t.id
+                WHERE t.assignment_id IS NOT NULL AND e.best_score IS NOT NULL
+                  AND e.id IN (SELECT MAX(e2.id) FROM evaluation e2 GROUP BY e2.task_id, e2.user_id)
+                GROUP BY e.user_id, t.assignment_id
+            ) facts
+            JOIN assignment a ON a.id = facts.assignment_id
+            JOIN course c ON c.id = a.course_id
+            LEFT JOIN assignment_evaluation ae
+              ON ae.user_id = facts.user_id AND ae.assignment_id = facts.assignment_id
+            WHERE ae.id IS NULL
+            ORDER BY c.slug, facts.user_id
+            LIMIT $limit
+        """)
+        return rows.joinToString("\n") { "  ${it["course"]} / ${it["user_id"]} / assignment ${it["assignment_id"]}" }
     }
 }
