@@ -210,6 +210,19 @@ class CourseService(
         return assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
     }
 
+
+    // Course page: the assignments without the per-task list (see AssignmentCourseView).
+    fun getAssignmentCourseViews(courseSlug: String?): List<AssignmentCourseView> {
+        return assignmentRepository.findCourseViewsByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
+    }
+
+    // Course page: the current student's points for one assignment, read from the pre-summed
+    // assignment_evaluation row (one indexed lookup) instead of summing its tasks.
+    fun calculateAssignmentPointsAggregated(assignmentId: Long?): Double {
+        val userId = roleService.getUserId() ?: return 0.0
+        return aggregateEvaluationService.assignmentPoints(userId, assignmentId ?: return 0.0)
+    }
+
     fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
         return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
             ?: throw ResponseStatusException(
