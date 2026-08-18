@@ -85,7 +85,6 @@ class SecurityConfig(private val env: Environment) {
                         "/courses/{course}/assistants/**",
                         "/courses/{course}/supervisors/**",
                         "/courses/{course}/summary",
-                        "/pruneSubmissions",
                         "/courses/pool/**"
                     ).access { _, context ->
                         AuthorityAuthorizationDecision(
