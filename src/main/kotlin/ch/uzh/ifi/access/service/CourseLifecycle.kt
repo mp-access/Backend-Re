@@ -267,7 +267,7 @@ class CourseLifecycle(
         return globalFile
     }
 
-    private fun cloneRepository(course: Course): Path {
+    fun cloneRepository(course: Course): Path {
         logger.debug { "Cloning ${course.slug} from ${course.repository}" }
         return cloneRepository(
             course.repository!!,
@@ -326,6 +326,7 @@ class CourseLifecycle(
     }
 
     fun runExamplesOnceToRetrieveTestNames(course: Course): Course {
+        // TODO: record test names for all tasks, not just examples
         course.examples.forEach { example ->
             if (example.start == null) {
                 val result = executionService.executeTemplate(example)

@@ -6,10 +6,8 @@ import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
-import ch.uzh.ifi.access.repository.AssignmentRepository
-import ch.uzh.ifi.access.repository.CourseRepository
-import ch.uzh.ifi.access.repository.TaskFileRepository
-import ch.uzh.ifi.access.repository.TaskRepository
+import ch.uzh.ifi.access.repository.*
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
@@ -40,7 +38,9 @@ class CourseService(
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
-    private val exampleQueueService: ExampleQueueService
+    private val exampleQueueService: ExampleQueueService,
+    private val mapper: ObjectMapper,
+    private val exampleRepository: ExampleRepository,
 ) {
 
     private val logger = KotlinLogging.logger {}

@@ -278,6 +278,7 @@ class ExecutionService(
                 if (results.points != null) {
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
+                    // TODO: record passed tests for all submissions, not just examples
                     if (isExample(task)) {
                         if (task.testNames.size == results.hints.size) {
                             submission.testsPassed = results.hints.map { hint ->

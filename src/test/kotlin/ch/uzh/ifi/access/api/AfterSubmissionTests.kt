@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
+import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
@@ -9,8 +10,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.*
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipInputStream
 
 @ExtendWith(SpringExtension::class, BaseTest.CurlCommandListener::class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -176,6 +180,90 @@ class AfterSubmissionTests(@Autowired val mvc: MockMvc) : BaseTest() {
             .andExpect(content().contentType("text/csv"))
             .andExpect(content().string(containsString("username,registered_as,other_ids,")))
             .andExpect(content().string(containsString("student@uzh.ch,,2.0,2.0")))
+    }
+
+    fun assertZipContains(entries: MutableMap<String, String>, name: String, expected: String) {
+        assertThat(entries[name], containsString(expected))
+    }
+
+    @Test
+    @Order(0)
+    @AccessUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["access-mock-course-supervisor", "access-mock-course"]
+    )
+    fun `Can download data dump containing all data`() {
+        val result = mvc.perform(
+            get("/courses/access-mock-course/dump")
+                .with(csrf())
+        )
+            .andExpect(status().isOk)
+            .andExpect(content().contentType("application/zip"))
+            .andExpect(request().asyncStarted())
+            .andReturn()
+
+        val finalResult = mvc.perform(asyncDispatch(result))
+            .andExpect(status().isOk)
+            .andReturn()
+
+        val zipBytes = finalResult.response.contentAsByteArray
+
+        val entries = mutableMapOf<String, String>()
+        ZipInputStream(ByteArrayInputStream(zipBytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                val content = zip.readBytes().toString(Charsets.UTF_8)
+                entries[entry.name] = content
+
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+
+        assertZipContains(entries, "participants.txt", "student@uzh.ch,Student,Test")
+        assertZipContains(entries, "participants.txt", "not_email@uzh.ch\n")
+        assertZipContains(entries, "supervisors.txt", "supervisor@uzh.ch")
+        assertZipContains(entries, "metadata.json", "Spring Semester 2023")
+        assertZipContains(entries, "metadata.json", "overrideStart")
+        assertZipContains(entries, "metadata.json", "repository")
+        assertZipContains(entries, "assignments.json", "python -m task.script")
+        assertZipContains(entries, "assignments.json", "python:latest")
+        assertZipContains(entries, "assignments.json", "friendly-pairs")
+
+        var filePath = "repository/01_intro"
+        assertZipContains(entries, "${filePath}/config.toml", """slug = "hello"""")
+        assertZipContains(entries, "${filePath}/config.toml", "Hello, World!")
+
+        filePath = "participants/student@uzh.ch/basics/variable-assignment/5"
+        assertZipContains(entries, "${filePath}/metadata.json", "GRADE")
+        assertZipContains(entries, "${filePath}/metadata.json", "true")
+        assertZipContains(entries, "${filePath}/log.txt", "not_literally_42) ... ok")
+
+        filePath = "participants/student@uzh.ch/basics/variable-assignment/5/submission/task"
+        assertZipContains(entries, "${filePath}/script.py", "41+1")
+        assertZipContains(entries, "${filePath}/tests.py", "assertGreater")
+
+        filePath = "participants/by_email@uzh.ch/basics/for-testing/4"
+        assertZipContains(entries, "${filePath}/metadata.json", "RUN")
+        filePath = "participants/by_email@uzh.ch/basics/for-testing/8"
+        assertZipContains(entries, "${filePath}/output.txt", "a should equal 1")
+
+
+    }
+
+    @Test
+    @AccessUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
+    @Order(0)
+    fun `Forbidden to download dump without supervisor role`() {
+        mvc.perform(
+            get("/courses/access-mock-course/dump")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isForbidden)
     }
 
 }
