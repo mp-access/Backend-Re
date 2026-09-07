@@ -224,13 +224,15 @@ class DumpService(
         val participants = courseService.getStudentsWithPoints(course.slug!!)
         val participantsHeader =
             listOf(
-                "registrationId",
-                "username",
-                "firstName",
-                "lastName",
-                "email",
-                "points",
-                "otherIds",
+                listOf(
+                    "registrationId",
+                    "username",
+                    "firstName",
+                    "lastName",
+                    "email",
+                    "points",
+                    "otherIds",
+                ).joinToString(",")
             )
 
         // write members
