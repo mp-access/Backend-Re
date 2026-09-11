@@ -219,37 +219,6 @@ class CourseController(
         return deferred
     }
 
-    // TODO: Just for testing - Remove before flight
-    @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit/benchmark")
-    @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
-    fun evaluateTaskSubmissionBenchmark(
-        @PathVariable course: String,
-        @PathVariable assignment: String,
-        @PathVariable task: String?,
-        @RequestBody submission: SubmissionDTO,
-        authentication: Authentication,
-    ): Map<String, Any> {
-        val phases = LinkedHashMap<String, Double>()
-
-        val (userId, tUser) = measureTimedValue { roleService.getUserId(authentication.name) }
-        phases["get_user_id"] = tUser.inWholeMicroseconds / 1000.0
-        submission.userId = userId
-
-        val timer = BenchTimer()
-        val (_, tSubmit) = measureTimedValue {
-            submissionService.createTaskSubmission(course, assignment, task!!, submission, timer)
-        }
-        // coarse phase total (includes Spring/cache overhead around the nested spans)
-        phases["create_submission"] = tSubmit.inWholeMicroseconds / 1000.0
-        // server total from the coarse phases only, computed BEFORE adding the nested
-        // spans below so they aren't double-counted in the sum
-        phases["server_total_ms"] = phases.values.sum()
-        // fine-grained spans collected across the service/execution layers
-        // (these are a breakdown *within* create_submission, not additional time)
-        phases.putAll(timer.phases)
-        return phases
-    }
-
     // A text event endpoint to publish events to clients
     @GetMapping("/{course}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun subscribe(@PathVariable course: String, authentication: Authentication): ResponseEntity<SseEmitter> {
