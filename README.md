@@ -1,12 +1,19 @@
 # Start the engine:
 
+The Docker container pool now starts **by default** (image `python:latest`, size 10), so the command below boots the backend with pools enabled — no extra env vars needed.
+
 ```bash
 JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 ```
 
-With pools:
+To override the pool (change image/size, or turn it off), set the env vars — the
+defaults are `DOCKER_POOL_ENABLED=true`, `DOCKER_POOL_IMAGE=python:latest`, `DOCKER_POOL_SIZE=10`:
 ```bash
-DOCKER_POOL_ENABLED=true DOCKER_POOL_IMAGE=python:latest JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
+# different image / size
+DOCKER_POOL_IMAGE=python:3.12 DOCKER_POOL_SIZE=20 JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
+
+# disable the pool (fall back to the one-shot execution path)
+DOCKER_POOL_ENABLED=false JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 ```
 
 Running all the Tests

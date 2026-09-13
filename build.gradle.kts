@@ -116,6 +116,9 @@ tasks.withType<KotlinCompile> {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Keep the Spring-managed Docker pool disabled during tests (the dedicated
+    // pool tests build their own enabled pool instances explicitly).
+    systemProperty("spring.profiles.active", "test")
     filter {
         includeTestsMatching("ch.uzh.ifi.access.AllTests")
         includeTestsMatching("ch.uzh.ifi.access.PerformanceTests")

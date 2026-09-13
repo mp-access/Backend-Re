@@ -1,0 +1,7 @@
+# Test profile: keep the Spring-managed Docker pool bean disabled during
+# @SpringBootTest context startup. The dedicated pool tests
+# (DockerPoolServiceTests, PooledGradingTests) construct their own enabled
+# DockerPoolService instances directly and are unaffected by this.
+docker:
+  pool:
+    enabled: false

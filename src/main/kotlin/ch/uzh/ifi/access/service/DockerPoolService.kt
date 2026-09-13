@@ -45,8 +45,8 @@ import java.util.concurrent.TimeUnit
 class DockerPoolService(
     private val dockerClient: DockerClient,
     private val workingDir: Path,
-    @Value("\${docker.pool.enabled:false}") val enabled: Boolean,
-    @Value("\${docker.pool.image:}") private val image: String,
+    @Value("\${docker.pool.enabled:true}") val enabled: Boolean,
+    @Value("\${docker.pool.image:python:latest}") private val image: String,
 
     /**
      * Modify the pool size if necessary. Default will be 10

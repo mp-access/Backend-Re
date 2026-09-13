@@ -98,7 +98,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
             slugMap.forEach { (slug, emitterMap) ->
                 emitterMap.forEach { (id, emitter) ->
                     val age = Duration.between(emitter.lastHeartbeat, ZonedDateTime.now()).abs().seconds
-                    if (age > 15) {
+                    if (age > 60) {
                         logger.debug { "Emitter ${emitter.id} died of old age $age" }
                         try {
                             emitter.complete()

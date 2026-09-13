@@ -14,6 +14,12 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * Notes on performance and hardware restrictions:
+ * - The Queue needs to keep threads to track submissions.
+ *   This is necessary and the only way to handle spikes.
+ */
+
 /** One pending submission plus the future that completes when it has been graded. */
 private class QueuedSubmission(
     val courseSlug: String,
