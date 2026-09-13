@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpHeaders
@@ -14,21 +15,20 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.scheduling.annotation.EnableAsync
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.context.request.async.StandardServletAsyncWebRequest
 import org.springframework.web.context.request.async.WebAsyncUtils
 import org.springframework.web.server.ResponseStatusException
-import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
-import kotlin.time.measureTimedValue
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipOutputStream
+import kotlin.time.measureTimedValue
 
 
 @RestController
@@ -103,7 +103,7 @@ class CourseController(
         response: HttpServletResponse
     ): ResponseEntity<StreamingResponseBody> {
         val asyncWebRequest = StandardServletAsyncWebRequest(request, response)
-        asyncWebRequest.setTimeout(TimeUnit.MINUTES.toMillis(60))
+        asyncWebRequest.setTimeout(TimeUnit.MINUTES.toMillis(120))
         WebAsyncUtils.getAsyncManager(request).setAsyncWebRequest(asyncWebRequest)
         return ResponseEntity
             .ok()
