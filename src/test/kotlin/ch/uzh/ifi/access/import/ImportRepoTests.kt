@@ -2,7 +2,6 @@ package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.Course
-import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.service.CourseLifecycle
 import ch.uzh.ifi.access.service.CourseService
 import org.eclipse.jgit.api.Git
@@ -16,6 +15,10 @@ import org.junit.jupiter.api.TestMethodOrder
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.security.test.context.support.WithMockUser
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.web.server.ResponseStatusException
 import java.io.File
 import java.nio.file.Paths
@@ -25,7 +28,7 @@ import java.nio.file.Paths
 class ImportRepoTests(
     @Autowired val courseLifecycle: CourseLifecycle,
     @Autowired val courseService: CourseService,
-    @Autowired val courseRepository: CourseRepository,
+    @Autowired val mvc: MockMvc,
 ) : BaseTest() {
 
     val courses = listOf(
@@ -76,8 +79,85 @@ class ImportRepoTests(
     }
 
     @Test
-    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
+    @WithMockUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
     @Order(3)
+    fun `Forbidden to delete course without API Key`() {
+        mvc.perform(
+            post("/courses/access-mock-course/delete")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    @WithMockUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
+    @Order(3)
+    fun `Unable to delete course without deletion key`() {
+        mvc.perform(
+            post("/courses/access-mock-course/delete")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+        )
+            .andDo(logResponse)
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    @WithMockUser(
+        username = "student@uzh.ch",
+        authorities = ["student", "access-mock-course-student", "access-mock-course"]
+    )
+    @Order(3)
+    fun `Unable to delete course with wrong deletion key`() {
+        mvc.perform(
+            post("/courses/access-mock-course/delete")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+                .content("2345")
+        )
+            .andDo(logResponse)
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
+    @Order(4)
+    fun `Allowed to delete course with API Key and deletion key`() {
+        mvc.perform(
+            post("/courses/access-mock-course/delete")
+                .header("X-API-Key", "1234")
+                .with(csrf())
+                .content("9876")
+        )
+            .andDo(logResponse)
+            .andExpect(status().isOk)
+    }
+
+    @Test
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
+    @Order(5)
+    fun `Course import succeeds with previously deleted slug`() {
+        checkout("main")
+        val course = Course()
+        course.slug = "access-mock-course"
+        course.repository = "https://github.com/mp-access/Mock-Course-Re.git"
+        val path = "Mock-Course-Re"
+        val file = File(path)
+        val absolutePath = Paths.get(file.absolutePath)
+        val createdCourse = courseLifecycle.createFromDirectory(absolutePath, course)
+        assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
+    }
+
+    @Test
+    @WithMockUser(username = "supervisor@uzh.ch", authorities = ["supervisor"])
+    @Order(6)
     fun `Course update succeeds`() {
         checkout("main")
         val absolutePath = Paths.get(File("Mock-Course-Re").absolutePath)

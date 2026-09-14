@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
+import org.springframework.core.env.Environment
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -91,12 +92,13 @@ class CourseController(
     private val visitQueueService: VisitQueueService,
     private val dockerPoolService: DockerPoolService,
     private val submissionQueueService: SubmissionQueueService,
+    private val env: Environment,
     @Value("\${submission.queue.requestTimeoutSeconds:120}") private val requestTimeoutSeconds: Long,
 ) {
     private val logger = KotlinLogging.logger {}
 
+    @PreAuthorize("hasRole(#course+'-supervisor')")
     @GetMapping("/{course}/dump")
-    @PreAuthorize("(hasRole(#course+'-supervisor')) or (hasRole('supervisor'))")
     fun getDump(
         @PathVariable course: String,
         request: HttpServletRequest,
@@ -115,6 +117,17 @@ class CourseController(
             })
     }
 
+    @PostMapping("/{course}/delete")
+    fun deleteCourse(
+        @PathVariable course: String,
+        @RequestBody safety: String?,
+    ) {
+        val expected = env.getProperty("DELETION_KEY") ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        if (safety != expected || expected.isEmpty()) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        }
+        courseService.deleteCourse(course)
+    }
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")

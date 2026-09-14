@@ -23,7 +23,7 @@ class Task {
     @Column(nullable = false)
     var ordinalNum: Int? = null
 
-    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL], fetch = FetchType.LAZY, orphanRemoval = true)
     @MapKey(name = "language")
     var information: MutableMap<String, TaskInformation> = HashMap()
 
@@ -51,11 +51,11 @@ class Task {
     @Column(nullable = false)
     var timeLimit = 30
 
-    @ManyToOne(cascade = [CascadeType.ALL])
+    @ManyToOne
     @JoinColumn(name = "assignment_id")
     var assignment: Assignment? = null
 
-    @ManyToOne(cascade = [CascadeType.ALL])
+    @ManyToOne
     @JoinColumn(name = "course_id")
     var course: Course? = null
 
@@ -72,13 +72,13 @@ class Task {
     @Transient
     var status: TaskStatus? = null
 
-    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL], orphanRemoval = true)
     var files: MutableList<TaskFile> = ArrayList()
 
     @JdbcTypeCode(SqlTypes.JSON)
     var persistentResultFilePaths: MutableList<String> = ArrayList()
 
-    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "task", cascade = [CascadeType.ALL], orphanRemoval = true)
     var evaluations: MutableList<Evaluation> = ArrayList()
 
     @Transient

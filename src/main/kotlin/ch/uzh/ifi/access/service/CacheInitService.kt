@@ -16,7 +16,7 @@ class CacheInitService(
 
     @Transactional
     fun initCache() {
-        courseRepository.findAllByDeletedFalse().forEach { course ->
+        courseRepository.findAll().filterNotNull().forEach { course ->
             course.registeredStudents.map { student ->
                 roleService.findUserByAllCriteria(student)?.let {
                     roleService.getRegistrationIDCandidates(it.username)

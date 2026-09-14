@@ -6,8 +6,10 @@ import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
-import ch.uzh.ifi.access.repository.*
-import com.fasterxml.jackson.databind.ObjectMapper
+import ch.uzh.ifi.access.repository.AssignmentRepository
+import ch.uzh.ifi.access.repository.CourseRepository
+import ch.uzh.ifi.access.repository.TaskFileRepository
+import ch.uzh.ifi.access.repository.TaskRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import jakarta.xml.bind.DatatypeConverter
@@ -39,8 +41,6 @@ class CourseService(
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
     private val exampleQueueService: ExampleQueueService,
-    private val mapper: ObjectMapper,
-    private val exampleRepository: ExampleRepository,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -394,11 +394,9 @@ class CourseService(
         return courseLifecycle.updateFromDirectory(existingCourse, directory)
     }
 
-    @Transactional
     @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
-    fun deleteCourse(courseSlug: String): Course {
-        val existingCourse = getCourseBySlug(courseSlug)
-        return courseLifecycle.delete(existingCourse)
+    fun deleteCourse(courseSlug: String) {
+        courseLifecycle.delete(courseSlug)
     }
 
     @Transactional

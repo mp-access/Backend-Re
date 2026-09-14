@@ -12,6 +12,8 @@ import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
+import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
@@ -32,6 +34,10 @@ class CourseLifecycle(
     private val cci: CourseConfigImporter,
     private val fileService: FileService,
     private val executionService: ExecutionService,
+    private val vacuumService: VacuumService,
+    private val courseInformationRepository: CourseInformationRepository,
+    private val assignmentInformationRepository: AssignmentInformationRepository,
+    private val taskInformationRepository: TaskInformationRepository,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -68,6 +74,7 @@ class CourseLifecycle(
         logger.debug { "Updating course ${course.slug} from ${coursePath}" }
         val existingSlug = course.slug
         val courseDTO = cci.readCourseConfig(coursePath)
+        course.information.clear()
         modelMapper.map(courseDTO, course)
         course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
@@ -97,6 +104,7 @@ class CourseLifecycle(
                 .filter { existing: Assignment -> existing.slug == assignmentDTO.slug }.findFirst()
                 .orElseGet { course.createAssignment() }
             assignment.ordinalNum = index + 1
+            assignment.information.clear()
             modelMapper.map(assignmentDTO, assignment)
             assignment.information.forEach { it.value.assignment = assignment }
             assignment.enabled = true
@@ -112,9 +120,9 @@ class CourseLifecycle(
                     }
                 logger.debug { "Updating task ${task.slug}" }
                 pullDockerImage(taskDTO.evaluator!!.dockerImage!!) // TODO: safety
+                task.information.clear()
                 modelMapper.map(taskDTO, task)
                 task.information.forEach { it.value.task = task }
-                val instructionFiles = task.information.values.map { it.instructionsFile }
 
                 task.ordinalNum = index + 1
                 task.dockerImage = taskDTO.evaluator!!.dockerImage // TODO: safety
@@ -319,10 +327,36 @@ class CourseLifecycle(
         }
     }
 
-    fun delete(course: Course): Course {
-        course.deleted = true
-        course.slug = "DELETED_${course.slug}_${UUID.randomUUID()}" // TODO: not exactly elegant
-        return courseRepository.saveAndFlush(course)
+    @Transactional
+    fun delete(courseSlug: String) {
+        val course = courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        // TODO: see comment and code at the end of this file!
+        logger.debug { "Deleting '${course.slug}' orphaned information..." }
+        courseInformationRepository.deleteAllByCourseId(course.id!!)
+        course.assignments.forEach {
+            assignmentInformationRepository.deleteAllByAssignmentId(it.id!!)
+        }
+        course.assignments.flatMap { it.tasks }.forEach {
+            taskInformationRepository.deleteAllByTaskId(it.id!!)
+        }
+        // delete submissions first to be able to delete tasks later
+        logger.debug { "Deleting '${course.slug}' submissions..." }
+        course.assignments
+            .flatMap { it.tasks }
+            .flatMap { it.evaluations }
+            .forEach { it.submissions.clear() }
+        courseRepository.flush()
+        // delete the rest of the course
+        logger.debug { "Deleting '${course.slug}' course..." }
+        courseRepository.delete(course)
+        courseRepository.flush()
+        // vacuum postgres (this does not shrink the file on disk, but makes parts of it reusable)
+        logger.debug { "Deleting '${course.slug}' (vacuuming)..." }
+        vacuumService.vacuumAllTables()
+        // delete roles
+        logger.debug { "Deleting '${course.slug}' roles..." }
+        roleService.deleteRoles(course.slug!!)
+        logger.debug { "Deleting '${course.slug}' course: done" }
     }
 
     fun runExamplesOnceToRetrieveTestNames(course: Course): Course {
@@ -337,3 +371,21 @@ class CourseLifecycle(
     }
 }
 
+// due to a bug, course/assignment/task information is left in the database on each update, leading to
+// duplicate rows, but Spring only ever sees two entries for de/en, because it's a map.
+// This here is necessary to clean up these orphaned information entries when deleting a course
+// TODO: delete once the bug has been fixed in updateFromDirectory and the DB is fully cleaned up
+interface CourseInformationRepository : JpaRepository<CourseInformation, Long> {
+    @Modifying
+    fun deleteAllByCourseId(courseId: Long)
+}
+
+interface AssignmentInformationRepository : JpaRepository<AssignmentInformation, Long> {
+    @Modifying
+    fun deleteAllByAssignmentId(assignmentId: Long)
+}
+
+interface TaskInformationRepository : JpaRepository<TaskInformation, Long> {
+    @Modifying
+    fun deleteAllByTaskId(taskId: Long)
+}

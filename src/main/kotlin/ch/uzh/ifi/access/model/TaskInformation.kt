@@ -10,7 +10,7 @@ class TaskInformation {
     var id: Long? = null
 
     @JsonIgnore
-    @ManyToOne(cascade = [CascadeType.ALL])
+    @ManyToOne
     @JoinColumn(nullable = false, name = "task_id")
     var task: Task? = null
 

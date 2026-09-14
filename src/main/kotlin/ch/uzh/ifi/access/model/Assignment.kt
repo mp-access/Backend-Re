@@ -18,7 +18,7 @@ class Assignment {
     @Column(nullable = false)
     var ordinalNum: Int? = null
 
-    @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL], fetch = FetchType.LAZY, orphanRemoval = true)
     @MapKey(name = "language")
     var information: MutableMap<String, AssignmentInformation> = HashMap()
 
@@ -36,7 +36,7 @@ class Assignment {
     @JoinColumn(nullable = false, name = "course_id")
     var course: Course? = null
 
-    @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "assignment", cascade = [CascadeType.ALL], orphanRemoval = true)
     @SQLOrder("ID ASC")
     var tasks: MutableList<Task> = ArrayList()
 

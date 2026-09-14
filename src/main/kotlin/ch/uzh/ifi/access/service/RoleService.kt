@@ -199,7 +199,7 @@ class RoleService(
     @Transactional
     @Cacheable("RoleService.getUserRoles", key = "T(java.lang.String).join(',', #usernames)")
     fun getUserRoles(usernames: List<String>): List<String> {
-        return courseRepository.findAllUnrestrictedByDeletedFalse().flatMap { course ->
+        return courseRepository.findAllUnrestrictedBy().flatMap { course ->
             val slug = course.slug
             usernames.flatMap { username ->
                 listOfNotNull(
@@ -345,5 +345,21 @@ class RoleService(
 
     fun isAdmin(userRoles: List<String>, courseSlug: String): Boolean {
         return userRoles.contains("$courseSlug-assistant") || userRoles.contains("$courseSlug-supervisor")
+    }
+
+    fun deleteRoles(slug: String) {
+        val rolesResource = accessRealm.roles()
+        listOf(Role.STUDENT, Role.ASSISTANT, Role.SUPERVISOR).map { it.withCourse(slug) }.forEach {
+            try {
+                rolesResource.deleteRole(it)
+            } catch (_: Exception) {
+                logger.warn { "Could not delete role $it - is it already deleted?" }
+            }
+        }
+        try {
+            rolesResource.deleteRole(slug)
+        } catch (_: Exception) {
+            logger.warn { "Could not delete role $slug - is it already deleted?" }
+        }
     }
 }

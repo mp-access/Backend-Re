@@ -14,15 +14,15 @@ class CacheEvictScheduler(private val cacheManager: CacheManager) {
         value = ["ExampleService.getInteractiveExampleSlug"],
         allEntries = true
     )
-    @Scheduled(fixedRateString = "15s", )
+    @Scheduled(fixedRateString = "15s")
     fun evictInteractiveExampleSlugCache() {
-        logger.info{"Scheduled cache eviction of ExampleService.getInteractiveExampleSlug" }
+        //logger.debug { "Scheduled cache eviction of ExampleService.getInteractiveExampleSlug" }
     }
 
     @CacheEvict("VisitQueueService.getRecentlyActiveCount", allEntries = true)
     @Scheduled(fixedRateString = "15s")
     fun evictRecentlyActiveCountCache() {
-        logger.info{"Scheduled cache eviction of VisitQueueService.getRecentlyActiveCount" }
+        //logger.debug { "Scheduled cache eviction of VisitQueueService.getRecentlyActiveCount" }
     }
 
     @Scheduled(fixedRateString = "\${caching.eviction-rate}")
@@ -30,6 +30,6 @@ class CacheEvictScheduler(private val cacheManager: CacheManager) {
         CacheConfig.TEMPORARY_CACHES.forEach { cacheName ->
             cacheManager.getCache(cacheName)?.clear()
         }
-        logger.info { "Finished periodic cache eviction (${CacheConfig.TEMPORARY_CACHES.size} caches cleared)." }
+        //logger.debug { "Finished periodic cache eviction (${CacheConfig.TEMPORARY_CACHES.size} caches cleared)." }
     }
 }

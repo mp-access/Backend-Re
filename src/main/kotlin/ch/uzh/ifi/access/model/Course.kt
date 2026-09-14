@@ -10,13 +10,10 @@ class Course {
     @GeneratedValue
     var id: Long? = null
 
-    @Column(nullable = false)
-    var deleted: Boolean? = false
-
     @Column(unique = true, nullable = false)
     var slug: String? = null
 
-    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], fetch = FetchType.LAZY, orphanRemoval = true)
     @MapKey(name = "language")
     var information: MutableMap<String, CourseInformation> = HashMap()
 
@@ -54,17 +51,17 @@ class Course {
     @Column(nullable = false)
     var studentRole: String? = null
 
-    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], orphanRemoval = true)
     var assignments: MutableList<Assignment> = ArrayList()
 
-    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("ordinalNum ASC")
     var examples: MutableList<Task> = ArrayList()
 
-    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], orphanRemoval = true)
     var globalFiles: MutableList<GlobalFile> = java.util.ArrayList()
 
-    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL])
+    @OneToMany(mappedBy = "course", cascade = [CascadeType.ALL], orphanRemoval = true)
     var events: MutableList<Event> = ArrayList()
 
     @ElementCollection

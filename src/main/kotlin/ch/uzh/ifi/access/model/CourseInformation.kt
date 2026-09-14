@@ -10,7 +10,7 @@ class CourseInformation {
     var id: Long? = null
 
     @JsonIgnore
-    @ManyToOne(cascade = [CascadeType.ALL])
+    @ManyToOne
     @JoinColumn(nullable = false, name = "course_id")
     var course: Course? = null
 

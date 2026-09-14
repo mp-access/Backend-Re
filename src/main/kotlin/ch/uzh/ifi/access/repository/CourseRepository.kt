@@ -42,16 +42,11 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesBy(): List<CourseOverview>
 
-    // TODO: remove for public courses and handle in controller
-    @PostFilter("hasRole(filterObject.slug)")
-    fun findCoursesByAndDeletedFalse(): List<CourseOverview>
-
     @Query(
         """
     SELECT DISTINCT c 
     FROM Course c 
-    WHERE c.deleted = false 
-    AND (
+    WHERE (
         EXISTS (SELECT 1 FROM c.registeredStudents rs WHERE rs IN :userIds)
         OR EXISTS (SELECT 1 FROM c.assistants a WHERE a IN :userIds)
         OR EXISTS (SELECT 1 FROM c.supervisors s WHERE s IN :userIds)
@@ -59,8 +54,6 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     """
     )
     fun findCoursesForUser(@Param("userIds") userIds: List<String>): Set<CourseOverview>
-
-    fun findAllByDeletedFalse(): List<Course>
 
     @Query(
         nativeQuery = true, value = "SELECT a.value AS name, :email AS email FROM user_attribute a " +
@@ -109,7 +102,7 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
 
     // Bypasses role restrictions, use only if preventing leaks by other means.
     // Necessary for retrieving user roles upon first login.
-    fun findAllUnrestrictedByDeletedFalse(): List<Course>
+    fun findAllUnrestrictedBy(): List<Course>
 
     @Query(
         nativeQuery = true,
