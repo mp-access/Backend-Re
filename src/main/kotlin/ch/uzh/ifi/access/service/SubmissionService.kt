@@ -133,7 +133,7 @@ class SubmissionService(
         }
         // the controller prevents regular users from even submitting with restricted = false
         // meaning for regular users, restricted is always true
-        if (submissionDTO.restricted && submissionDTO.command == Command.GRADE) {
+        if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !isExample(task)) {
             if (evaluation.remainingAttempts == null || evaluation.remainingAttempts!! <= 0)
                 throw ResponseStatusException(
                     HttpStatus.FORBIDDEN,

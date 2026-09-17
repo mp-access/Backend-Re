@@ -50,7 +50,7 @@ class Evaluation {
     }
 
     fun update(newScore: Double?) {
-        remainingAttempts = remainingAttempts!! - 1
+        remainingAttempts = maxOf(0, remainingAttempts!! - 1)
         if (isActive) {
             bestScore = (bestScore ?: 0.0).coerceAtLeast(newScore!!)
         }
