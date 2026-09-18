@@ -118,12 +118,12 @@ class ExampleController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication
     ) {
+        val submissionReceivedAt = LocalDateTime.now()
         val userId = roleService.getUserId(authentication.name)!!
         submission.userId = userId
         val usernames = roleService.getRegistrationIDCandidates(userId)
         val userRoles = roleService.getUserRoles(usernames)
         val isAdmin = roleService.isAdmin(userRoles, course)
-        val submissionReceivedAt = LocalDateTime.now()
         if (exampleService.isSubmittedDuringInteractivePeriod(
                 course,
                 example,
