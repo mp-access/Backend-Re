@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap
 class EmbeddingQueueService(
     private val submissionRepository: SubmissionRepository,
     private val exampleService: ExampleService,
-    private val emitterService: EmitterService,
     private val webClient: WebClient,
     @Value("\${llm.service.batch-size}") private val batchSize: Int,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
@@ -126,12 +125,7 @@ class EmbeddingQueueService(
                     val courseSlug = submissions[0].courseSlug
                     val exampleSlug = submissions[0].exampleSlug
                     if (exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug).size == exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)) {
-                        emitterService.sendPayload(
-                            EmitterType.SUPERVISOR,
-                            submissions[0].courseSlug,
-                            "example-information",
-                            exampleService.computeExampleInformation(submissions[0].courseSlug, submissions[0].exampleSlug),
-                        )
+                        exampleService.requestExampleInformationUpdate(courseSlug, exampleSlug)
                         if (!submissions.any {it.forceComputation}) {
                             val submissionsWithoutEmbeddings =
                                 exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)

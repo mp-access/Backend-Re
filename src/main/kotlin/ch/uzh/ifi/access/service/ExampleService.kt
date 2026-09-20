@@ -20,10 +20,14 @@ import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-
+import java.util.concurrent.atomic.AtomicLong
 
 @Service
 @Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
@@ -41,6 +45,10 @@ class ExampleService(
     @Value("\${examples.grace-period}") private val gracePeriod: Long
 ) {
     val exampleSubmissionCount = ConcurrentHashMap<Pair<String, String>, AtomicInteger>()
+    private val logger = KotlinLogging.logger {}
+    private val pendingExampleInformationUpdates =
+        ConcurrentHashMap<Pair<String, String>, Long>()
+    private val exampleInformationUpdateSequence = AtomicLong()
 
     fun getExamples(courseSlug: String): List<TaskOverview> {
         return exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
@@ -214,12 +222,7 @@ class ExampleService(
                 )
             )
 
-            emitterService.sendPayload(
-                EmitterType.SUPERVISOR,
-                courseSlug,
-                "example-information",
-                computeExampleInformation(courseSlug, exampleSlug)
-            )
+            requestExampleInformationUpdate(courseSlug, exampleSlug)
         }
         return newSubmission
     }
@@ -237,6 +240,51 @@ class ExampleService(
         return ExampleSubmissionsCountDTO(
             submissionsCount = submissionsCount.toMutableMap()
         )
+    }
+
+    fun requestExampleInformationUpdate(courseSlug: String, exampleSlug: String) {
+        val markPending = {
+            pendingExampleInformationUpdates[
+                Pair(courseSlug, exampleSlug)
+            ] = exampleInformationUpdateSequence.incrementAndGet()
+        }
+
+        if (
+            TransactionSynchronizationManager.isActualTransactionActive() &&
+            TransactionSynchronizationManager.isSynchronizationActive()
+        ) {
+            TransactionSynchronizationManager.registerSynchronization(
+                object : TransactionSynchronization {
+                    override fun afterCommit() {
+                        markPending()
+                    }
+                }
+            )
+        } else {
+            markPending()
+        }
+    }
+
+    @Scheduled(fixedDelayString = "\${examples.information-update-rate:1s}")
+    fun publishPendingExampleInformationUpdates() {
+        pendingExampleInformationUpdates.entries.toList().forEach { (key, generation) ->
+            val (courseSlug, exampleSlug) = key
+
+            try {
+                val information = computeExampleInformation(courseSlug, exampleSlug)
+                emitterService.sendPayload(
+                    EmitterType.SUPERVISOR,
+                    courseSlug,
+                    "example-information",
+                    information
+                )
+                pendingExampleInformationUpdates.remove(key, generation)
+            } catch (exception: Exception) {
+                logger.error(exception) {
+                    "Failed to publish example information for $courseSlug/$exampleSlug"
+                }
+            }
+        }
     }
 
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
