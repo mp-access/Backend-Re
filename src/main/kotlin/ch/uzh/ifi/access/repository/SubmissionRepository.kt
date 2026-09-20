@@ -9,7 +9,28 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import java.time.LocalDateTime
 
+interface InteractiveSubmissionStats {
+    fun getTestsPassed(): String?
+    fun getPoints(): Double?
+    fun getHasEmbedding(): Boolean
+}
+
 interface SubmissionRepository : JpaRepository<Submission?, Long?> {
+
+    @Query(
+        nativeQuery = true, value = """
+            SELECT CAST(s.tests_passed AS text) AS testsPassed, s.points AS points,
+                   (COALESCE(cardinality(s.embedding), 0) > 0) AS hasEmbedding
+            FROM submission s JOIN evaluation e ON e.id = s.evaluation_id
+            WHERE e.task_id = :taskId AND s.command = 'GRADE'
+              AND s.created_at >= :exampleStart AND s.created_at <= :exampleEnd
+        """
+    )
+    fun findInteractiveExampleSubmissionStats(
+        @Param("taskId") taskId: Long,
+        @Param("exampleStart") exampleStart: LocalDateTime,
+        @Param("exampleEnd") exampleEnd: LocalDateTime
+    ): List<InteractiveSubmissionStats>
 
     @Query(
         value = """

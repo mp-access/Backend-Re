@@ -242,26 +242,36 @@ class ExampleService(
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
         val participantsOnline = visitQueueService.getRecentlyActiveCount(courseSlug)
         val totalParticipants = courseService.getCourseBySlug(courseSlug).participantCount
-        val processedSubmissions = getInteractiveExampleSubmissions(courseSlug, exampleSlug)
-        val numberOfProcessedSubmissions = processedSubmissions.size
-        val exampleKey = Pair(courseSlug, exampleSlug)
-        val numberOfReceivedSubmissions = exampleSubmissionCount[exampleKey]?.get() ?: 0
-        val numberOfProcessedSubmissionsWithEmbeddings = processedSubmissions.filter { it.embedding.isNotEmpty() }.size
-        val passRatePerTestCase = getExamplePassRatePerTestCase(courseSlug, exampleSlug, processedSubmissions)
-        val avgPoints = calculateAvgPoints(processedSubmissions)
+        val example = getExampleBySlug(courseSlug, exampleSlug)
+        val stats = if (example.start == null || example.end == null) emptyList() else
+            submissionRepository.findInteractiveExampleSubmissionStats(
+                example.id!!, example.start!!, example.end!!.plusSeconds(gracePeriod)
+            )
+        val processed = stats.map { row ->
+            Triple(parseTestsPassed(row.getTestsPassed()), row.getPoints(), row.getHasEmbedding())
+        }.filter { it.first.isNotEmpty() }
+        val numberOfProcessedSubmissions = processed.size
+        val numberOfReceivedSubmissions = exampleSubmissionCount[Pair(courseSlug, exampleSlug)]?.get() ?: 0
+        val passRatePerTestCase = example.testNames.mapIndexed { i, name ->
+            name to if (processed.isEmpty()) 0.0
+            else processed.sumOf { it.first.getOrElse(i) { 0 } }.toDouble() / processed.size
+        }.toMap()
+        val avgPoints = processed.mapNotNull { it.second }.ifEmpty { listOf(0.0) }.average()
 
         return ExampleInformationDTO(
             participantsOnline,
             totalParticipants,
-            maxOf(
-                numberOfReceivedSubmissions,
-                numberOfProcessedSubmissions
-            ),
+            maxOf(numberOfReceivedSubmissions, numberOfProcessedSubmissions),
             numberOfProcessedSubmissions,
-            numberOfProcessedSubmissionsWithEmbeddings,
+            processed.count { it.third },
             passRatePerTestCase,
             avgPoints
         )
+    }
+
+    private fun parseTestsPassed(raw: String?): List<Int> {
+        return (raw ?: "[]").trim().removePrefix("[").removeSuffix("]")
+            .split(",").filter { it.isNotBlank() }.map { it.trim().toInt() }
     }
 
     fun createExampleSubmission(
