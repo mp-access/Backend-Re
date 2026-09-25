@@ -10,6 +10,9 @@ spring:
   jackson:
     mapper:
       ACCEPT_CASE_INSENSITIVE_ENUMS: true
+  data:
+    rest:
+      detection-strategy: annotated
   datasource:
     url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/access}
     username: ${POSTGRES_USER:admin}
