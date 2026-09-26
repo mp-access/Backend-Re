@@ -122,6 +122,7 @@ tasks.withType<Test> {
     filter {
         includeTestsMatching("ch.uzh.ifi.access.AllTests")
         includeTestsMatching("ch.uzh.ifi.access.PerformanceTests")
+        includeTestsMatching("ch.uzh.ifi.access.sse.EmitterServiceTests")
     }
     testLogging {
         events("passed", "skipped", "failed")

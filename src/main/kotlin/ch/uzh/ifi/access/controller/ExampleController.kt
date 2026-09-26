@@ -196,6 +196,7 @@ class ExampleController(
             )
         }
 
+        logger.info { "Example $course/$example published: $start -> $end" }
         emitterService.sendPayload(EmitterType.STUDENT, course, "redirect", "/courses/$course/examples/$example")
         emitterService.sendPayload(
             EmitterType.EVERYONE,
@@ -214,8 +215,10 @@ class ExampleController(
         @PathVariable course: String,
         @PathVariable example: String,
         @RequestBody body: ExampleDurationDTO,
-    ) {
+    ): ExamplePublicationDTO {
         val updatedExample = exampleService.extendExampleDeadlineBySlug(course, example, body.duration)
+        val start = updatedExample.start!!
+        val end = updatedExample.end!!
 
         emitterService.sendPayload(
             EmitterType.EVERYONE,
@@ -227,8 +230,10 @@ class ExampleController(
             EmitterType.EVERYONE,
             course,
             "timer-update",
-            "${updatedExample.start}/${updatedExample.end}"
+            "${start}/${end}"
         )
+
+        return ExamplePublicationDTO(start, end)
     }
 
     // Invoked by the teacher when want to terminate the active example
@@ -239,6 +244,7 @@ class ExampleController(
         @PathVariable example: String
     ) {
         val updatedExample = exampleService.terminateExampleBySlug(course, example)
+        logger.info { "Example $course/$example terminated: end is now ${updatedExample.end}" }
         emitterService.sendPayload(
             EmitterType.EVERYONE,
             course,

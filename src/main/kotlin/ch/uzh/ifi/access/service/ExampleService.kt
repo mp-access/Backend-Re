@@ -162,8 +162,10 @@ class ExampleService(
             )
         }
 
+        val previousEnd = example.end
         example.end = example.end!!.plusSeconds(duration.toLong())
         exampleRepository.saveAndFlush(example)
+        logger.info { "Example $courseSlug/$exampleSlug extended by ${duration}s: end $previousEnd -> ${example.end}" }
 
         return example
     }

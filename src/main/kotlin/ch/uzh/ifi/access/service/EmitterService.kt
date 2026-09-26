@@ -43,11 +43,11 @@ class EmitterService : DisposableBean, SmartLifecycle {
         }
         emitter.onTimeout {
             logger.debug { "SSE connection timed out ($slug)" }
-            emitter.complete()
+            discard(type, slug, id, emitter)
         }
         emitter.onError { throwable: Throwable? ->
             logger.debug { "SSE exception ($slug): $throwable" }
-            emitter.complete()
+            discard(type, slug, id, emitter)
         }
 
         emitters.computeIfAbsent(type) { ConcurrentHashMap() }
@@ -56,7 +56,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
             try {
                 emitter.send(SseEmitter.event().name("emitter-id").data(id))
             } catch (e: Exception) {
-                emitter.completeWithError(e)
+                discard(type, slug, id, emitter)
             }
         }, 1, TimeUnit.SECONDS)
 
@@ -64,13 +64,16 @@ class EmitterService : DisposableBean, SmartLifecycle {
     }
 
     fun sendPayload(type: EmitterType, courseSlug: String, name: String, message: Any) {
+        var delivered = 0
+        var failed = 0
         if (EmitterType.SUPERVISOR == type || EmitterType.EVERYONE == type) {
             emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.forEach {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
+                    delivered++
                 } catch (e: Exception) {
-                    it.value.complete()
-                    emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.remove(it.key)
+                    discard(EmitterType.SUPERVISOR, courseSlug, it.key, it.value)
+                    failed++
                 }
             }
         }
@@ -79,17 +82,42 @@ class EmitterService : DisposableBean, SmartLifecycle {
             emitters[EmitterType.STUDENT]?.get(courseSlug)?.forEach {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
+                    delivered++
                 } catch (e: Exception) {
-                    it.value.complete()
-                    emitters[EmitterType.STUDENT]?.get(courseSlug)?.remove(it.key)
+                    discard(EmitterType.STUDENT, courseSlug, it.key, it.value)
+                    failed++
                 }
             }
         }
+        logger.info { "SSE '$name' in $courseSlug: delivered=$delivered failed=$failed" }
     }
-
 
     fun keepAliveEmitter(type: EmitterType, slug: String, emitterId: String) {
         emitters[type]?.get(slug)?.get(emitterId)?.lastHeartbeat = ZonedDateTime.now()
+    }
+
+    private fun discard(type: EmitterType, slug: String, id: String, emitter: PerishableSseEmitter) {
+        emitters[type]?.get(slug)?.remove(id)
+        try {
+            emitter.complete()
+        } catch (e: Exception) {
+            logger.debug { "SSE emitter $id could not be completed cleanly: $e" }
+        }
+    }
+
+    @Scheduled(fixedRate = 20 * 1000)
+    fun pingEmitters() {
+        emitters.forEach { (type, slugMap) ->
+            slugMap.forEach { (slug, emitterMap) ->
+                emitterMap.forEach { (id, emitter) ->
+                    try {
+                        emitter.send(SseEmitter.event().comment("ping"))
+                    } catch (e: Exception) {
+                        discard(type, slug, id, emitter)
+                    }
+                }
+            }
+        }
     }
 
     @Scheduled(fixedRate = 30 * 1000)
