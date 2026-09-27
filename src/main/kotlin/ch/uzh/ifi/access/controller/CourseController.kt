@@ -232,11 +232,19 @@ class CourseController(
         return deferred
     }
 
+    private fun emitterTypeFor(course: String, authentication: Authentication): EmitterType {
+        val supervisor = authentication.authorities.any {
+            it.authority == "$course-supervisor" || it.authority == "supervisor"
+        }
+        return if (supervisor) EmitterType.SUPERVISOR else EmitterType.STUDENT
+    }
+
+
     // A text event endpoint to publish events to clients
     @GetMapping("/{course}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun subscribe(@PathVariable course: String, authentication: Authentication): ResponseEntity<SseEmitter> {
         val headers = HttpHeaders()
-        val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
+        val emitterType = emitterTypeFor(course, authentication)
         val emitter = emitterService.registerEmitter(emitterType, course, authentication.name)
         headers.add("Cache-Control", "no-transform") // needed to work with webpack-dev-server
         return ResponseEntity<SseEmitter>(emitter, headers, HttpStatus.OK)
@@ -244,8 +252,8 @@ class CourseController(
 
     // Sent by the client to keep the emitter alive
     @PutMapping("/{course}/heartbeat/{emitterId}")
-    fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String) {
-        val emitterType = if (roleService.isSupervisor(course)) EmitterType.SUPERVISOR else EmitterType.STUDENT
+    fun heartbeat(@PathVariable course: String, @PathVariable emitterId: String, authentication: Authentication) {
+        val emitterType = emitterTypeFor(course, authentication)
         emitterService.keepAliveEmitter(emitterType, course, emitterId)
 
         if (emitterType == EmitterType.STUDENT) {

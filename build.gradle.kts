@@ -124,6 +124,7 @@ tasks.withType<Test> {
         includeTestsMatching("ch.uzh.ifi.access.PerformanceTests")
         includeTestsMatching("ch.uzh.ifi.access.sse.EmitterServiceTests")
         includeTestsMatching("ch.uzh.ifi.access.api.SpringDataRestExposureTests")
+        includeTestsMatching("ch.uzh.ifi.access.users.RoleInitializationGuardTests")
     }
     testLogging {
         events("passed", "skipped", "failed")

@@ -25,6 +25,8 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.CommonsRequestLoggingFilter
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 
 @AllArgsConstructor
@@ -150,16 +152,29 @@ class SecurityConfig(private val env: Environment) {
     class AuthenticationSuccessListener(
         val roleService: RoleService,
     ) : ApplicationListener<AuthenticationSuccessEvent> {
+        private val logger = KotlinLogging.logger {}
+        private val initializedAt = ConcurrentHashMap<String, Long>()
+        private val warned: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
         override fun onApplicationEvent(event: AuthenticationSuccessEvent) {
             // This ensures the necessary roles are added to the Keycloak account when the user first logs in
             // because at that point, the roles_initialized_at attribute will yet be missing
-            val initialized =
-                (event.authentication as JwtAuthenticationToken).token.getClaimAsString("roles_initialized_at")
-            if (initialized == null) {
-                val username = event.authentication.name
-                roleService.initializeUserRoles(username)
+            val token = (event.authentication as? JwtAuthenticationToken)?.token ?: return
+            if (token.getClaimAsString("roles_initialized_at") != null) return
+            val username = event.authentication.name
+            val previous = initializedAt[username]
+            if (previous != null) {
+                val minutesAgo = TimeUnit.MILLISECONDS.toMinutes(System.currentTimeMillis() - previous)
+                if (minutesAgo >= 10 && warned.add(username)) {
+                    logger.warn {
+                        "Token of $username still has no roles_initialized_at claim $minutesAgo minutes after " +
+                        "initialization: check the roles_initialized_at protocol mapper of client access-client"
+                    }
+                }
+                return
             }
+            roleService.initializeUserRoles(username)
+            initializedAt[username] = System.currentTimeMillis()
         }
 
     }
