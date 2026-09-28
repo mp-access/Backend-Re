@@ -6,7 +6,9 @@ import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
+import io.github.oshai.kotlinlogging.KLogger
 import org.modelmapper.ModelMapper
+import org.slf4j.Logger
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
@@ -83,7 +85,8 @@ class SubmissionService(
         assignmentSlug: String,
         taskSlug: String,
         submissionDTO: SubmissionDTO,
-        timer: BenchTimer? = null
+        timer: BenchTimer? = null,
+        logger: KLogger,
     ): Submission {
         return createSubmission(
             courseSlug,
@@ -91,7 +94,8 @@ class SubmissionService(
             timer.measure("get_task_by_slug") { getTaskBySlug(courseSlug, assignmentSlug, taskSlug) },
             submissionDTO,
             null,
-            timer
+            logger,
+            timer,
         )
     }
 
@@ -108,7 +112,8 @@ class SubmissionService(
         task: Task,
         submissionDTO: SubmissionDTO,
         submissionReceivedAt: LocalDateTime?,
-        timer: BenchTimer? = null
+        logger: KLogger? = null,
+        timer: BenchTimer? = null,
     ): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
@@ -157,11 +162,13 @@ class SubmissionService(
             timer.measure("execute") {
                 // A/B switch: pooled path when docker.pool.enabled=true, else the one-shot
                 // baseline. Roll back by deleting this if/else (keep the executeSubmission call).
-                if (dockerPoolService.enabled)
-                    dockerService.executePooledSubmission(course, submission, task, evaluation, timer)
-                else
+                if (dockerPoolService.enabled) {
+                    logger?.info {"[SubmissionService.createSubmission] execute in pooled submission"}
+                    dockerService.executePooledSubmission(course, submission, task, evaluation, timer)}
+                else {
                     // TODO: When does this fallback? If the pooled submission fails...
-                    dockerService.executeSubmission(course, submission, task, evaluation, timer)
+                    logger?.info {"[SubmissionService.createSubmission] falling back into non-pooled submission" }
+                    dockerService.executeSubmission(course, submission, task, evaluation, timer)}
             }
         } catch (e: Exception) {
             submission.output =

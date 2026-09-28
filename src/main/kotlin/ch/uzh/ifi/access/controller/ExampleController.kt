@@ -55,6 +55,7 @@ class ExampleController(
         return exampleService.computeSubmissionsCount(course)
     }
 
+    // TODO: This one returns a lot of 401's
     @GetMapping("/interactive")
     @PreAuthorize("hasRole(#course)")
     fun getInteractiveExampleSlug(
@@ -130,10 +131,17 @@ class ExampleController(
                 submissionReceivedAt
             ) && !isAdmin && submission.command == Command.GRADE
         ) {
+            // Is this code ever reached?
+            val tmp = exampleService.isSubmittedDuringInteractivePeriod(
+                course,
+                example,
+                submissionReceivedAt
+            )
+            logger.info { "[if-statement reached] Queue engaged: Submitted submission ${submission.command} with following arguments: ${tmp} and Command.Grade=${Command.GRADE}" }
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
             exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
-            exampleService.processSubmission(course, example, submission, submissionReceivedAt)
+            exampleService.processSubmission(course, example, submission, submissionReceivedAt, logger)
         }
     }
 
@@ -251,7 +259,7 @@ class ExampleController(
             "timer-update",
             "${updatedExample.start}/${updatedExample.end}"
         )
-        exampleQueueService.removeOutdatedSubmissions(course, example)
+        // Waiting submissions are not removed: they were submitted in time and are graded in drain mode.
     }
 
     // Invoked by the teacher when publishing an example to inform the students

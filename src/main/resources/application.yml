@@ -44,8 +44,14 @@ llm:
 examples:
   grace-period: ${GRACE_PERIOD:5}
   example-queue:
-    cpu-threshold: ${CPU_THRESHOLD:0.70}
-    max-concurrent-submissions: ${MAX_CONCURRENT_SUBMISSIONS:20}
+    # Soft brake during the interactive period; the concurrency limits below are the actual protection.
+    cpu-threshold: ${CPU_THRESHOLD:0.90}
+    # Keep below docker.pool.size so graders don't wait for / fall back from the container pool.
+    max-concurrent-submissions: ${MAX_CONCURRENT_SUBMISSIONS:8}
+    # Always running during the interactive period, regardless of CPU load (progress guarantee).
+    min-concurrent-submissions: ${MIN_CONCURRENT_SUBMISSIONS:2}
+    # Parallelism after the example ended (drain mode, CPU load ignored) until the queue is empty.
+    drain-concurrent-submissions: ${DRAIN_CONCURRENT_SUBMISSIONS:8}
 
 logging:
   level:

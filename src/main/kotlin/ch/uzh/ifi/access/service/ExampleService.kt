@@ -10,6 +10,7 @@ import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
+import io.github.oshai.kotlinlogging.KLogger
 import jakarta.transaction.Transactional
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
@@ -189,9 +190,11 @@ class ExampleService(
         courseSlug: String,
         exampleSlug: String,
         submission: SubmissionDTO,
-        submissionReceivedAt: LocalDateTime
+        submissionReceivedAt: LocalDateTime,
+        logger: KLogger? = null
     ): Submission {
-        val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt)
+        logger?.info {"[processSubmission] Processing submission" }
+        val newSubmission = createExampleSubmission(courseSlug, exampleSlug, submission, submissionReceivedAt, logger)
 
         val usernames = roleService.getRegistrationIDCandidates(submission.userId!!)
         val userRoles = roleService.getUserRoles(usernames)
@@ -268,7 +271,8 @@ class ExampleService(
         courseSlug: String,
         exampleSlug: String,
         submissionDTO: SubmissionDTO,
-        submissionReceivedAt: LocalDateTime
+        submissionReceivedAt: LocalDateTime,
+        logger: KLogger? = null
     ): Submission {
         val submissionLockDuration = 2L
 
@@ -315,7 +319,7 @@ class ExampleService(
         }
 
         val newSubmission =
-            submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO, submissionReceivedAt)
+            submissionService.createSubmission(courseSlug, exampleSlug, example, submissionDTO, submissionReceivedAt, logger)
 
         return newSubmission
     }
