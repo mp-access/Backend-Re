@@ -402,39 +402,40 @@ class ExampleService(
         atomicSubmissionCount.incrementAndGet()
     }
 
+    /**
+     * Waits until the example is over and then sends "point-distribution" via SSE
+     * every few seconds until all received submissions are graded.
+     * Always sends at least once, and the last event carries the final state.
+     */
     fun sendPointDistributionUpdates(courseSlug: String, exampleSlug: String) {
-        val maxTime = 5 * 60 * 1000L
-        val waitTime = 5 * 1000L
-        var timeWaited = 0L
+        val pollMillis = 5_000L
+        val maxMillis = 5 * 60_000L
 
-        val example = getExampleBySlug(courseSlug, exampleSlug)
-
-        while (example.end!! > LocalDateTime.now()) {
-            Thread.sleep(waitTime)
+        while (isExampleInteractive(courseSlug, exampleSlug)) {
+            Thread.sleep(1_000)
         }
 
-        while (exampleSubmissionCount[Pair(
-                courseSlug,
-                exampleSlug
-            )] != null // if it is null, the example was reset, so we can stop sending updates
-            && timeWaited < maxTime
-            && getInteractiveExampleSubmissions(courseSlug, exampleSlug).size < getExampleSubmissionCount(
-                courseSlug,
-                exampleSlug
-            )
-        ) {
-            val pointDistributionDTO = computePointDistribution(courseSlug, exampleSlug)
+        val deadline = System.currentTimeMillis() + maxMillis
+        do {
+            if (getExampleBySlug(courseSlug, exampleSlug).start == null) return // example was reset
+            sendPointDistribution(courseSlug, exampleSlug)
+            val allGraded = getInteractiveExampleSubmissions(courseSlug, exampleSlug).size >=
+                getExampleSubmissionCount(courseSlug, exampleSlug)
+            if (allGraded) return
+            Thread.sleep(pollMillis)
+        } while (System.currentTimeMillis() < deadline)
 
-            emitterService.sendPayload(
-                EmitterType.SUPERVISOR,
-                courseSlug,
-                "point-distribution",
-                pointDistributionDTO
-            )
+        // Timed out: send the latest state once more.
+        sendPointDistribution(courseSlug, exampleSlug)
+    }
 
-            Thread.sleep(waitTime)
-            timeWaited += waitTime
-        }
+    fun sendPointDistribution(courseSlug: String, exampleSlug: String) {
+        emitterService.sendPayload(
+            EmitterType.SUPERVISOR,
+            courseSlug,
+            "point-distribution",
+            computePointDistribution(courseSlug, exampleSlug)
+        )
     }
 
     fun getExampleSubmissionCount(courseSlug: String, exampleSlug: String): Int {
