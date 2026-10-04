@@ -342,7 +342,9 @@ class ExampleController(
         @PathVariable example: String,
     ): PointDistributionDTO {
         // Always answer with the current state, never an empty DTO.
-        pointDistributionUpdater.ensureRunning(course, example)
+        if (exampleService.isExampleInteractive(course, example)) {
+            pointDistributionUpdater.ensureRunning(course, example)
+        }
         return exampleService.computePointDistribution(course, example)
     }
 }
