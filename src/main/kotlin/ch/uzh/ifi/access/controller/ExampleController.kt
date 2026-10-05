@@ -8,9 +8,6 @@ import ch.uzh.ifi.access.projections.TaskWorkspace
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
@@ -33,7 +30,8 @@ class ExampleController(
     private val roleService: RoleService,
     private val emitterService: EmitterService,
     private val clusteringService: ClusteringService,
-    private val submissionRepository: SubmissionRepository
+    private val submissionRepository: SubmissionRepository,
+    private val pointDistributionUpdater: PointDistributionUpdater
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -55,6 +53,7 @@ class ExampleController(
         return exampleService.computeSubmissionsCount(course)
     }
 
+    // TODO: This one returns a lot of 401's
     @GetMapping("/interactive")
     @PreAuthorize("hasRole(#course)")
     fun getInteractiveExampleSlug(
@@ -130,10 +129,17 @@ class ExampleController(
                 submissionReceivedAt
             ) && !isAdmin && submission.command == Command.GRADE
         ) {
+            // Is this code ever reached?
+            val tmp = exampleService.isSubmittedDuringInteractivePeriod(
+                course,
+                example,
+                submissionReceivedAt
+            )
+            logger.info { "[if-statement reached] Queue engaged: Submitted submission ${submission.command} with following arguments: ${tmp} and Command.Grade=${Command.GRADE}" }
             exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
             exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
-            exampleService.processSubmission(course, example, submission, submissionReceivedAt)
+            exampleService.processSubmission(course, example, submission, submissionReceivedAt, logger)
         }
     }
 
@@ -205,6 +211,9 @@ class ExampleController(
             "${start}/${end}"
         )
 
+        // Sends point-distribution via SSE once the example is over, until all submissions are graded.
+        pointDistributionUpdater.ensureRunning(course, example)
+
         return ExamplePublicationDTO(start, end)
     }
 
@@ -257,7 +266,7 @@ class ExampleController(
             "timer-update",
             "${updatedExample.start}/${updatedExample.end}"
         )
-        exampleQueueService.removeOutdatedSubmissions(course, example)
+        // Waiting submissions are not removed: they were submitted in time and are graded in drain mode.
     }
 
     // Invoked by the teacher when publishing an example to inform the students
@@ -332,28 +341,15 @@ class ExampleController(
         return clusteringService.performSpectralClustering(course, example, submissionEmbeddingMap, numberOfClusters)
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
     @GetMapping("/{example}/point-distribution")
     @PreAuthorize("hasRole(#course+'-assistant')")
     fun getPointDistribution(
         @PathVariable course: String,
         @PathVariable example: String,
     ): PointDistributionDTO {
-        val currentExample = exampleService.getExampleBySlug(course, example)
-        if (currentExample.end!! >= LocalDateTime.now()) {
-            GlobalScope.launch {
-                exampleService.sendPointDistributionUpdates(course, example)
-            }
-            return PointDistributionDTO()
-        }
-        if (exampleService.getInteractiveExampleSubmissions(
-                course,
-                example
-            ).size < exampleService.getExampleSubmissionCount(course, example)
-        ) {
-            GlobalScope.launch {
-                exampleService.sendPointDistributionUpdates(course, example)
-            }
+        // Always answer with the current state, never an empty DTO.
+        if (exampleService.isExampleInteractive(course, example)) {
+            pointDistributionUpdater.ensureRunning(course, example)
         }
         return exampleService.computePointDistribution(course, example)
     }
