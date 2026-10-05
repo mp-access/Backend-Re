@@ -86,7 +86,7 @@ class SubmissionService(
         taskSlug: String,
         submissionDTO: SubmissionDTO,
         timer: BenchTimer? = null,
-        logger: KLogger,
+        logger: KLogger? = null,
     ): Submission {
         return createSubmission(
             courseSlug,
