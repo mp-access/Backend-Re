@@ -2,7 +2,9 @@ package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.CategorizationDTO
 import org.apache.commons.math3.ml.distance.EuclideanDistance
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import smile.clustering.SpectralClustering
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -27,7 +29,12 @@ class ClusteringService(
         {
             embeddingQueueService.reAddSubmissionsToQueue(courseSlug, exampleSlug, submissionsWithoutEmbeddings.map { it.key })
         }
-        require(submissionsWithEmbeddings.size >= numClusters) { "For categorization to work, at least $numClusters submissions with embeddings are required. The calculation of embeddings is currently retried. Try again in a minute." }
+        if (submissionsWithEmbeddings.size < numClusters) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "For categorization to work, at least $numClusters submissions with embeddings are required. The calculation of embeddings is currently retried. Try again in a minute."
+            )
+        }
         val orderedEmbeddingsMap = submissionsWithEmbeddings.sortedBy { it.key }
         val orderedSubmissionIds = orderedEmbeddingsMap.map { it.key }
         val orderedEmbeddings = orderedEmbeddingsMap.map { it.value }.toTypedArray()

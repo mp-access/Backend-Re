@@ -333,7 +333,12 @@ class ExampleController(
         @RequestBody body: SubmissionListDTO
     ): CategorizationDTO {
         val numberOfClusters = 5
-        require(numberOfClusters <= body.submissionIds.size) { "For categorization to work, at least $numberOfClusters submissions are required" }
+        if (body.submissionIds.size < numberOfClusters) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "For categorization to work, at least $numberOfClusters submissions are required"
+            )
+        }
         val submissionEmbeddingMap: Map<Long, DoubleArray> = submissionRepository.findByIdIn(body.submissionIds)
             .associate { submission ->
                 submission.getId() to submission.getEmbedding()
