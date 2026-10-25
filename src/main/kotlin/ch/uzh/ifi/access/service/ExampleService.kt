@@ -223,7 +223,8 @@ class ExampleService(
                     newSubmission.testsPassed,
                     newSubmission.files.associate { file ->
                         (file.taskFile?.name ?: "unknown") to file.content.toString()
-                    }
+                    },
+                    exampleSlug
                 )
             )
 
@@ -318,7 +319,8 @@ class ExampleService(
             numberOfProcessedSubmissions,
             processed.count { it.third },
             passRatePerTestCase,
-            avgPoints
+            avgPoints,
+            exampleSlug
         )
     }
 

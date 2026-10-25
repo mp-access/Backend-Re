@@ -10,5 +10,6 @@ class SubmissionSseDTO(
     var date: LocalDateTime? = null,
     var points: Double? = null,
     var testsPassed: List<Int> = emptyList(),
-    var content: Map<String, String>
+    var content: Map<String, String>,
+    var exampleSlug: String? = null
 )

@@ -8,6 +8,7 @@ data class ExampleInformationDTO(
     val numberOfProcessedSubmissions: Int,
     val numberOfProcessedSubmissionsWithEmbeddings: Int,
     val passRatePerTestCase: Map<String, Double>,
-    val avgPoints: Double
+    val avgPoints: Double,
+    val exampleSlug: String
 )
 

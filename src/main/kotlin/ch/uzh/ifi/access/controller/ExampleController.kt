@@ -91,7 +91,8 @@ class ExampleController(
                 it.testsPassed,
                 it.files.associate { file ->
                     (file.taskFile?.name ?: "unknown") to file.content.toString()
-                }
+                },
+                example
             )
         }
 
