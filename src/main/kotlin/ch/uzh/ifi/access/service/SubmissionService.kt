@@ -8,7 +8,6 @@ import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
 import io.github.oshai.kotlinlogging.KLogger
 import org.modelmapper.ModelMapper
-import org.slf4j.Logger
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
@@ -85,17 +84,15 @@ class SubmissionService(
         assignmentSlug: String,
         taskSlug: String,
         submissionDTO: SubmissionDTO,
-        timer: BenchTimer? = null,
         logger: KLogger? = null,
     ): Submission {
         return createSubmission(
             courseSlug,
             taskSlug,
-            timer.measure("get_task_by_slug") { getTaskBySlug(courseSlug, assignmentSlug, taskSlug) },
+            getTaskBySlug(courseSlug, assignmentSlug, taskSlug),
             submissionDTO,
             null,
             logger,
-            timer,
         )
     }
 
@@ -113,7 +110,6 @@ class SubmissionService(
         submissionDTO: SubmissionDTO,
         submissionReceivedAt: LocalDateTime?,
         logger: KLogger? = null,
-        timer: BenchTimer? = null,
     ): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
@@ -128,14 +124,12 @@ class SubmissionService(
                 "Submission rejected - missing userId"
             )
         }
-        val evaluation = timer.measure("prepare_evaluation") {
-            pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-            pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
-            val eval = evaluationService.getEvaluation(task.id, submissionDTO.userId)
-                ?: task.createEvaluation(submissionDTO.userId)
-            evaluationRepository.saveAndFlush(eval)
-            eval
-        }
+        pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+        pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
+        val eval = evaluationService.getEvaluation(task.id, submissionDTO.userId)
+            ?: task.createEvaluation(submissionDTO.userId)
+        evaluationRepository.saveAndFlush(eval)
+        val evaluation = eval
         // the controller prevents regular users from even submitting with restricted = false
         // meaning for regular users, restricted is always true
         if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !isExample(task)) {
@@ -146,40 +140,35 @@ class SubmissionService(
                 )
         }
         // at this point, all restrictions have passed, and we can create the submission
-        val submission = timer.measure("persist_submission") {
-            val sub = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
-            if (submissionReceivedAt != null) sub.createdAt = submissionReceivedAt
-            submissionRepository.saveAndFlush(sub)
-            submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
-                .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(sub, fileDTO) }
-            sub
-        }
+        val sub = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
+        if (submissionReceivedAt != null) sub.createdAt = submissionReceivedAt
+        submissionRepository.saveAndFlush(sub)
+        submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
+            .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(sub, fileDTO) }
+        val submission = sub
         // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
         submission.valid = !submission.isGraded
-        val course = timer.measure("get_course_by_slug") { getCourseBySlug(courseSlug) }
+        val course = getCourseBySlug(courseSlug)
         // execute the submission
         try {
-            timer.measure("execute") {
-                // A/B switch: pooled path when docker.pool.enabled=true, else the one-shot
-                // baseline. Roll back by deleting this if/else (keep the executeSubmission call).
-                if (dockerPoolService.enabled) {
-                    logger?.info {"[SubmissionService.createSubmission] execute in pooled submission"}
-                    dockerService.executePooledSubmission(course, submission, task, evaluation, timer)}
-                else {
-                    // TODO: When does this fallback? If the pooled submission fails...
-                    logger?.info {"[SubmissionService.createSubmission] falling back into non-pooled submission" }
-                    dockerService.executeSubmission(course, submission, task, evaluation, timer)}
-            }
+            // A/B switch: pooled path when docker.pool.enabled=true, else the one-shot
+            // baseline. Roll back by deleting this if/else (keep the executeSubmission call).
+            if (dockerPoolService.enabled) {
+                logger?.info {"[SubmissionService.createSubmission] execute in pooled submission"}
+                dockerService.executePooledSubmission(course, submission, task, evaluation)}
+            else {
+                // TODO: When does this fallback? If the pooled submission fails...
+                logger?.info {"[SubmissionService.createSubmission] falling back into non-pooled submission" }
+                dockerService.executeSubmission(course, submission, task, evaluation)}
+
         } catch (e: Exception) {
             submission.output =
                 "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         } finally {
-            timer.measure("finalize") {
-                submissionRepository.save(submission)
-                evaluationRepository.save(evaluation)
-                pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-                pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
-            }
+            submissionRepository.save(submission)
+            evaluationRepository.save(evaluation)
+            pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
+            pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         }
         return submission
     }

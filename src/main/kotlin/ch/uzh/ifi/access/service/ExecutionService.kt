@@ -60,34 +60,29 @@ class ExecutionService(
         submission: Submission,
         task: Task,
         evaluation: Evaluation,
-        timer: BenchTimer? = null
     ): Pair<Submission, Results> {
         var results = Results()
         val image = task.dockerImage!!
         // inspect the image to check whether it's local, and pull it if necessary
-        timer.measure("image_inspect_pull") {
-            try {
-                dockerClient.inspectImageCmd(image).exec()
-            } catch (e: NotFoundException) {
-                dockerClient.pullImageCmd(image)
-                    .exec(PullImageResultCallback())
-                    .awaitCompletion()
-            }
+        try {
+            dockerClient.inspectImageCmd(image).exec()
+        } catch (e: NotFoundException) {
+            dockerClient.pullImageCmd(image)
+                .exec(PullImageResultCallback())
+                .awaitCompletion()
         }
         val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
-            timer.measure("file_setup") {
-                // add submission files (supplied by the frontend) to the container
-                submission.files.forEach { file -> writeSubmissionFile(submissionDir, file) }
-                // add visible but non-editable files (these are not part of the submission files, but part of the task)
-                getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
-                // add grading and course global files if submission is graded
-                if (submission.isGraded) {
-                    getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
-                    course.globalFiles.forEach { file -> writeGlobalFile(submissionDir, file) }
-                }
+            // add submission files (supplied by the frontend) to the container
+            submission.files.forEach { file -> writeSubmissionFile(submissionDir, file) }
+            // add visible but non-editable files (these are not part of the submission files, but part of the task)
+            getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
+            // add grading and course global files if submission is graded
+            if (submission.isGraded) {
+                getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(submissionDir, file) }
+                course.globalFiles.forEach { file -> writeGlobalFile(submissionDir, file) }
             }
             // student code is run on a tmpfs so we can enforce a disk quota
             // tmpfs hard coded to 50M
@@ -147,8 +142,7 @@ class ExecutionService(
             )
             // create the container
             val memoryLimit = 250 * Util.MEGABYTE
-            val container = timer.measure("container_create") {
-                containerCmd
+            val container = containerCmd
                     .withLabels(mapOf("userId" to submission.userId)).withWorkingDir("/workspace")
                     .withCmd("/bin/bash", "-c", command)
                     .withHostConfig(
@@ -158,7 +152,6 @@ class ExecutionService(
                             .withMemory(memoryLimit)
                             .withBinds(Bind.parse("$submissionDir:/submission"))
                     ).exec()
-            }
             // Set up a scheduler to kill the container forcefully after the specified task timeout (or 180 seconds at
             // most). This is necessary if the submission is in an endless loop or similar lock-up.
             val scheduler = Executors.newScheduledThreadPool(1)
@@ -174,34 +167,27 @@ class ExecutionService(
                 }
             }, timeout, TimeUnit.SECONDS)
             // start the container
-            timer.measure("container_start") {
-                dockerClient.startContainerCmd(container.id).exec()
-            }
+            dockerClient.startContainerCmd(container.id).exec()
             // wait for the container to terminate (this span is the actual user-code execution time)
-            val statusCode = timer.measure("container_wait") {
-                dockerClient.waitContainerCmd(container.id)
+            val statusCode = dockerClient.waitContainerCmd(container.id)
                     .exec(WaitContainerResultCallback())
                     .awaitStatusCode()
-            }
             // we can get rid of the scheduler now, because the container is dead for sure
-            timer.measure("container_remove") {
-                dockerClient.removeContainerCmd(container.id).exec()
-            }
+            dockerClient.removeContainerCmd(container.id).exec()
+
             scheduler.shutdown()
             logger.debug { "Submission $submissionDir finished with statusCode $statusCode" }
             // time to collect the execution results
-            submission.logs = timer.measure("read_logs") { readLogsFile(submissionDir) }
+            submission.logs = readLogsFile(submissionDir)
             val persistentResultFileErrors: MutableList<String> = mutableListOf()
-            timer.measure("collect_result_files") {
-                task.persistentResultFilePaths.forEach { path ->
-                    try {
-                        val resultFile = fileService.storeFile(submissionDir.resolve(path), ResultFile())
-                        resultFile.path = path
-                        resultFile.submission = submission
-                        submission.persistentResultFiles.add(resultFile)
-                    } catch (e: Exception) {
-                        persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
-                    }
+            task.persistentResultFilePaths.forEach { path ->
+                try {
+                    val resultFile = fileService.storeFile(submissionDir.resolve(path), ResultFile())
+                    resultFile.path = path
+                    resultFile.submission = submission
+                    submission.persistentResultFiles.add(resultFile)
+                } catch (e: Exception) {
+                    persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
                 }
             }
             val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
@@ -294,8 +280,8 @@ class ExecutionService(
                     evaluation.update(submission.points)
                 }
             }
-            timer?.record("evaluate_results", evalMark.elapsedNow().inWholeMicroseconds)
-            timer.measure("cleanup") { FileUtils.deleteQuietly(submissionDir.toFile()) }
+            evalMark.elapsedNow().inWholeMicroseconds
+            FileUtils.deleteQuietly(submissionDir.toFile())
         }
         return Pair(submission, results)
     }
@@ -314,24 +300,21 @@ class ExecutionService(
         submission: Submission,
         task: Task,
         evaluation: Evaluation,
-        timer: BenchTimer? = null
     ): Pair<Submission, Results> {
         // If the pool can't hand out a container in time, fall back to one-shot so a submission
         // is never stuck. For a clean A/B measurement, size the pool >= peak concurrency so this
         // fallback effectively never triggers.
-        val container = timer.measure("pool_borrow") { dockerPoolService.borrow() }
-            ?: return executeSubmission(course, submission, task, evaluation, timer)
+        val container = dockerPoolService.borrow()
+            ?: return executeSubmission(course, submission, task, evaluation)
         try {
             var results = Results()
             val workDir = container.hostWorkDir
             // write the submission + task + grading + global files into the container's bound /submission dir
-            timer.measure("file_setup") {
-                submission.files.forEach { file -> writeSubmissionFile(workDir, file) }
-                getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
-                if (submission.isGraded) {
-                    getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
-                    course.globalFiles.forEach { file -> writeGlobalFile(workDir, file) }
-                }
+            submission.files.forEach { file -> writeSubmissionFile(workDir, file) }
+            getVisibleNonEditableFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
+            if (submission.isGraded) {
+                getGradingFiles(task.id).forEach { file: TaskFile -> writeTaskFile(workDir, file) }
+                course.globalFiles.forEach { file -> writeGlobalFile(workDir, file) }
             }
             val resultFileSizeLimit = 100 * Util.KILOBYTE
             val persistentFileCopyCommands = task.persistentResultFilePaths.joinToString("\n") { path ->
@@ -375,21 +358,19 @@ class ExecutionService(
             val memoryLimit = 250 * Util.MEGABYTE
             val timeout = task.timeLimit.coerceAtMost(timeOutLimit).toLong()
             // this span is the actual user-code execution time (analogous to container_wait)
-            val exec = timer.measure("container_exec") { container.exec(command, timeout) }
+            val exec = container.exec(command, timeout)
             val statusCode = exec.exitCode
             logger.debug { "Pooled submission ${container.id} finished with statusCode $statusCode" }
-            submission.logs = timer.measure("read_logs") { readLogsFile(workDir) }
+            submission.logs = readLogsFile(workDir)
             val persistentResultFileErrors: MutableList<String> = mutableListOf()
-            timer.measure("collect_result_files") {
-                task.persistentResultFilePaths.forEach { path ->
-                    try {
-                        val resultFile = fileService.storeFile(workDir.resolve(path), ResultFile())
-                        resultFile.path = path
-                        resultFile.submission = submission
-                        submission.persistentResultFiles.add(resultFile)
-                    } catch (e: Exception) {
-                        persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
-                    }
+            task.persistentResultFilePaths.forEach { path ->
+                try {
+                    val resultFile = fileService.storeFile(workDir.resolve(path), ResultFile())
+                    resultFile.path = path
+                    resultFile.submission = submission
+                    submission.persistentResultFiles.add(resultFile)
+                } catch (e: Exception) {
+                    persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
                 }
             }
             val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
@@ -450,11 +431,11 @@ class ExecutionService(
                     evaluation.update(submission.points)
                 }
             }
-            timer?.record("evaluate_results", evalMark.elapsedNow().inWholeMicroseconds)
+            evalMark.elapsedNow().inWholeMicroseconds
             return Pair(submission, results)
         } finally {
             // reset() inside release() wipes /workspace + /submission — no manual cleanup here
-            timer.measure("pool_release") { dockerPoolService.release(container) }
+            dockerPoolService.release(container)
         }
     }
 
