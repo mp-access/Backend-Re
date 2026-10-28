@@ -75,6 +75,7 @@ class DockerContainerInstance(
     override fun isHealthy(): Boolean = try {
         dockerClient.inspectContainerCmd(id).exec().state?.running == true
     } catch (e: Exception) {
+        // TODO: Log this?
         false
     }
 

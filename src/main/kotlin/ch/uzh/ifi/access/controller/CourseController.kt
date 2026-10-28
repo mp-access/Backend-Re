@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
 import ch.uzh.ifi.access.projections.*
@@ -11,7 +12,6 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.core.env.Environment
-import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -108,8 +108,7 @@ class CourseController(
             .header("Content-Disposition", "attachment; filename=data.zip")
             .header("Content-Type", "application/zip")
             .body(StreamingResponseBody { out: OutputStream ->
-                val zipOutputStream = ZipOutputStream(out)
-                dumpService.getCourseDump(course, zipOutputStream)
+                ZipOutputStream(out).use { zip -> dumpService.getCourseDump(course, zip) }
             })
     }
 

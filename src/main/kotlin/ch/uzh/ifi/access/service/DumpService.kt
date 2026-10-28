@@ -1,24 +1,27 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.model.constants.Visibility
+import ch.uzh.ifi.access.model.Course
+import ch.uzh.ifi.access.model.Submission
+import ch.uzh.ifi.access.model.Task
+import ch.uzh.ifi.access.model.dto.AssignmentMetadata
+import ch.uzh.ifi.access.model.dto.CourseMetadata
+import ch.uzh.ifi.access.model.dto.SubmissionMetadata
+import ch.uzh.ifi.access.model.dto.TaskMetadata
+import ch.uzh.ifi.access.projections.AssignmentWorkspace
 import ch.uzh.ifi.access.repository.AssignmentRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.TaskRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.context.annotation.Scope
-import org.springframework.context.annotation.ScopedProxyMode
 import org.springframework.stereotype.Service
 import java.io.BufferedInputStream
 import java.nio.file.Files
 import java.nio.file.Path
-import java.time.LocalDateTime
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-// TODO: decide properly which parameters should be nullable
+// Nullability follows the DB schema: non-nullable columns use !! (crash on broken data), nullable columns are dumped as null.
 @Service
-@Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class DumpService(
     private val courseService: CourseService,
     private val courseLifecycle: CourseLifecycle,
@@ -40,11 +43,31 @@ class DumpService(
     private fun writeZipData(zip: ZipOutputStream, path: String, bytes: ByteArray) {
         zip.putNextEntry(ZipEntry(path))
         zip.write(bytes)
-        zip.flush()
         zip.closeEntry()
     }
 
-    fun writeZipRepository(zip: ZipOutputStream, repoPath: Path) {
+    private fun <V> Map<out String?, V>.localized(language: String = "en"): V =
+        this[language] ?: values.first()
+
+    private fun Task.toMetadata(): TaskMetadata {
+        val info = information.localized()
+        return TaskMetadata(
+            slug = slug!!,
+            ordinalNum = ordinalNum!!,
+            title = info.title!!,
+            maxPoints = maxPoints,
+            maxAttempts = maxAttempts,
+            dockerImage = dockerImage!!,
+            runCommand = runCommand ?: "",
+            testCommand = testCommand ?: "",
+            gradeCommand = gradeCommand ?: "",
+            testNames = testNames,
+            files = files.map { it.path!! },
+            persistentResultFilePaths = persistentResultFilePaths,
+        )
+    }
+
+    private fun writeZipRepository(zip: ZipOutputStream, repoPath: Path) {
         val root = "repository"
 
         Files.walk(repoPath).use { paths ->
@@ -77,64 +100,31 @@ class DumpService(
         }
     }
 
-    data class CourseMetadata(
-        val repository: String,
-        val repositoryBranch: String,
-        val overrideVisibility: Visibility,
-        val overrideStart: LocalDateTime,
-        val overrideEnd: LocalDateTime,
-        val title: String,
-        val description: String,
-        val university: String,
-        val period: String,
-    )
-
-    data class AssignmentMetadata(
-        var slug: String,
-        var ordinalNum: Int,
-        var title: String,
-        var start: LocalDateTime,
-        var end: LocalDateTime,
-        var tasks: List<TaskMetadata>,
-    )
-
-    data class TaskMetadata(
-        var slug: String,
-        var ordinalNum: Int,
-        var title: String,
-        var maxPoints: Double,
-        var maxAttempts: Int,
-        var dockerImage: String,
-        var runCommand: String,
-        var testCommand: String,
-        var gradeCommand: String,
-        var testNames: MutableList<String>,
-        var files: List<String>,
-        var persistentResultFilePaths: MutableList<String>,
-    )
-
-    data class SubmissionMetadata(
-        val command: String,
-        val valid: Boolean,
-        val createdAt: LocalDateTime,
-        val testsPassed: List<Int>,
-        val points: Double?,
-    )
-
     fun getCourseDump(slug: String, zip: ZipOutputStream) {
         // using !! a lot to ensure code will crash rather than silently dump nulls
         logger.info { "Generating course dump for slug ${slug}..." }
         val course = courseService.getCourseBySlug(slug)
+        val assignments = assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(slug)
 
-        // write course metadata
-        val information = course.information["en"] ?: course.information.values.first()
+        writeCourseMetadata(zip, course)
+        writeAssignments(zip, course, assignments)
+        writeExamples(zip, course)
+        writeMembers(zip, course)
+        writeSubmissions(zip, course, assignments)
+        writeRepository(zip, course)
+
+        logger.info { "Done generating course dump for slug ${slug}." }
+    }
+
+    private fun writeCourseMetadata(zip: ZipOutputStream, course: Course) {
+        val information = course.information.localized()
 
         val metadata = CourseMetadata(
             course.repository ?: "",
             course.repositoryBranch ?: "",
-            course.overrideVisibility!!,
-            course.overrideStart!!,
-            course.overrideEnd!!,
+            course.overrideVisibility,
+            course.overrideStart,
+            course.overrideEnd,
             information.title!!,
             information.description!!,
             information.university!!,
@@ -144,44 +134,25 @@ class DumpService(
             zip, "metadata.json",
             mapper.writeValueAsBytes(metadata)
         )
+    }
 
-
-        // write assignment and task metadata
+    private fun writeAssignments(zip: ZipOutputStream, course: Course, assignments: List<AssignmentWorkspace>) {
         val assignmentMetadata = mutableMapOf<String, AssignmentMetadata>()
 
-
-        val assignments = assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(slug)
         assignments.forEach { assignment ->
-            val information = assignment.information!!["en"] ?: assignment.information!!.values.first()
+            val information = assignment.information!!.localized()
             assignmentMetadata[assignment.slug!!] = AssignmentMetadata(
                 assignment.slug!!,
                 assignment.ordinalNum!!,
                 information!!.title!!,
-                assignment.start!!,
-                assignment.end!!,
+                assignment.start,
+                assignment.end,
                 assignment.tasks!!.map { taskOverview ->
-                    val task = taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
+                    taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
                         course.slug,
                         assignment.slug,
                         taskOverview!!.slug
-                    )
-                    val information = task!!.information["en"] ?: task.information.values.first()
-                    TaskMetadata(
-                        task.slug!!,
-                        task.ordinalNum!!,
-                        information.title!!,
-                        task.maxPoints!!,
-                        task.maxAttempts!!,
-                        task.dockerImage!!,
-                        task.runCommand ?: "",
-                        task.testCommand ?: "",
-                        task.gradeCommand ?: "",
-                        task.testNames,
-                        task.files.map { it.path!! },
-                        task.persistentResultFilePaths,
-                    )
-
-
+                    )!!.toMetadata()
                 }
             )
         }
@@ -189,38 +160,19 @@ class DumpService(
             zip, "assignments.json",
             mapper.writeValueAsBytes(assignmentMetadata)
         )
+    }
 
-        // write example metadata
+    private fun writeExamples(zip: ZipOutputStream, course: Course) {
         writeZipData(
             zip, "examples.json",
             mapper.writeValueAsBytes(
-                course.examples.map { task ->
-                    val example = exampleRepository.getByCourse_SlugAndSlug(
-                        course.slug,
-                        task.slug
-                    )
-                    val information = example!!.information["en"] ?: example.information.values.first()
-                    TaskMetadata(
-                        example.slug!!,
-                        example.ordinalNum!!,
-                        information.title!!,
-                        example.maxPoints!!,
-                        example.maxAttempts!!,
-                        example.dockerImage!!,
-                        example.runCommand ?: "",
-                        example.testCommand ?: "",
-                        example.gradeCommand ?: "",
-                        example.testNames,
-                        example.files.map { it.path!! },
-                        example.persistentResultFilePaths,
-                    )
+                course.examples.map { example ->
+                    exampleRepository.getByCourse_SlugAndSlug(course.slug, example.slug)!!.toMetadata()
                 }
             ))
+    }
 
-        // write submissions and participant metadata
-        val users = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it) }
-        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
-
+    private fun writeMembers(zip: ZipOutputStream, course: Course) {
         val participants = courseService.getStudentsWithPoints(course.slug!!)
         val participantsHeader =
             listOf(
@@ -235,7 +187,6 @@ class DumpService(
                 ).joinToString(",")
             )
 
-        // write members
         writeZipData(zip, "supervisors.txt", course.supervisors.joinToString("\n"))
         writeZipData(zip, "assistants.txt", course.assistants.joinToString("\n"))
         writeZipData(zip, "participants.txt", (participantsHeader + participants.map {
@@ -249,87 +200,66 @@ class DumpService(
                 it.otherId
             ).joinToString(",")
         }).joinToString("\n"))
+    }
 
-        users.forEach { (registrationId, _) ->
-            // create subdir for each participant
+    private fun writeSubmissions(zip: ZipOutputStream, course: Course, assignments: List<AssignmentWorkspace>) {
+        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+
+        course.registeredStudents.forEach { registrationId ->
             val participantDir = "participants/${registrationId}"
             assignments.forEach { assignment ->
-                val tasks = assignment.tasks
-                tasks!!.forEach { task ->
+                assignment.tasks!!.forEach { task ->
                     val evaluation = evaluationService.getEvaluation(task!!.id, userIds[registrationId])
-                    evaluation?.submissions?.sortedBy { it.createdAt }?.forEachIndexed { index, s ->
-                        val submissionPadding = evaluation.submissions.size.toString().length
+                        ?: return@forEach
+                    val taskDirName = "${participantDir}/${assignment.slug}/${task.slug}"
+                    val submissionPadding = evaluation.submissions.size.toString().length
 
-                        // create subdir for each submission
-                        val taskDirName = "${participantDir}/${assignment.slug}/${task.slug}"
+                    evaluation.submissions.sortedBy { it.createdAt }.forEachIndexed { index, submission ->
                         val submissionIndexPadded = index.toString().padStart(submissionPadding, '0')
-                        val submissionDirName = "${taskDirName}/${submissionIndexPadded}"
-
-                        //  write submission metadata
-                        val metadata = SubmissionMetadata(
-                            s.command.toString(),
-                            s.valid,
-                            s.createdAt!!,
-                            s.testsPassed,
-                            s.points,
-                        )
-                        writeZipData(
-                            zip, "${submissionDirName}/metadata.json",
-                            mapper.writeValueAsBytes(metadata)
-                        )
-
-                        // write output
-                        if (s.output != null) {
-                            writeZipData(zip, "${submissionDirName}/output.txt", s.output!!)
-                        }
-
-                        // write logs
-                        if (s.logs != null) {
-                            writeZipData(zip, "${submissionDirName}/log.txt", s.logs!!)
-                        }
-
-                        // write each submitted file
-                        val submissionFilesDirName = "${submissionDirName}/submission"
-                        s.files.forEach {
-                            writeZipData(
-                                zip,
-                                "${submissionFilesDirName}/${it.taskFile!!.path!!.removePrefix("/")}",
-                                it.content!!
-                            )
-                        }
-
-                        // create subdir for result files (if any exist)
-                        if (s.persistentResultFiles.isNotEmpty()) {
-                            val persistentResultsDirName = "${submissionDirName}/persistentResultFiles"
-                            //writeZipDir(zip, persistentResultsDirName)
-                            // write each persistent result file
-                            s.persistentResultFiles.forEach {
-                                val fileName = "${persistentResultsDirName}/${it.path}"
-                                if (it.binary) {
-                                    writeZipData(zip, fileName, it.contentBinary!!)
-                                } else {
-                                    writeZipData(zip, fileName, it.content!!)
-                                }
-                            }
-
-                        }
+                        writeSubmission(zip, "${taskDirName}/${submissionIndexPadded}", submission)
                     }
-
                 }
             }
         }
+    }
 
-        // write git repository (if possible)
-        try {
-            courseLifecycle.withClonedRepository(course) { path -> writeZipRepository(zip, path) }
-        } catch (_: Exception) {
-            logger.info { "Could not clone repository for dump: ${course.repository}" }
+    private fun writeSubmission(zip: ZipOutputStream, submissionDirName: String, submission: Submission) {
+        val metadata = SubmissionMetadata(
+            submission.command.toString(),
+            submission.valid,
+            submission.createdAt!!,
+            submission.testsPassed,
+            submission.points,
+        )
+        writeZipData(zip, "${submissionDirName}/metadata.json", mapper.writeValueAsBytes(metadata))
+
+        submission.output?.let { writeZipData(zip, "${submissionDirName}/output.txt", it) }
+        submission.logs?.let { writeZipData(zip, "${submissionDirName}/log.txt", it) }
+
+        submission.files.forEach {
+            writeZipData(
+                zip,
+                "${submissionDirName}/submission/${it.taskFile!!.path!!.removePrefix("/")}",
+                it.content!!
+            )
         }
 
-        zip.finish()
-        zip.flush()
-        zip.close()
-        logger.info { "Done generating course dump for slug ${slug}." }
+        submission.persistentResultFiles.forEach {
+            val fileName = "${submissionDirName}/persistentResultFiles/${it.path}"
+            if (it.binary) {
+                writeZipData(zip, fileName, it.contentBinary!!)
+            } else {
+                writeZipData(zip, fileName, it.content!!)
+            }
+        }
+    }
+
+    private fun writeRepository(zip: ZipOutputStream, course: Course) {
+        try {
+            courseLifecycle.withClonedRepository(course) { path -> writeZipRepository(zip, path) }
+        } catch (e: Exception) {
+            logger.warn(e) { "Could not clone repository for dump: ${course.repository}" }
+        }
     }
 
 }

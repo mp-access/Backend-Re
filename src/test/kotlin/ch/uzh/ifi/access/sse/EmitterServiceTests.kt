@@ -2,7 +2,7 @@ package ch.uzh.ifi.access.sse
 
 import ch.uzh.ifi.access.model.PerishableSseEmitter
 import ch.uzh.ifi.access.service.EmitterService
-import ch.uzh.ifi.access.service.EmitterType
+import ch.uzh.ifi.access.model.constants.EmitterType
 import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just

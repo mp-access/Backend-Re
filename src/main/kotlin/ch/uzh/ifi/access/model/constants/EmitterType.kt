@@ -1,4 +1,4 @@
-package ch.uzh.ifi.access.service
+package ch.uzh.ifi.access.model.constants
 
 enum class EmitterType {
     SUPERVISOR,

@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.PerishableSseEmitter
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.beans.factory.DisposableBean
@@ -55,7 +56,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
         scheduler.schedule({
             try {
                 emitter.send(SseEmitter.event().name("emitter-id").data(id))
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 discard(type, slug, id, emitter)
             }
         }, 1, TimeUnit.SECONDS)
@@ -71,7 +72,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                     delivered++
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     discard(EmitterType.SUPERVISOR, courseSlug, it.key, it.value)
                     failed++
                 }
@@ -83,7 +84,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
                 try {
                     it.value.send(SseEmitter.event().name(name).data(message))
                     delivered++
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     discard(EmitterType.STUDENT, courseSlug, it.key, it.value)
                     failed++
                 }
@@ -112,7 +113,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
                 emitterMap.forEach { (id, emitter) ->
                     try {
                         emitter.send(SseEmitter.event().comment("ping"))
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         discard(type, slug, id, emitter)
                     }
                 }
@@ -130,8 +131,8 @@ class EmitterService : DisposableBean, SmartLifecycle {
                         logger.debug { "Emitter ${emitter.id} died of old age $age" }
                         try {
                             emitter.complete()
-                        } catch (_: IllegalStateException) {
-
+                        } catch (e: IllegalStateException) {
+                            logger.debug { "emitter completion failed: $e" }
                         }
                         emitters[type]?.get(slug)?.remove(id)
                     }

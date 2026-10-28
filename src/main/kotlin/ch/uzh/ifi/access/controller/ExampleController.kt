@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.*
