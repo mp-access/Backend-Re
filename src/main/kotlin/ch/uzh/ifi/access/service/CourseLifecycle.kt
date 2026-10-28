@@ -191,7 +191,7 @@ class CourseLifecycle(
                 pullDockerImage(exampleDTO.evaluator!!.dockerImage!!) // TODO: safety
                 modelMapper.map(exampleDTO, example)
                 example.information.forEach { it.value.task = example }
-                val instructionFiles = example.information.values.map { it.instructionsFile }
+                example.information.values.map { it.instructionsFile }
 
                 example.ordinalNum = index + 1
                 example.dockerImage = exampleDTO.evaluator!!.dockerImage // TODO: safety

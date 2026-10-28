@@ -8,19 +8,21 @@ import org.springframework.stereotype.Service
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDateTime
+import kotlin.collections.set
 
 @Service
 class CourseConfigImporter(
     private val tomlMapper: TomlMapper,
     private val fileService: FileService,
 ) {
+    private val configFile = "config.toml"
 
     fun JsonNode?.asTextOrNull(): String? {
         return if (this is NullNode || this == null) null else this.asText()
     }
 
     fun readCourseConfig(path: Path): CourseDTO {
-        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
+        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve(configFile)))
         val course = CourseDTO()
 
         course.slug = config["slug"].asText()
@@ -32,14 +34,23 @@ class CourseConfigImporter(
             course.examples.add(directory.asText())
         }
 
-        // TODO: override can be null - deal with it
-        // if overrideVisibility is not null, overrideStart and overrideEnd may not be null either
-        course.defaultVisibility = config["visibility"].get("default").asText()
-        course.overrideVisibility = config["visibility"].get("override")?.asText()
-        val overrideStart = config["visibility"].get("override_start")?.asText()
-        val overrideEnd = config["visibility"].get("override_end")?.asText()
-        course.overrideStart = overrideStart?.let { LocalDateTime.parse(it) }
-        course.overrideEnd = overrideEnd?.let { LocalDateTime.parse(it) }
+        // Visibility-Block sicher auslesen
+        val visibility = config["visibility"]
+        course.defaultVisibility = visibility?.get("default")?.asTextOrNull()
+        course.overrideVisibility = visibility?.get("override")?.asTextOrNull()
+
+        if (course.overrideVisibility != null) {
+            val overrideStart = visibility.get("override_start")?.asTextOrNull()
+                ?: throw IllegalArgumentException("override_start must not be null when override visibility is specified")
+            val overrideEnd = visibility.get("override_end")?.asTextOrNull()
+                ?: throw IllegalArgumentException("override_end must not be null when override visibility is specified")
+
+            course.overrideStart = LocalDateTime.parse(overrideStart)
+            course.overrideEnd = LocalDateTime.parse(overrideEnd)
+        } else {
+            course.overrideStart = null
+            course.overrideEnd = null
+        }
 
         config["information"].properties().forEach { field ->
             val information = CourseInformationDTO()
@@ -69,11 +80,10 @@ class CourseConfigImporter(
         course.globalFiles = files
 
         return course
-
     }
 
     fun readAssignmentConfig(path: Path): AssignmentDTO {
-        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
+        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve(configFile)))
         val assignment = AssignmentDTO()
 
         assignment.slug = config["slug"].asText()
@@ -85,7 +95,7 @@ class CourseConfigImporter(
             assignment.tasks.add(directory.asText())
         }
 
-        val information = config["information"].properties().forEach { field ->
+        config["information"].properties().forEach { field ->
             val information = AssignmentInformationDTO()
             val data = field.value
             information.language = field.key
@@ -96,14 +106,21 @@ class CourseConfigImporter(
         return assignment
     }
 
-    fun readTaskConfig(path: Path): TaskDTO {
-        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
+    private fun readConfig(path: Path, isExample: Boolean): TaskDTO {
+        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve(configFile)))
         val task = TaskDTO()
 
         task.slug = config["slug"].asText()
-        task.maxAttempts = config["max_attempts"].asInt()
         task.refill = config["refill"].asInt()
-        task.maxPoints = config["max_points"].asDouble()
+
+        // Unterschiede anhand des Flags / Typs behandeln
+        if (isExample) {
+            task.maxAttempts = 1
+            task.maxPoints = 1.0
+        } else {
+            task.maxAttempts = config["max_attempts"].asInt()
+            task.maxPoints = config["max_points"].asDouble()
+        }
 
         val instructionFiles = config["information"].properties().map { field ->
             val information = TaskInformationDTO()
@@ -117,7 +134,14 @@ class CourseConfigImporter(
 
         val evaluator = TaskEvaluatorDTO()
         evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
-        evaluator.runCommand = config["evaluator"].get("run_command").asText()
+
+        // runCommand ist beim Example optional, beim Task Pflicht
+        evaluator.runCommand = if (isExample) {
+            config["evaluator"].get("run_command")?.asTextOrNull()
+        } else {
+            config["evaluator"].get("run_command").asText()
+        }
+
         evaluator.gradeCommand = config["evaluator"].get("grade_command").asText()
         evaluator.testCommand = config["evaluator"].get("test_command").asTextOrNull()
         task.evaluator = evaluator
@@ -126,10 +150,7 @@ class CourseConfigImporter(
         files.instruction = instructionFiles
         config["files"].properties().forEach { field ->
             val data = field.value
-            val filenames = ArrayList<String>()
-            data.forEach { filename ->
-                filenames.add(filename.asText())
-            }
+            val filenames = data.map { it.asText() }
             when (field.key) {
                 "visible" -> files.visible = filenames
                 "editable" -> files.editable = filenames
@@ -143,54 +164,7 @@ class CourseConfigImporter(
         return task
     }
 
-    fun readExampleConfig(path: Path): TaskDTO {
-        val config: JsonNode = tomlMapper.readTree(Files.readString(path.resolve("config.toml")))
-        val example = TaskDTO()
+    fun readTaskConfig(path: Path): TaskDTO = readConfig(path, isExample = false)
 
-        example.slug = config["slug"].asText()
-        example.refill = config["refill"].asInt()
-        example.maxAttempts = 1
-        example.maxPoints = 1.0
-
-        val instructionFiles = config["information"].properties().map { field ->
-            val information = TaskInformationDTO()
-            val data = field.value
-            information.language = field.key
-            information.title = data.get("title").asText()
-            information.instructionsFile = data.get("instructions_file").asText()
-            example.information[field.key] = information
-            information.instructionsFile!!
-        }.toList()
-
-        val evaluator = TaskEvaluatorDTO()
-        evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
-        evaluator.runCommand = config["evaluator"].get("run_command").asTextOrNull()
-        evaluator.testCommand = config["evaluator"].get("test_command").asTextOrNull()
-        evaluator.gradeCommand = config["evaluator"].get("grade_command").asText()
-        example.evaluator = evaluator
-
-        val files = TaskFilesDTO()
-        files.instruction = instructionFiles
-        config["files"].properties().forEach { field ->
-            val data = field.value
-            val filenames = ArrayList<String>()
-            data.forEach { filename ->
-                filenames.add(filename.asText())
-            }
-            when (field.key) {
-                "visible" -> files.visible = filenames
-                "editable" -> files.editable = filenames
-                "grading" -> files.grading = filenames
-                "solution" -> files.solution = filenames
-                "persist" -> files.persist = filenames
-            }
-        }
-        example.files = files
-
-        return example
-    }
-}
-
-class InvalidCourseException : Throwable() {
-
+    fun readExampleConfig(path: Path): TaskDTO = readConfig(path, isExample = true)
 }
