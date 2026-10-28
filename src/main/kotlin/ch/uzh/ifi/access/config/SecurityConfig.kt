@@ -77,6 +77,7 @@ class SecurityConfig(private val env: Environment) {
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers(
+                        "/error",
                         "/v3/api-docs/**",
                         "/swagger-ui/**",
                         "/courses/contact/**",

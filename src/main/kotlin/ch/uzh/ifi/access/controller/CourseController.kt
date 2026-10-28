@@ -15,7 +15,6 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
@@ -27,10 +26,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.io.OutputStream
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipOutputStream
-import kotlin.time.measureTimedValue
-
 
 @RestController
 class CourseRootController(
@@ -82,15 +81,12 @@ class WebhooksController(
 
 @RestController
 @RequestMapping("/courses")
-@EnableAsync
 class CourseController(
     private val courseService: CourseService,
     private val dumpService: DumpService,
     private val roleService: RoleService,
     private val emitterService: EmitterService,
-    private val submissionService: SubmissionService,
     private val visitQueueService: VisitQueueService,
-    private val dockerPoolService: DockerPoolService,
     private val submissionQueueService: SubmissionQueueService,
     private val env: Environment,
     @Value("\${submission.queue.requestTimeoutSeconds:120}") private val requestTimeoutSeconds: Long,
@@ -122,62 +118,34 @@ class CourseController(
         @PathVariable course: String,
         @RequestBody safety: String?,
     ) {
-        val expected = env.getProperty("DELETION_KEY") ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        if (safety != expected || expected.isEmpty()) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND)
-        }
+        val expected = env.getProperty("DELETION_KEY")
+        val valid = !expected.isNullOrEmpty() && safety != null &&
+        MessageDigest.isEqual(expected.toByteArray(), safety.toByteArray())
+        if (!valid) throw ResponseStatusException(HttpStatus.NOT_FOUND)
         courseService.deleteCourse(course)
     }
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun updateCourse(@PathVariable course: String?): String? {
-        return courseService.updateCourse(course!!).slug
-    }
+    fun updateCourse(@PathVariable course: String): String? =
+        courseService.updateCourse(course).slug
 
     @GetMapping("")
-    fun getCourses(request: HttpServletRequest): List<CourseOverview> {
-        val userId = roleService.getUserId() ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "Cannot resolve user ID"
-        )
-        val courseOverview = courseService.getCoursesOverview(userId)
-        return courseOverview
-        // TODO: implement correctly for public courses
-        /*
-        val courses = courseService.getCoursesOverview()
-        val now = LocalDateTime.now()
-        return courses.filter { course ->
-            if (roleService.isSupervisor(course.slug!!)) {
-                true
-            } else {
-                val visibility = if (course.overrideVisibility != null &&
-                    course.overrideStart!! < now &&
-                    (course.overrideEnd == null || course.overrideEnd!! > now)
-                ) {
-                    course.overrideVisibility
-                } else {
-                    course.defaultVisibility
-                }
-                visibility == Visibility.PUBLIC ||
-                (visibility == Visibility.REGISTERED &&
-                request.isUserInRole(course.slug))
-            }
-        }
-        */
-
+    fun getCourses(): List<CourseOverview> {
+        val userId = roleService.getUserId()
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Cannot resolve user ID")
+        return courseService.getCoursesOverview(userId)
     }
 
     @GetMapping("/{course}")
     @PreAuthorize("hasRole(#course)")
-    fun getCourseWorkspace(@PathVariable course: String?): CourseWorkspace {
-        return courseService.getCourseWorkspaceBySlug(course!!)
-    }
+    fun getCourseWorkspace(@PathVariable course: String): CourseWorkspace =
+        courseService.getCourseWorkspaceBySlug(course)
 
     @GetMapping("/{course}/assignments/{assignment}")
-    fun getAssignment(@PathVariable course: String?, @PathVariable assignment: String?): AssignmentWorkspace {
-        return courseService.getAssignment(course, assignment!!)
-    }
+    @PreAuthorize("hasRole(#course)")
+    fun getAssignment(@PathVariable course: String, @PathVariable assignment: String): AssignmentWorkspace =
+        courseService.getAssignmentWorkspaceBySlug(course, assignment)
 
     @GetMapping("/{course}/assignments/{assignment}/tasks/{task}/users/{username}")
     @PreAuthorize("hasRole(#course+'-assistant') or (#username == authentication.name)")
@@ -186,20 +154,15 @@ class CourseController(
         @PathVariable assignment: String,
         @PathVariable task: String,
         @PathVariable username: String,
-    ): TaskWorkspace {
-        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No participant $username"
-        )
-        return courseService.getTask(course, assignment, task, username, userId)
-    }
+    ): TaskWorkspace =
+        courseService.getTask(course, assignment, task, resolveUserId(username))
 
     @PostMapping("/{course}/assignments/{assignment}/tasks/{task}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
     fun evaluateTaskSubmission(
         @PathVariable course: String,
         @PathVariable assignment: String,
-        @PathVariable task: String?,
+        @PathVariable task: String,
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication,
     ): DeferredResult<ResponseEntity<Void>> {
@@ -210,7 +173,7 @@ class CourseController(
         // it and completes the DeferredResult, at which point Spring writes the response -- the same
         // "empty 200 when grading is done" contract as before, minus one parked Tomcat thread per call.
         val deferred = DeferredResult<ResponseEntity<Void>>(requestTimeoutSeconds * 1000)
-        val future = submissionQueueService.enqueue(course, assignment, task!!, submission)
+        val future = submissionQueueService.enqueue(course, assignment, task, submission)
         if (future == null) {
             // Backpressure: the queue is full -- shed load politely instead of accepting unbounded work.
             deferred.setResult(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build())
@@ -222,7 +185,7 @@ class CourseController(
             } else {
                 // Preserve the original error semantics (e.g. 403 no-attempts, 404 unknown task) by
                 // handing the real exception, unwrapped, to Spring's async exception handling.
-                val cause = if (ex is java.util.concurrent.CompletionException && ex.cause != null) ex.cause!! else ex
+                val cause = (ex as? CompletionException)?.cause ?: ex
                 deferred.setErrorResult(cause)
             }
         }
@@ -243,11 +206,10 @@ class CourseController(
     // A text event endpoint to publish events to clients
     @GetMapping("/{course}/subscribe", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun subscribe(@PathVariable course: String, authentication: Authentication): ResponseEntity<SseEmitter> {
-        val headers = HttpHeaders()
-        val emitterType = emitterTypeFor(course, authentication)
-        val emitter = emitterService.registerEmitter(emitterType, course, authentication.name)
-        headers.add("Cache-Control", "no-transform") // needed to work with webpack-dev-server
-        return ResponseEntity<SseEmitter>(emitter, headers, HttpStatus.OK)
+        val emitter = emitterService.registerEmitter(emitterTypeFor(course, authentication), course, authentication.name)
+        return ResponseEntity.ok()
+            .header("Cache-Control", "no-transform") // needed to work with webpack-dev-server
+            .body(emitter)
     }
 
     // Sent by the client to keep the emitter alive
@@ -279,12 +241,14 @@ class CourseController(
             contentType = "text/csv"
         }
         response.outputStream.writer(StandardCharsets.UTF_8).use { writer ->
-            rows.forEach { row ->
-                writer.write(row.joinToString(",") { (it.toString()) })
-                writer.appendLine()
-            }
-            writer.flush()
+            rows.forEach { row -> writer.appendLine(row.joinToString(",", transform = ::csvCell)) }
         }
+    }
+
+    private fun csvCell(value: String?): String {
+        val v = value.orEmpty()
+        val needsQuotes = v.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+        return if (needsQuotes) "\"" + v.replace("\"", "\"\"") + "\"" else v
     }
 
     @GetMapping("/{courseSlug}/users")
@@ -307,25 +271,22 @@ class CourseController(
     }
 
 
-    //@Transactional
     private fun updateRoles(slug: String, registrationIDs: List<String>, role: Role) {
-        val assessment = courseService.getCourseBySlug(slug)
+        val course = courseService.getCourseBySlug(slug)
         // Saves the list of registrationIDs in the database
-        val (remove, add) = courseService.updateCourseRegistration(assessment, registrationIDs, role)
-        // Grants the correct role to any existing users in usernames
+        val (remove, add) = courseService.updateCourseRegistration(course, registrationIDs, role)
+        // Grants the correct role to any existing users in usernames.
         // This is one of two ways a keycloak user can receive/lose a role, the other way is on first login.
-        roleService.updateRoleUsers(assessment, remove, add, role)
+        roleService.updateRoleUsers(course, remove, add, role)
     }
 
     @PostMapping("/{course}/supervisors")
-    fun registerSupervisors(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
-        return updateRoles(course, registrationIDs, Role.SUPERVISOR)
-    }
+    fun registerSupervisors(@PathVariable course: String, @RequestBody registrationIDs: List<String>) =
+        updateRoles(course, registrationIDs, Role.SUPERVISOR)
 
     @PostMapping("/{course}/assistants")
-    fun registerAssistants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
-        return updateRoles(course, registrationIDs, Role.ASSISTANT)
-    }
+    fun registerAssistants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) =
+        updateRoles(course, registrationIDs, Role.ASSISTANT)
 
     @PostMapping("/{course}/participants")
     @Caching(
@@ -337,88 +298,41 @@ class CourseController(
             CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
         ]
     )
-    fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) {
-        return updateRoles(course, registrationIDs, Role.STUDENT)
-    }
+    fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) =
+        updateRoles(course, registrationIDs, Role.STUDENT)
+
+    private fun resolveUserId(username: String): String =
+        roleService.getUserId(username)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $username")
 
     @GetMapping("/{course}/participants/{username}")
     fun getCourseProgress(
-        @PathVariable course: String, @PathVariable username: String,
-        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
-        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
-    ): CourseProgressDTO? {
-        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No participant $username"
-        )
-        // TODO: reduce the number of parameters being passed around
-        return courseService.getCourseProgress(
-            course,
-            username,
-            userId,
-            submissionLimit,
-            includeGrade,
-            includeTest,
-            includeRun
-        )
-    }
+        @PathVariable course: String,
+        @PathVariable username: String,
+        options: ProgressOptions,
+    ): CourseProgressDTO =
+        courseService.getCourseProgress(course, username, resolveUserId(username), options)
 
     @GetMapping("/{course}/participants/{username}/assignments/{assignment}")
     fun getAssignmentProgress(
         @PathVariable course: String,
         @PathVariable assignment: String,
         @PathVariable username: String,
-        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
-        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
-    ): AssignmentProgressDTO? {
-        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No participant $username"
-        )
-        return courseService.getAssignmentProgress(
-            course,
-            assignment,
-            username,
-            userId,
-            submissionLimit,
-            includeGrade,
-            includeTest,
-            includeRun
-        )
-    }
+        options: ProgressOptions,
+    ): AssignmentProgressDTO =
+        courseService.getAssignmentProgress(course, assignment, username, resolveUserId(username), options)
 
     @GetMapping("/{course}/participants/{username}/assignments/{assignment}/tasks/{task}")
     fun getTaskProgress(
-        @PathVariable course: String, @PathVariable assignment: String,
-        @PathVariable task: String, @PathVariable username: String,
-        @RequestParam(required = true, defaultValue = "1") submissionLimit: Int,
-        @RequestParam(required = true, defaultValue = "true") includeGrade: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeTest: Boolean,
-        @RequestParam(required = true, defaultValue = "false") includeRun: Boolean,
-    ): TaskProgressDTO? {
-        val userId = roleService.getUserId(username) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No participant $username"
-        )
-        return courseService.getTaskProgress(
-            course,
-            assignment,
-            task,
-            username,
-            userId,
-            submissionLimit,
-            includeGrade,
-            includeTest,
-            includeRun
-        )
-    }
+        @PathVariable course: String,
+        @PathVariable assignment: String,
+        @PathVariable task: String,
+        @PathVariable username: String,
+        options: ProgressOptions,
+    ): TaskProgressDTO =
+        courseService.getTaskProgress(course, assignment, task, username, resolveUserId(username), options)
 
     @GetMapping("/{course}/summary")
-    fun getCourseSummary(@PathVariable course: String): CourseSummary? {
-        return courseService.getCourseSummary(course)
-    }
+    fun getCourseSummary(@PathVariable course: String): CourseSummary =
+        courseService.getCourseSummary(course)
 }

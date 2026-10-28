@@ -34,7 +34,7 @@ class CourseConfigImporter(
             course.examples.add(directory.asText())
         }
 
-        // Visibility-Block sicher auslesen
+        // Read Visibility-Block
         val visibility = config["visibility"]
         course.defaultVisibility = visibility?.get("default")?.asTextOrNull()
         course.overrideVisibility = visibility?.get("override")?.asTextOrNull()
@@ -113,7 +113,7 @@ class CourseConfigImporter(
         task.slug = config["slug"].asText()
         task.refill = config["refill"].asInt()
 
-        // Unterschiede anhand des Flags / Typs behandeln
+        // Difference according to the flags/type
         if (isExample) {
             task.maxAttempts = 1
             task.maxPoints = 1.0
@@ -135,7 +135,7 @@ class CourseConfigImporter(
         val evaluator = TaskEvaluatorDTO()
         evaluator.dockerImage = config["evaluator"].get("docker_image").asText()
 
-        // runCommand ist beim Example optional, beim Task Pflicht
+        // runCommand differences in example vs proper submission
         evaluator.runCommand = if (isExample) {
             config["evaluator"].get("run_command")?.asTextOrNull()
         } else {

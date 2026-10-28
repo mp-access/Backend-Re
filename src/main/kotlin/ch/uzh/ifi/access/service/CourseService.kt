@@ -12,8 +12,6 @@ import ch.uzh.ifi.access.repository.TaskFileRepository
 import ch.uzh.ifi.access.repository.TaskRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
-import jakarta.xml.bind.DatatypeConverter
-import org.keycloak.representations.idm.UserRepresentation
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
@@ -23,11 +21,13 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Path
+import java.security.MessageDigest
 import java.time.LocalDateTime
+import java.util.*
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-// TODO: decide properly which parameters should be nullable
+// Parameters are non-null unless "absent" has a meaning (e.g. userId = null → current user)
 @Service
 @Scope(proxyMode = ScopedProxyMode.TARGET_CLASS)
 class CourseService(
@@ -52,10 +52,13 @@ class CourseService(
         return course.registeredStudents.map {
             val user = roleService.findUserByAllCriteria(it)
             if (user != null) {
-                val studentDTO = proxy.getStudent(courseSlug, user)
-                studentDTO.username = user.username
-                studentDTO.registrationId = it
-                studentDTO
+                StudentDTO(
+                    firstName = user.firstName,
+                    lastName = user.lastName,
+                    email = user.email,
+                    username = user.username,
+                    registrationId = it
+                )
             } else {
                 StudentDTO(registrationId = it)
             }
@@ -96,42 +99,25 @@ class CourseService(
         }
     }
 
-    // TODO: avoid duplication with previous function
-    fun getStudentsWithAssignmentPoints(
-        courseSlug: String,
-        withAssistants: Boolean = false
-    ): MutableList<List<String?>> {
+    fun getStudentsWithAssignmentPoints(courseSlug: String): MutableList<List<String?>> {
         val course = getCourseBySlug(courseSlug)
-        val names = if (withAssistants) {
-            course.registeredStudents + course.assistants + course.supervisors
-        } else {
-            course.registeredStudents
-        }
-        val users = names.associateWith { roleService.findUserByAllCriteria(it) }
         val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
-        val userIdsInverse = userIds.map { (k, v) -> v to k }.toMap()
-        val userNames = users.map { (k, v) -> k to v?.username }.toMap()
+        val userIdsInverse = userIds.entries.associate { (registrationId, userId) -> userId to registrationId }
+        val userNames = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it)?.username }
         val pointsData = courseRepository.getParticipantsAssignmentPoints(
             courseSlug,
             userIds.values.filterNotNull().toTypedArray()
         ).map {
-            val registrationID = userIdsInverse.getOrDefault(it.userId!!, it.userId!!)
+            val userId = it.userId!!
+            val registrationID = userIdsInverse[userId] ?: userId
             AssignmentPointsDTO(
-                userNames.getOrElse(registrationID, { it.userId }),
+                userNames[registrationID] ?: userId,
                 it.ordinalNum,
                 it.totalPoints,
             )
         }
         val pointsByUser = pointsData.groupBy { it.userId }
-        val assignments = pointsData
-            .map { it.ordinalNum }
-            .distinct()
-            .sortedBy { ordinalNum ->
-                pointsData
-                    .filter { it.ordinalNum == ordinalNum }
-                    .minByOrNull { it.ordinalNum ?: Long.MAX_VALUE }
-                    ?.ordinalNum ?: Long.MAX_VALUE
-            }
+        val assignments = pointsData.map { it.ordinalNum }.distinct().sortedBy { it ?: Long.MAX_VALUE }
         val rows = mutableListOf(
             mutableListOf<String?>(
                 "username",
@@ -158,31 +144,20 @@ class CourseService(
         return rows
     }
 
-    fun getCourseBySlug(courseSlug: String): Course {
-        return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No course found with the URL $courseSlug"
-        )
-    }
+    private fun notFound(message: String): Nothing =
+        throw ResponseStatusException(HttpStatus.NOT_FOUND, message)
 
-    fun getCourseSlugByTask(task: Task): String {
-        if (task.assignment != null) {
-            return task.assignment!!.course!!.slug!!
-        } else {
-            return task.course!!.slug!!
-        }
-    }
+    fun getCourseBySlug(courseSlug: String): Course =
+        courseRepository.getBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
 
-    fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace {
-        return courseRepository.findBySlug(courseSlug) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No course found with the URL $courseSlug"
-        )
-    }
+    fun getCourseSlugByTask(task: Task): String =
+        (task.assignment?.course ?: task.course)!!.slug!!
 
-    fun getTaskById(taskId: Long): Task {
-        return taskRepository.findById(taskId).get()
-    }
+    fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace =
+        courseRepository.findBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
+
+    fun getTaskById(taskId: Long): Task =
+        taskRepository.findById(taskId).orElse(null) ?: notFound("No task found with the id $taskId")
 
     @Cacheable("CourseService.getCoursesOverview", key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
@@ -190,102 +165,57 @@ class CourseService(
         return courseRepository.findCoursesForUser(candidates).toList()
     }
 
+    fun getCourseSummary(courseSlug: String): CourseSummary =
+        courseRepository.findCourseBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
 
-    fun getCourseSummary(courseSlug: String): CourseSummary {
-        return courseRepository.findCourseBySlug(courseSlug) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No course found with the URL $courseSlug"
-        )
-    }
+    fun enabledTasksOnly(tasks: List<Task>): List<Task> = tasks.filter { it.enabled }
 
-    fun enabledTasksOnly(tasks: List<Task>): List<Task> {
-        return tasks.filter { it.enabled }
-    }
+    fun getAssignmentWorkspaces(courseSlug: String): List<AssignmentWorkspace> =
+        assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
 
-    // TODO: clean up these confusing method names
-    fun getAssignments(courseSlug: String?): List<AssignmentWorkspace> {
-        return assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
-    }
+    fun getAssignmentWorkspaceBySlug(courseSlug: String, assignmentSlug: String): AssignmentWorkspace =
+        assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
+            ?: notFound("No assignment found with the URL $assignmentSlug")
 
-    fun getAssignment(courseSlug: String?, assignmentSlug: String): AssignmentWorkspace {
-        return assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No assignment found with the URL $assignmentSlug"
-            )
-    }
+    fun getAssignmentBySlug(courseSlug: String, assignmentSlug: String): Assignment =
+        assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug)
+            ?: notFound("No assignment found with the URL $assignmentSlug")
 
-    fun getAssignmentBySlug(courseSlug: String?, assignmentSlug: String): Assignment {
-        return assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug)
-            ?: throw ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "No assignment found with the URL $assignmentSlug"
-            )
-    }
-
-    fun getTask(
-        courseSlug: String,
-        assignmentSlug: String,
-        taskSlug: String,
-        username: String,
-        userId: String
-    ): TaskWorkspace {
+    fun getTask(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskWorkspace {
         val workspace =
             taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
-                ?: throw ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug"
-                )
-        // TODO: is this supposed to be username, or userId??
+                ?: notFound("No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug")
+        // userId (not username): the projections pass it on to evaluation and points lookups
         workspace.setUserId(userId)
         return workspace
     }
 
-    fun getTaskFiles(taskId: Long?): List<TaskFile> {
-        val permittedFiles = taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
-        return permittedFiles
-    }
+    fun getTaskFiles(taskId: Long): List<TaskFile> =
+        taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
 
-    fun getRemainingAttempts(taskId: Long?, maxAttempts: Int): Int {
-        return evaluationService.getEvaluation(taskId, roleService.getUserId())?.remainingAttempts
-            ?: maxAttempts
-    }
+    fun getRemainingAttempts(taskId: Long, maxAttempts: Int): Int =
+        evaluationService.getEvaluation(taskId, roleService.getUserId())?.remainingAttempts ?: maxAttempts
 
-    fun getNextAttemptAt(taskId: Long?, userId: String?): LocalDateTime? {
-        var res = evaluationService.getEvaluation(taskId, userId ?: roleService.getUserId())?.nextAttemptAt
-        val task = if (taskId != null) getTaskById(taskId) else return null
+    fun getNextAttemptAt(taskId: Long, userId: String?): LocalDateTime? {
+        val uid = userId ?: roleService.getUserId()
+        val task = getTaskById(taskId)
         val courseSlug = getCourseSlugByTask(task)
+        val taskSlug = task.slug!!
+        val nextAttemptAt = evaluationService.getEvaluation(taskId, uid)?.nextAttemptAt
 
         // Example without any submissions
-        if (exampleQueueService.isSubmissionInTheQueue(
-                courseSlug,
-                task.slug!!,
-                userId
-            ) || exampleQueueService.isSubmissionCurrentlyProcessed(
-                courseSlug,
-                task.slug!!,
-                userId
-            ) || (res == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)
-        ) {
-            res = task.end!!.plusHours(2)
-        }
+        val exampleBlocked =
+            exampleQueueService.isSubmissionInTheQueue(courseSlug, taskSlug, uid) ||
+            exampleQueueService.isSubmissionCurrentlyProcessed(courseSlug, taskSlug, uid) ||
+            (nextAttemptAt == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)
 
-        return res
+        return if (exampleBlocked) task.end?.plusHours(2) else nextAttemptAt
     }
 
-    fun getAssignmentDeadlineForTask(taskId: Long?): LocalDateTime? {
-        return getTaskById(taskId!!).assignment?.end
-    }
+    fun getAssignmentDeadlineForTask(taskId: Long): LocalDateTime? =
+        getTaskById(taskId).assignment?.end
 
-    fun createEvent(ordinalNum: Int?, date: LocalDateTime?, type: String?): Event {
-        val newEvent = Event()
-        newEvent.date = date
-        newEvent.type = type
-        newEvent.description = "Assignment $ordinalNum is $type."
-        return newEvent
-    }
-
-    fun calculateTaskPoints(taskId: Long?, userId: String?): Double {
+    fun calculateTaskPoints(taskId: Long, userId: String?): Double {
         val id = userId ?: roleService.getUserId() ?: return 0.0
         return pointsService.calculateTaskPoints(taskId, id)
     }
@@ -293,14 +223,8 @@ class CourseService(
 
     fun calculateAssignmentPoints(tasks: List<Task>): Double {
         val userId = roleService.getUserId() ?: return 0.0
-        return calculateAssignmentPoints(tasks, userId)
-
+        return tasks.sumOf { pointsService.calculateTaskPoints(it.id, userId) }
     }
-
-    fun calculateAssignmentPoints(tasks: List<Task>, userId: String): Double {
-        return tasks.stream().mapToDouble { task: Task -> pointsService.calculateTaskPoints(task.id, userId) }.sum()
-    }
-
 
     fun calculateCoursePoints(slug: String): Double {
         val userId = roleService.getUserId() ?: return 0.0
@@ -308,25 +232,17 @@ class CourseService(
     }
 
     @Cacheable(value = ["CourseService.calculateCoursePoints"], key = "#slug + '-' + #userId")
-    fun calculateCoursePoints(slug: String, userId: String): Double {
-        return courseRepository.getTotalPoints(slug, userId) ?: 0.0
-    }
+    fun calculateCoursePoints(slug: String, userId: String): Double =
+        courseRepository.getTotalPoints(slug, userId) ?: 0.0
 
-    fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> {
-        return setOf()
-        // TODO: re-enable if needed
-        //return memberIds.mapNotNull { courseRepository.getTeamMemberName(it) }.toSet()
-    }
+    // Team member names are currently not resolved (see CourseRepository.getTeamMemberName).
+    // The frontend (Course.tsx, Courses.tsx) still expects the arrays, so return an empty set.
+    @Suppress("UNUSED_PARAMETER")
+    fun getTeamMembers(memberIds: List<String>): Set<MemberOverview> = emptySet()
 
-    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
-        return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
-            courseSlug,
-            assignmentSlug,
-            taskSlug
-        ) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
-        )
-    }
+    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task =
+        taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
+            ?: notFound("No task found with the URL $taskSlug")
 
     @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
     fun createCourse(course: CourseDTO): Course {
@@ -345,32 +261,32 @@ class CourseService(
         return courseLifecycle.updateFromRepository(existingCourse)
     }
 
-    @Transactional
-    fun webhookUpdateWithSecret(courseSlug: String, secret: String?): Course? {
-        val existingCourse = getCourseBySlug(courseSlug)
-        if (existingCourse.webhookSecret != null && secret != null) {
-            if (existingCourse.webhookSecret == secret) {
-                return proxy.updateCourse(courseSlug)
-            }
-        }
-        logger.debug { "Provided webhook secret does not match secret of course $courseSlug" }
-        throw ResponseStatusException(HttpStatus.FORBIDDEN)
+    fun webhookUpdateWithSecret(courseSlug: String, secret: String): Course {
+        val storedSecret = getCourseBySlug(courseSlug).webhookSecret
+        requireValidWebhook(courseSlug, storedSecret != null && secureEquals(storedSecret, secret))
+        return proxy.updateCourse(courseSlug)
     }
 
-    fun webhookUpdateWithHmac(courseSlug: String, signature: String?, body: String): Course? {
-        val existingCourse = getCourseBySlug(courseSlug)
-        if (existingCourse.webhookSecret != null && signature != null) {
-            val key = SecretKeySpec(existingCourse.webhookSecret!!.toByteArray(Charsets.UTF_8), "HmacSHA256")
+    fun webhookUpdateWithHmac(courseSlug: String, signature: String, body: String): Course {
+        val storedSecret = getCourseBySlug(courseSlug).webhookSecret
+        val valid = storedSecret != null && run {
             val mac = Mac.getInstance("HmacSHA256")
-            mac.init(key)
-            val hmac = mac.doFinal(body.toByteArray(Charsets.UTF_8))
-            val expected = DatatypeConverter.printHexBinary(hmac)
-            if (expected.equals(signature, ignoreCase = true)) {
-                return proxy.updateCourse(courseSlug)
-            }
+            mac.init(SecretKeySpec(storedSecret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+            val expected = HexFormat.of().formatHex(mac.doFinal(body.toByteArray(Charsets.UTF_8)))
+            secureEquals(expected, signature.lowercase())
         }
-        logger.debug { "Provided webhook signature does not match secret of course $courseSlug" }
-        throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        requireValidWebhook(courseSlug, valid)
+        return proxy.updateCourse(courseSlug)
+    }
+
+    private fun secureEquals(a: String, b: String): Boolean =
+        MessageDigest.isEqual(a.toByteArray(Charsets.UTF_8), b.toByteArray(Charsets.UTF_8))
+
+    private fun requireValidWebhook(courseSlug: String, valid: Boolean) {
+        if (!valid) {
+            logger.debug { "Provided webhook secret/signature does not match secret of course $courseSlug" }
+            throw ResponseStatusException(HttpStatus.FORBIDDEN)
+        }
     }
 
     @Transactional
@@ -406,195 +322,94 @@ class CourseService(
         registrationIDs: List<String>,
         role: Role
     ): Pair<List<String>, List<String>> {
-        val existingUsers = when (role) {
+        val existingUsers: Set<String> = when (role) {
             Role.SUPERVISOR -> course.supervisors
             Role.ASSISTANT -> course.assistants
             Role.STUDENT -> course.registeredStudents
         }
-
-        val newUsersSet = registrationIDs.toSet()
-        val existingUsersSet = existingUsers.toSet()
-
-        logger.debug { "existingUsersSet: $existingUsers" }
-        logger.debug { "newUsersSet: $newUsersSet" }
-        val removedUsers = existingUsersSet.minus(newUsersSet).toList()
-        val addedUsers = newUsersSet.minus(existingUsersSet).toList()
-        logger.debug { "removedUsers: $removedUsers" }
-        logger.debug { "addedUsers: $addedUsers" }
+        val newUsers = registrationIDs.toMutableSet()
+        val removedUsers = (existingUsers - newUsers).toList()
+        val addedUsers = (newUsers - existingUsers).toList()
+        logger.debug { "existing: $existingUsers, new: $newUsers, removed: $removedUsers, added: $addedUsers" }
 
         when (role) {
-            Role.SUPERVISOR -> course.supervisors = newUsersSet.toMutableSet()
-            Role.ASSISTANT -> course.assistants = newUsersSet.toMutableSet()
-            Role.STUDENT -> course.registeredStudents = newUsersSet.toMutableSet()
+            Role.SUPERVISOR -> course.supervisors = newUsers
+            Role.ASSISTANT -> course.assistants = newUsers
+            Role.STUDENT -> course.registeredStudents = newUsers
         }
-
         courseRepository.save(course)
-
         return Pair(removedUsers, addedUsers)
     }
 
-
-    @Cacheable(value = ["getStudent"], key = "#courseSlug + '-' + #user.username")
-    fun getStudent(courseSlug: String, user: UserRepresentation): StudentDTO {
-        return StudentDTO(user.firstName, user.lastName, user.email)
-    }
-
     fun getTaskProgress(
-        courseSlug: String, assignmentSlug: String, taskSlug: String, username: String,
-        userId: String,
-        submissionLimit: Int = 1,
-        includeGrade: Boolean = true,
-        includeTest: Boolean = false,
-        includeRun: Boolean = false,
-    ): TaskProgressDTO {
-        // there is one special rule for this function:
-        // if only includeGrade is true and submissionLimit is 1, the BEST, latest submission will be included
-        // in all other cases, the <submissionLimit> most recent submissions are included in reverse chronological order
-        val onlyLatestGraded = submissionLimit == 1 && includeGrade && !includeTest && !includeRun
-        val task = getTaskBySlug(courseSlug, assignmentSlug, taskSlug)
-        val evaluation = evaluationService.getEvaluationSummary(task, userId)
-        val evaluationEntity = evaluationService.getEvaluation(task, userId)
-        logger.debug { "Evaluation for username $username (uniqueId: $userId): $evaluation" }
-        if (evaluation == null) {
-            return TaskProgressDTO(
-                username,
-                taskSlug,
-                0.0,
-                task.maxPoints,
-                task.maxAttempts,
-                task.maxAttempts,
-                task.information.map { (language, info) ->
-                    language to TaskInformationDTO(
-                        info.language,
-                        info.title,
-                        info.instructionsFile
-                    )
-                }.toMap().toMutableMap(),
-                listOf()
-            )
-        }
-        return TaskProgressDTO(
-            username,
-            taskSlug,
-            evaluation.bestScore,
-            task.maxPoints,
-            evaluation.remainingAttempts,
-            task.maxAttempts,
-            task.information.map { (language, info) ->
-                language to TaskInformationDTO(
-                    info.language,
-                    info.title,
-                    info.instructionsFile
-                )
-            }.toMap().toMutableMap(),
-            evaluation.submissions.sortedBy { it.ordinalNum }.reversed()
-                .filter {
-                    (it.command == Command.GRADE && includeGrade) ||
-                    (it.command == Command.TEST && includeTest) ||
-                    (it.command == Command.RUN && includeRun)
-                }
-                .let { submissions ->
-                    if (submissions.isEmpty()) {
-                        submissions
-                    } else if (onlyLatestGraded) {
-                        val best = submissions.firstOrNull { it.points == evaluation.bestScore }
-                        // if there are only late submissions, best will be null
-                        if (best == null) {
-                            listOf()
-                        } else {
-                            listOf(best)
-                        }
-                    } else if (submissionLimit == 0) submissions
-                    else submissions.take(submissionLimit)
-                }
-        )
-    }
-
-    private fun getTasksProgress(
-        assignment: Assignment,
-        username: String,
-        userId: String,
-        submissionLimit: Int,
-        includeGrade: Boolean,
-        includeTest: Boolean,
-        includeRun: Boolean
-    ): List<TaskProgressDTO> {
-        return assignment.tasks.map { task ->
-            getTaskProgress(
-                assignment.course!!.slug!!,
-                assignment.slug!!,
-                task.slug!!,
-                username,
-                userId,
-                submissionLimit,
-                includeGrade,
-                includeTest,
-                includeRun
-            )
-        }
-    }
+        courseSlug: String, assignmentSlug: String, taskSlug: String,
+        username: String, userId: String, options: ProgressOptions = ProgressOptions(),
+    ): TaskProgressDTO =
+        getTaskProgress(getTaskBySlug(courseSlug, assignmentSlug, taskSlug), username, userId, options)
 
     fun getAssignmentProgress(
-        courseSlug: String,
-        assignmentSlug: String,
-        username: String,
-        userId: String,
-        submissionLimit: Int = 1,
-        includeGrade: Boolean = true,
-        includeTest: Boolean = false,
-        includeRun: Boolean = false,
-    ): AssignmentProgressDTO {
-        val assignment: Assignment = getAssignmentBySlug(courseSlug, assignmentSlug)
-        return AssignmentProgressDTO(
-            username, assignmentSlug,
-            assignment.information.map { (language, info) ->
-                language to AssignmentInformationDTO(
-                    info.language,
-                    info.title
-                )
-            }.toMap().toMutableMap(),
-            getTasksProgress(assignment, username, userId, submissionLimit, includeGrade, includeTest, includeRun)
-        )
-    }
+        courseSlug: String, assignmentSlug: String,
+        username: String, userId: String, options: ProgressOptions = ProgressOptions(),
+    ): AssignmentProgressDTO =
+        buildAssignmentProgress(getAssignmentBySlug(courseSlug, assignmentSlug), username, username, userId, options)
 
     fun getCourseProgress(
-        courseSlug: String,
-        username: String,
-        userId: String,
-        submissionLimit: Int = 1,
-        includeGrade: Boolean = true,
-        includeTest: Boolean = false,
-        includeRun: Boolean = false,
+        courseSlug: String, username: String, userId: String, options: ProgressOptions = ProgressOptions(),
     ): CourseProgressDTO {
-        val course: Course = getCourseBySlug(courseSlug)
+        val course = getCourseBySlug(courseSlug)
         return CourseProgressDTO(
             username,
             course.information.map { (language, info) ->
-                language to CourseInformationDTO(
-                    info.language, info.title, info.description, info.university, info.period
-                )
+                language to CourseInformationDTO(info.language, info.title, info.description, info.university, info.period)
             }.toMap().toMutableMap(),
-            course.assignments.filter { it.isPublished }.map { assignment ->
-                AssignmentProgressDTO(
-                    null,
-                    assignment.slug!!,
-                    assignment.information.map { (language, info) ->
-                        language to AssignmentInformationDTO(
-                            info.language,
-                            info.title
-                        )
-                    }.toMap().toMutableMap(),
-                    getTasksProgress(
-                        assignment,
-                        username,
-                        userId,
-                        submissionLimit,
-                        includeGrade,
-                        includeTest,
-                        includeRun
-                    )
-                )
-            }.toList()
+            course.assignments
+                .filter { it.isPublished }
+                .map { buildAssignmentProgress(it, null, username, userId, options) }
         )
+    }
+
+    private fun buildAssignmentProgress(
+        assignment: Assignment, dtoUsername: String?,
+        username: String, userId: String, options: ProgressOptions,
+    ) = AssignmentProgressDTO(
+        dtoUsername,
+        assignment.slug!!,
+        assignment.information.mapValues { (_, info) ->
+            AssignmentInformationDTO(info.language, info.title)
+        }.toMutableMap(),
+        assignment.tasks.map { getTaskProgress(it, username, userId, options) }
+    )
+
+    private fun getTaskProgress(task: Task, username: String, userId: String, options: ProgressOptions): TaskProgressDTO {
+        val evaluation = evaluationService.getEvaluationSummary(task, userId)
+        logger.debug { "Evaluation for username $username (uniqueId: $userId): $evaluation" }
+        return TaskProgressDTO(
+            username,
+            task.slug,
+            if (evaluation == null) 0.0 else evaluation.bestScore,
+            task.maxPoints,
+            if (evaluation == null) task.maxAttempts else evaluation.remainingAttempts,
+            task.maxAttempts,
+            task.information.mapValues { (_, info) ->
+                TaskInformationDTO(info.language, info.title, info.instructionsFile)
+            }.toMutableMap(),
+            if (evaluation == null) listOf() else selectSubmissions(evaluation, options)
+        )
+    }
+
+    private fun selectSubmissions(evaluation: EvaluationSummary, options: ProgressOptions): List<SubmissionSummary> {
+        val submissions = evaluation.submissions
+            .sortedByDescending { it.ordinalNum }
+            .filter {
+                (it.command == Command.GRADE && options.includeGrade) ||
+                (it.command == Command.TEST && options.includeTest) ||
+                (it.command == Command.RUN && options.includeRun)
+            }
+        return when {
+            // if there are only late submissions, there is no best one -> empty list
+            options.onlyBestGraded -> listOfNotNull(submissions.firstOrNull { it.points == evaluation.bestScore })
+            options.submissionLimit == 0 -> submissions
+            else -> submissions.take(options.submissionLimit)
+        }
     }
 }

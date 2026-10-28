@@ -5,6 +5,7 @@ import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.repository.CourseRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
+import jakarta.ws.rs.NotFoundException
 import org.keycloak.admin.client.resource.RealmResource
 import org.keycloak.admin.client.resource.RoleResource
 import org.keycloak.admin.client.resource.UserResource
@@ -234,9 +235,16 @@ class RoleService(
                 val roles = proxy.getUserRoles(searchNames)
                 logger.info { "Initializing roles for $username (a.k.a. $searchNames): $roles" }
                 // add the corresponding Keycloak roles
-                user.toResource().roles().realmLevel().add(roles.map {
-                    getRoleByName(it).toRepresentation()
-                })
+                // TODO: Ask Carol if this is okay...
+                val representations = roles.mapNotNull { roleName ->
+                    try {
+                        getRoleByName(roleName).toRepresentation()
+                    } catch (e: NotFoundException) {
+                        logger.warn { "Role $roleName does not exist in Keycloak, skipping it for $username" }
+                        null
+                    }
+                }
+                user.toResource().roles().realmLevel().add(representations)
                 // set the roles_initialized_at attribute to the current time (prevents future calls to this method)
                 val attributes = user.attributes ?: mutableMapOf()
                 attributes["roles_initialized_at"] = listOf(LocalDateTime.now().toString())

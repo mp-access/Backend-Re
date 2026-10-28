@@ -321,8 +321,7 @@ class DumpService(
 
         // write git repository (if possible)
         try {
-            val coursePath = courseLifecycle.cloneRepository(course)
-            writeZipRepository(zip, coursePath)
+            courseLifecycle.withClonedRepository(course) { path -> writeZipRepository(zip, path) }
         } catch (_: Exception) {
             logger.info { "Could not clone repository for dump: ${course.repository}" }
         }

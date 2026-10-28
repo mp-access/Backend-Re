@@ -98,7 +98,6 @@ class SubmissionService(
 
     @Caching(
         evict = [
-            CacheEvict("getStudent", key = "#courseSlug + '-' + #submissionDTO.userId"),
             CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
         ]
     )

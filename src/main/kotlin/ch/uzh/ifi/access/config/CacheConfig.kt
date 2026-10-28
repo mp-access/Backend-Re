@@ -25,7 +25,6 @@ class CacheConfig {
         )
 
         val TEMPORARY_CACHES = listOf(
-            "getStudent",
             "studentWithPoints",
             "PointsService.calculateTaskPoints",
             "PointsService.calculateAssignmentPoints",
