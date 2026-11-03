@@ -55,6 +55,10 @@ examples:
     min-concurrent-submissions: ${MIN_CONCURRENT_SUBMISSIONS:2}
     # Parallelism after the example ended (drain mode, CPU load ignored) until the queue is empty.
     drain-concurrent-submissions: ${DRAIN_CONCURRENT_SUBMISSIONS:8}
+    # Max submissions buffered; when full, further submissions are rejected with HTTP 503.
+    capacity: ${EXAMPLE_QUEUE_CAPACITY:1000}
+    # Retries of a failed grading (not for 4xx rejections such as the submission lock).
+    max-retries: ${EXAMPLE_QUEUE_MAX_RETRIES:2}
 
 logging:
   level:

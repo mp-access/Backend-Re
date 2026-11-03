@@ -137,7 +137,13 @@ class ExampleController(
                 submissionReceivedAt
             )
             logger.info { "[if-statement reached] Queue engaged: Submitted submission ${submission.command} with following arguments: ${tmp} and Command.Grade=${Command.GRADE}" }
-            exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)
+            if (!exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)) {
+                // Backpressure: the example queue is full. Reject instead of silently dropping the submission.
+                throw ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Too many submissions are being processed right now. Please submit again in a moment."
+                )
+            }
             exampleService.increaseInteractiveSubmissionCount(course, example)
         } else {
             exampleService.processSubmission(course, example, submission, submissionReceivedAt, logger)

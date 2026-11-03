@@ -39,11 +39,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Characterization tests for [ExampleQueueService] (refactoring plan, step 0: safety net).
- *
- * They pin down the CURRENT behaviour, so the queue can be moved onto a shared core without changing
- * it unnoticed. Tests whose name starts with "CURRENT BEHAVIOUR" document something the plan intends to
- * change later (e.g. silently dropping submissions when the queue is full) - update those deliberately.
+ * Tests for [ExampleQueueService]. Written as characterization tests before the migration onto
+ * [ch.uzh.ifi.access.queue.GradingQueue] (refactoring plan, step 0) and kept unchanged through it (step 3),
+ * except for the one intended behaviour change: a full queue is now reported instead of silently dropping.
  *
  * Pure unit tests: no Spring context, database or Docker. Grading is replaced by a scripted fake whose
  * behaviour is controlled per user (block until released, fail N times, take some time).
@@ -197,8 +195,8 @@ class ExampleQueueServiceTests {
     // ---------------------------------------------------------------------------------------------
     // Retry
     //
-    // Known gap (not testable deterministically): between leaving `running` and being re-queued,
-    // a submission that is about to be retried is briefly neither waiting nor running.
+    // Before the migration, a submission about to be retried was briefly neither waiting nor running.
+    // GradingQueue closes that gap; GradingQueueTests covers it with a stress test including retries.
     // ---------------------------------------------------------------------------------------------
 
     @Test
@@ -382,15 +380,16 @@ class ExampleQueueServiceTests {
     }
 
     @Test
-    fun `CURRENT BEHAVIOUR - when the queue is full further submissions are dropped silently`() {
+    fun `when the queue is full addToQueue reports the rejection`() {
         cpuUsage.set(CPU_BUSY)
         val queue = startQueue(min = 0)
-        repeat(1000) { queue.submit("user-$it") }
+        repeat(1000) { assertTrue(queue.submit("user-$it")) }
 
-        queue.submit("one-too-many") // no exception, no feedback to the caller
+        assertFalse(queue.submit("one-too-many"))
 
         assertEquals(1000, waiting())
         assertFalse(queue.isSubmissionInTheQueue(COURSE, EXAMPLE, "one-too-many"))
+        assertEquals(1.0, meterRegistry.get("example_queue.rejected").counter().count())
     }
 
     // ---------------------------------------------------------------------------------------------

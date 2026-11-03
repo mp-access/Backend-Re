@@ -64,6 +64,25 @@ class PolicyTests {
         assertThrows(IllegalArgumentException::class.java) { CpuGatedPolicy(0, 0, 0.8, cpu) }
     }
 
+    // --- DrainAwarePolicy ------------------------------------------------------------------------
+
+    @Test
+    fun `DrainAwarePolicy uses its own limit while draining and the normal policy otherwise`() {
+        val policy = DrainAwarePolicy<String>(FixedPolicy(1), drainConcurrent = 3) { it == "draining" }
+
+        assertTrue(policy.canDispatch("normal", 0))
+        assertFalse(policy.canDispatch("normal", 1))
+        assertTrue(policy.canDispatch("draining", 2))
+        assertFalse(policy.canDispatch("draining", 3))
+    }
+
+    @Test
+    fun `DrainAwarePolicy sizes the worker pool for the larger of both limits`() {
+        assertEquals(3, DrainAwarePolicy<String>(FixedPolicy(1), drainConcurrent = 3) { false }.maxParallelism)
+        assertEquals(4, DrainAwarePolicy<String>(FixedPolicy(4), drainConcurrent = 2) { false }.maxParallelism)
+        assertThrows(IllegalArgumentException::class.java) { DrainAwarePolicy<String>(FixedPolicy(1), 0) { false } }
+    }
+
     // --- RetryPolicy ------------------------------------------------------------------------------
 
     @Test

@@ -1,5 +1,6 @@
 .kotlin
 scripts/get_submissions*
+scripts/*
 *.class
 *.log
 *.ctxt
