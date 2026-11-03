@@ -40,13 +40,14 @@ class CourseConfigImporter(
         course.overrideVisibility = visibility?.get("override")?.asTextOrNull()
 
         if (course.overrideVisibility != null) {
+            // override_start is required; override_end is optional: without it the override applies
+            // from override_start onwards without an end (e.g. "becomes public from 2093 on").
             val overrideStart = visibility.get("override_start")?.asTextOrNull()
                 ?: throw IllegalArgumentException("override_start must not be null when override visibility is specified")
             val overrideEnd = visibility.get("override_end")?.asTextOrNull()
-                ?: throw IllegalArgumentException("override_end must not be null when override visibility is specified")
 
             course.overrideStart = LocalDateTime.parse(overrideStart)
-            course.overrideEnd = LocalDateTime.parse(overrideEnd)
+            course.overrideEnd = overrideEnd?.let { LocalDateTime.parse(it) }
         } else {
             course.overrideStart = null
             course.overrideEnd = null

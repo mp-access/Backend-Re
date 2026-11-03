@@ -27,6 +27,7 @@ class EvaluationService(
         return res
     }
 
+    // Not used at all?
     fun getEvaluation(task: Task, userId: String): Evaluation? {
         val res = evaluationRepository.getTopByTask_IdAndUserIdOrderById(task.id, userId)
         // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)

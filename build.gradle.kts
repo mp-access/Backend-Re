@@ -125,6 +125,8 @@ tasks.withType<Test> {
         includeTestsMatching("ch.uzh.ifi.access.sse.EmitterServiceTests")
         includeTestsMatching("ch.uzh.ifi.access.api.SpringDataRestExposureTests")
         includeTestsMatching("ch.uzh.ifi.access.users.RoleInitializationGuardTests")
+        includeTestsMatching("ch.uzh.ifi.access.queue.*")
+        includeTestsMatching("ch.uzh.ifi.access.load.*") // only runs with LOAD_TEST=true
     }
     testLogging {
         events("passed", "skipped", "failed")

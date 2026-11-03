@@ -1,6 +1,10 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
+import ch.uzh.ifi.access.queue.FixedPolicy
+import ch.uzh.ifi.access.queue.GradingQueue
+import ch.uzh.ifi.access.queue.GradingQueueListener
+import ch.uzh.ifi.access.queue.RetryPolicy
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
@@ -8,17 +12,8 @@ import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.util.concurrent.BlockingQueue
+import org.springframework.web.server.ResponseStatusException
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * Notes on performance and hardware restrictions:
- * - The Queue needs to keep threads to track submissions.
- *   This is necessary and the only way to handle spikes.
- */
 
 /** One pending submission plus the future that completes when it has been graded. */
 private class QueuedSubmission(
@@ -30,45 +25,65 @@ private class QueuedSubmission(
 )
 
 /**
- * Intake buffer for regular task submissions. The controller drops a submission here and returns a
- * DeferredResult instead of blocking a request thread; a fixed pool of worker threads grades from the
- * queue. This decouples "accepted" from "in-flight": a burst of N submissions costs N cheap queue
- * entries, not N parked Tomcat threads, so the endpoint survives well past the servlet thread limit.
+ * Intake buffer for regular task submissions (peak times, e.g. shortly before a deadline). The controller
+ * drops a submission here and returns a DeferredResult instead of blocking a request thread; a fixed number
+ * of workers grades from the queue. A burst of N submissions costs N cheap queue entries, not N parked
+ * Tomcat threads, so the endpoint survives well past the servlet thread limit.
  *
- * The queue is BOUNDED on purpose (backpressure): when it is full, enqueue() returns null and the
- * caller sheds load with a 503 instead of accepting unbounded work. Mirrors ExampleQueueService.
+ * Built on [GradingQueue]:
+ *  - at most [workers] gradings run in parallel (keep roughly equal to docker.pool.size),
+ *  - BOUNDED on purpose (backpressure): when full, [enqueue] returns null and the caller answers 503,
+ *  - a failed grading is retried up to [maxRetries] times, except for 4xx rejections (no attempts left,
+ *    unknown task, ...). Safe because createTaskSubmission is transactional: a failed attempt is rolled
+ *    back completely and leaves no submission behind.
  */
 @Service
 class SubmissionQueueService(
     private val submissionService: SubmissionService,
     @Value("\${submission.queue.capacity:2000}") private val capacity: Int,
-    @Value("\${submission.queue.workers:10}") private val workers: Int,
-    private val meterRegistry: MeterRegistry,
+    @Value("\${submission.queue.workers:10}") workers: Int,
+    @Value("\${submission.queue.max-retries:2}") maxRetries: Int,
+    meterRegistry: MeterRegistry,
 ) {
     private val logger = KotlinLogging.logger {}
-    private val running = AtomicBoolean(false)
-    private lateinit var queue: BlockingQueue<QueuedSubmission>
-    private val workerThreads = mutableListOf<Thread>()
+
+    private val queue = GradingQueue<QueuedSubmission>(
+        name = "submission_queue",
+        capacity = capacity,
+        policy = FixedPolicy(workers),
+        retryPolicy = RetryPolicy.skipClientErrors(maxRetries),
+        meterRegistry = meterRegistry,
+        handler = ::grade,
+        listener = object : GradingQueueListener<QueuedSubmission> {
+            override fun onAttemptFailed(item: QueuedSubmission, attempt: Int, error: Exception, willRetry: Boolean) =
+                logFailure(item, attempt, error, willRetry)
+
+            override fun onCompleted(item: QueuedSubmission, error: Exception?) {
+                // Hand the original exception to the controller, so e.g. 403 / 404 keep their meaning.
+                if (error == null) item.done.complete(Unit) else item.done.completeExceptionally(error)
+            }
+        },
+    )
+
+    init {
+        // Kept from before the GradingQueue migration, for existing dashboards and the burst runs.
+        Gauge.builder("submission.queue.depth", queue) { it.waitingCount.toDouble() }.register(meterRegistry)
+    }
 
     @PostConstruct
     fun start() {
-        queue = LinkedBlockingQueue(capacity)
-        // Expose how many submissions are waiting to be graded (for the burst/backpressure runs).
-        Gauge.builder("submission.queue.depth", this) { it.queueDepth().toDouble() }.register(meterRegistry)
-        running.set(true)
-        repeat(workers) { i ->
-            val thread = Thread({ workLoop() }, "submission-worker-$i")
-            thread.isDaemon = true
-            thread.start()
-            workerThreads.add(thread)
-        }
-        logger.info { "SubmissionQueueService started: $workers workers, queue capacity $capacity" }
+        queue.start()
+    }
+
+    @PreDestroy
+    fun shutdown() {
+        queue.shutdown()
     }
 
     /**
-     * Offer a submission for grading. Returns a future that completes when grading finishes (or
-     * completes exceptionally with the grading error), or null if the queue is full -- in which case
-     * the caller should respond 503 (backpressure).
+     * Offer a submission for grading. Returns a future that completes when grading finishes (or completes
+     * exceptionally with the grading error), or null if the queue is full -- in which case the caller
+     * should respond 503 (backpressure).
      */
     fun enqueue(
         courseSlug: String,
@@ -77,8 +92,7 @@ class SubmissionQueueService(
         submission: SubmissionDTO,
     ): CompletableFuture<Unit>? {
         val done = CompletableFuture<Unit>()
-        val queued = QueuedSubmission(courseSlug, assignmentSlug, taskSlug, submission, done)
-        if (!queue.offer(queued)) {
+        if (!queue.offer(QueuedSubmission(courseSlug, assignmentSlug, taskSlug, submission, done))) {
             logger.warn { "Submission queue full (capacity $capacity) - rejecting submission for user ${submission.userId}" }
             return null
         }
@@ -86,35 +100,24 @@ class SubmissionQueueService(
     }
 
     /** Current number of submissions waiting to be graded (observability). */
-    fun queueDepth(): Int = if (::queue.isInitialized) queue.size else 0
+    fun queueDepth(): Int = queue.waitingCount
 
-    private fun workLoop() {
-        while (running.get()) {
-            val item = try {
-                queue.poll(1, TimeUnit.SECONDS) ?: continue
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
-            }
-            try {
-                // createTaskSubmission is @Transactional and reached cross-bean, so BOTH its caching
-                // proxy and a Hibernate session engage on this worker thread. Open-session-in-view does
-                // not apply off the request thread, so the transaction is what makes lazy loads work.
-                submissionService.createTaskSubmission(
-                    item.courseSlug, item.assignmentSlug, item.taskSlug, item.submission
-                )
-                item.done.complete(Unit)
-            } catch (e: Exception) {
-                logger.error(e) { "Grading failed for queued submission (user ${item.submission.userId})" }
-                item.done.completeExceptionally(e)
-            }
-        }
+    private fun grade(item: QueuedSubmission) {
+        // createTaskSubmission is @Transactional and reached cross-bean, so BOTH its caching proxy and a
+        // Hibernate session engage on this worker thread. Open-session-in-view does not apply off the
+        // request thread, so the transaction is what makes lazy loads work.
+        submissionService.createTaskSubmission(item.courseSlug, item.assignmentSlug, item.taskSlug, item.submission)
     }
 
-    @PreDestroy
-    fun shutdown() {
-        logger.info { "Shutting down SubmissionQueueService (${queueDepth()} submissions still queued)" }
-        running.set(false)
-        workerThreads.forEach { it.interrupt() }
+    private fun logFailure(item: QueuedSubmission, attempt: Int, error: Exception, willRetry: Boolean) {
+        val who = "user ${item.submission.userId}, task ${item.courseSlug}/${item.assignmentSlug}/${item.taskSlug}"
+        when {
+            willRetry ->
+                logger.warn(error) { "Grading attempt $attempt failed ($who). Retrying." }
+            error is ResponseStatusException && error.statusCode.is4xxClientError ->
+                logger.info { "Submission rejected ($who): ${error.reason}" }
+            else ->
+                logger.error(error) { "Grading failed after $attempt attempt(s) ($who)." }
+        }
     }
 }

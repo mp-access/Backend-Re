@@ -74,7 +74,7 @@ class ImportRepoTests(
         val path = "Mock-Course-Re"
         val file = File(path)
         val absolutePath = Paths.get(file.absolutePath)
-        val createdCourse = courseLifecycle.createFromDirectory(absolutePath, course)
+        val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
     }
 
@@ -151,7 +151,7 @@ class ImportRepoTests(
         val path = "Mock-Course-Re"
         val file = File(path)
         val absolutePath = Paths.get(file.absolutePath)
-        val createdCourse = courseLifecycle.createFromDirectory(absolutePath, course)
+        val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
     }
 
@@ -174,7 +174,7 @@ class ImportRepoTests(
         val path = "Mock-Course-Re"
         val file = File(path)
         val absolutePath = Paths.get(file.absolutePath)
-        val createdCourse = courseLifecycle.createFromDirectory(absolutePath, course)
+        val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
     }
 

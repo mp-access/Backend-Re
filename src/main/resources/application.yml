@@ -73,6 +73,8 @@ submission:
     capacity: ${SUBMISSION_QUEUE_CAPACITY:2000}
     # Worker threads that grade from the queue -- keep roughly equal to docker.pool.size.
     workers: ${SUBMISSION_QUEUE_WORKERS:10}
+    # Retries of a failed grading (not for 4xx rejections such as "no attempts left").
+    max-retries: ${SUBMISSION_QUEUE_MAX_RETRIES:2}
     # How long the async request waits for a grade before returning 503.
     requestTimeoutSeconds: ${SUBMISSION_QUEUE_REQUEST_TIMEOUT_SECONDS:120}
 

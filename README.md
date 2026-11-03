@@ -16,9 +16,9 @@ DOCKER_POOL_IMAGE=python:3.12 DOCKER_POOL_SIZE=20 JAVA_HOME=$(/usr/libexec/java_
 DOCKER_POOL_ENABLED=false JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 ```
 
-Running all the Tests
+Running all the Tests (`DELETION_KEY=9876` is the key the course-deletion tests send)
 ```bash
-JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew cleanTest test
+DELETION_KEY=9876 JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew cleanTest test
 ```
 
 ## Docker Engine update

@@ -10,6 +10,7 @@ import jakarta.annotation.PreDestroy
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
+import java.time.Clock
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
@@ -30,6 +31,8 @@ class ExampleQueueService(
     private val exampleService: ExampleService,
     private val embeddingQueueService: EmbeddingQueueService,
     private val meterRegistry: MeterRegistry,
+    private val cpuUsageProvider: CpuUsageProvider,
+    private val clock: Clock,
     @Value("\${examples.example-queue.cpu-threshold}") private val cpuThreshold: Double,
     @Value("\${examples.example-queue.max-concurrent-submissions}") private val maxConcurrent: Int,
     @Value("\${examples.example-queue.min-concurrent-submissions}") private val minConcurrent: Int,
@@ -124,13 +127,13 @@ class ExampleQueueService(
         if (runningCount >= maxConcurrent) {
             return false
         }
-        val currentCpuUsage = meterRegistry.find("system.cpu.usage").gauge()?.value() ?: return false
+        val currentCpuUsage = cpuUsageProvider.currentCpuUsage() ?: return false
         return currentCpuUsage < cpuThreshold
     }
 
     private fun isDraining(item: SubmissionWithContext): Boolean {
         val key = Pair(item.courseSlug, item.exampleSlug)
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
         val cached = interactiveCache[key]
         val interactive = if (cached != null && now - cached.second < interactiveCacheMillis) {
             cached.first
@@ -212,7 +215,7 @@ class ExampleQueueService(
 
     private fun updateDrainState(item: SubmissionWithContext) {
         val key = Pair(item.courseSlug, item.exampleSlug)
-        if (isDraining(item) && drainStartedAt.putIfAbsent(key, System.currentTimeMillis()) == null) {
+        if (isDraining(item) && drainStartedAt.putIfAbsent(key, clock.millis()) == null) {
             val left = submissionQueue.count { it.courseSlug == item.courseSlug && it.exampleSlug == item.exampleSlug } + 1
             logger.info { "Drain started for example ${item.exampleSlug} in course ${item.courseSlug}: $left submission(s) left." }
         }
@@ -222,15 +225,15 @@ class ExampleQueueService(
         val key = Pair(courseSlug, exampleSlug)
         val start = drainStartedAt[key] ?: return
         if (areInteractiveExampleSubmissionsFullyProcessed(courseSlug, exampleSlug) && drainStartedAt.remove(key) != null) {
-            logger.info { "Drain finished for example $exampleSlug in course $courseSlug after ${(System.currentTimeMillis() - start) / 1000}s." }
+            logger.info { "Drain finished for example $exampleSlug in course $courseSlug after ${(clock.millis() - start) / 1000}s." }
         }
     }
 
     private fun logBusyThrottled(next: SubmissionWithContext) {
-        val now = System.currentTimeMillis()
+        val now = clock.millis()
         if (now - lastBusyLog < busyLogIntervalMillis) return
         lastBusyLog = now
-        val headWaitSeconds = Duration.between(next.submissionReceivedAt, LocalDateTime.now()).seconds
+        val headWaitSeconds = Duration.between(next.submissionReceivedAt, LocalDateTime.now(clock)).seconds
         logger.info { "Queue waiting: ${submissionQueue.size} queued, ${running.size} running, head waits ${headWaitSeconds}s." }
     }
 
