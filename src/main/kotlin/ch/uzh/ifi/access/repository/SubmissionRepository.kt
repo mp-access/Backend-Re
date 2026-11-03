@@ -45,6 +45,17 @@ interface SubmissionRepository : JpaRepository<Submission?, Long?> {
         )
     fun findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(@Param("taskId") taskId: Long, @Param("userId") userId: String): List<Submission>
 
+    /** Creation time of the user's latest submission with [command] for a task, or null if there is none. */
+    @Query(
+        "SELECT MAX(s.createdAt) FROM Submission s " +
+            "WHERE s.evaluation.task.id = :taskId AND s.userId = :userId AND s.command = :command"
+    )
+    fun findLatestCreatedAt(
+        @Param("taskId") taskId: Long,
+        @Param("userId") userId: String,
+        @Param("command") command: Command,
+    ): LocalDateTime?
+
     @Query(
         value = """
         SELECT s FROM Submission s

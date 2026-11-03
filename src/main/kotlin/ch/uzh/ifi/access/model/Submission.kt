@@ -64,6 +64,27 @@ class Submission {
     val isGraded: Boolean
         get() = command!!.isGraded
 
+    /**
+     * An UNMANAGED copy showing [displayedOutput] instead of [output], for display only (see
+     * SubmissionService.getSubmissions). Never save it. Keep in sync when adding fields to this class.
+     */
+    fun copyForDisplay(displayedOutput: String?): Submission = Submission().also { copy ->
+        copy.id = id
+        copy.ordinalNum = ordinalNum
+        copy.userId = userId
+        copy.command = command
+        copy.points = points
+        copy.valid = valid
+        copy.createdAt = createdAt
+        copy.logs = logs
+        copy.output = displayedOutput
+        copy.files = files
+        copy.persistentResultFiles = persistentResultFiles
+        copy.testsPassed = testsPassed
+        copy.embedding = embedding
+        copy.evaluation = evaluation
+    }
+
     @PrePersist
     protected fun onCreate() {
         if (createdAt == null) {

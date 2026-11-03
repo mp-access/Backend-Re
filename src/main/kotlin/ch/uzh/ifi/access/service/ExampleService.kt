@@ -351,11 +351,10 @@ class ExampleService(
                     "Example not published yet"
                 )
             if (submissionDTO.command == Command.GRADE) {
+                // A plain query on purpose: loading the submissions as entities here (inside the transaction of
+                // processSubmission) once caused their display masking to be written back to the database.
                 val lastSubmissionDate =
-                    submissionService.getSubmissions(example.id, submissionDTO.userId)
-                        .filter { it.command == Command.GRADE }
-                        .sortedByDescending { it.createdAt }
-                        .firstOrNull()?.createdAt
+                    submissionRepository.findLatestCreatedAt(example.id!!, submissionDTO.userId!!, Command.GRADE)
                 if (lastSubmissionDate != null && submissionReceivedAt.isBefore(
                         lastSubmissionDate.plusHours(
                             submissionLockDuration

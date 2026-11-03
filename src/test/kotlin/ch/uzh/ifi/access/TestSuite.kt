@@ -3,6 +3,7 @@ package ch.uzh.ifi.access
 import ch.uzh.ifi.access.api.AfterSubmissionTests
 import ch.uzh.ifi.access.api.ManagementAPITests
 import ch.uzh.ifi.access.api.SubmissionTests
+import ch.uzh.ifi.access.example.ExampleSubmissionPersistenceTests
 import ch.uzh.ifi.access.execution.ExecutionServiceTests
 import ch.uzh.ifi.access.execution.DockerPoolServiceTests
 import ch.uzh.ifi.access.execution.TaskLookupCacheTests
@@ -47,6 +48,7 @@ import java.util.concurrent.TimeUnit
     PooledGradingTests::class,
     SubmissionTests::class,
     AfterSubmissionTests::class,
+    ExampleSubmissionPersistenceTests::class,
     RoleServiceTests::class,
     PerformanceTests::class,
 )

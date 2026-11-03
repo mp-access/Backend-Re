@@ -47,28 +47,21 @@ class SubmissionService(
         val isAdmin = roleService.isAdmin(userRoles, courseSlug!!)
 
         val submissions = submissionRepository.findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId, userId)
-        if (isAdmin) {
-            submissions.forEach { submission ->
-                submission.logs?.let { logs ->
-                    if (submission.command == Command.GRADE) {
-                        submission.output = "Logs:\n$logs\n\nHint:\n${submission.output}"
-                    } else {
-                        submission.output = logs
-                    }
-                }
+        // The output is masked for DISPLAY only. The managed entities must never be modified for that: inside a
+        // transaction Hibernate wrote the masked output to the database. Submissions shown with a different output
+        // are therefore returned as unmanaged copies (see Submission.copyForDisplay); all others unchanged.
+        return submissions.map { submission ->
+            val logs = submission.logs ?: return@map submission
+            val displayedOutput = when {
+                isAdmin && submission.command == Command.GRADE -> "Logs:\n$logs\n\nHint:\n${submission.output}"
+                isAdmin -> logs
+                isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive &&
+                    submission.command == Command.GRADE -> ""
+                submission.command != Command.GRADE -> logs
+                else -> return@map submission
             }
-        } else {
-            submissions.forEach { submission ->
-                submission.logs?.let { logs ->
-                    if (isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive && submission.command == Command.GRADE) {
-                        submission.output = ""
-                    } else if (submission.command != Command.GRADE) {
-                        submission.output = logs
-                    }
-                }
-            }
+            submission.copyForDisplay(displayedOutput)
         }
-        return submissions
     }
 
     private fun isExample(task: Task): Boolean {
