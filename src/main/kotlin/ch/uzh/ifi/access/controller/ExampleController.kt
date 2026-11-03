@@ -17,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
 
@@ -130,13 +131,6 @@ class ExampleController(
                 submissionReceivedAt
             ) && !isAdmin && submission.command == Command.GRADE
         ) {
-            // Is this code ever reached?
-            val tmp = exampleService.isSubmittedDuringInteractivePeriod(
-                course,
-                example,
-                submissionReceivedAt
-            )
-            logger.info { "[if-statement reached] Queue engaged: Submitted submission ${submission.command} with following arguments: ${tmp} and Command.Grade=${Command.GRADE}" }
             if (!exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)) {
                 // Backpressure: the example queue is full. Reject instead of silently dropping the submission.
                 throw ResponseStatusException(
@@ -309,15 +303,8 @@ class ExampleController(
     ) {
         exampleQueueService.removeOutdatedSubmissions(course, example)
         embeddingQueueService.removeOutdatedSubmissions(course, example)
-        val maxWaitingTime = LocalDateTime.now().plusSeconds(30)
-        while (LocalDateTime.now() <= maxWaitingTime && !exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(
-                course,
-                example
-            )
-        ) {
-            Thread.sleep(100)
-        }
-        if (LocalDateTime.now() > maxWaitingTime) {
+        // Running gradings cannot be cancelled: wait for them, so the reset below also removes their results.
+        if (!exampleQueueService.awaitIdle(course, example, Duration.ofSeconds(30))) {
             logger.warn { "It is likely that not all submissions of example $example in course $course were deleted after reset." }
         }
         exampleService.resetExampleBySlug(course, example)

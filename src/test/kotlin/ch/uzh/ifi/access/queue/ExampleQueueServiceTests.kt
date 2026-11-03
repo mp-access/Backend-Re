@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.queue
 
+import ch.uzh.ifi.access.config.ExampleQueueProperties
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.Evaluation
 import ch.uzh.ifi.access.model.Submission
@@ -380,6 +381,21 @@ class ExampleQueueServiceTests {
     }
 
     @Test
+    fun `awaitIdle waits for the running submissions of the given example only`() {
+        gate("alice")
+        val queue = startQueue()
+        queue.submit("alice")
+        awaitUntil("alice is running") { queue.isSubmissionCurrentlyProcessed(COURSE, EXAMPLE, "alice") }
+
+        assertTrue(queue.awaitIdle(COURSE, OTHER_EXAMPLE, Duration.ofMillis(50)))
+        assertFalse(queue.awaitIdle(COURSE, EXAMPLE, Duration.ofMillis(200)))
+
+        open("alice")
+        assertTrue(queue.awaitIdle(COURSE, EXAMPLE, Duration.ofMillis(TIMEOUT_MS)))
+        assertTrue("alice" in graded)
+    }
+
+    @Test
     fun `when the queue is full addToQueue reports the rejection`() {
         cpuUsage.set(CPU_BUSY)
         val queue = startQueue(min = 0)
@@ -428,10 +444,14 @@ class ExampleQueueServiceTests {
             meterRegistry = meterRegistry,
             cpuUsageProvider = CpuUsageProvider { cpuUsage.get() },
             clock = clock,
-            cpuThreshold = CPU_THRESHOLD,
-            maxConcurrent = max,
-            minConcurrent = min,
-            drainConcurrent = drain,
+            properties = ExampleQueueProperties(
+                cpuThreshold = CPU_THRESHOLD,
+                maxConcurrentSubmissions = max,
+                minConcurrentSubmissions = min,
+                drainConcurrentSubmissions = drain,
+                capacity = 1000,
+                maxRetries = 2,
+            ),
         ).also {
             it.startQueueProcessor()
             service = it

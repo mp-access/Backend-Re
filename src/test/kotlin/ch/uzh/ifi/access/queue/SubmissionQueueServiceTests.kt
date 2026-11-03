@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.queue
 
+import ch.uzh.ifi.access.config.SubmissionQueueProperties
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
@@ -176,9 +177,12 @@ class SubmissionQueueServiceTests {
     private fun start(capacity: Int = 100, workers: Int = 2, maxRetries: Int = 2): SubmissionQueueService =
         SubmissionQueueService(
             submissionService = submissionService,
-            capacity = capacity,
-            workers = workers,
-            maxRetries = maxRetries,
+            properties = SubmissionQueueProperties(
+                capacity = capacity,
+                workers = workers,
+                maxRetries = maxRetries,
+                requestTimeoutSeconds = 120,
+            ),
             meterRegistry = registry,
         ).also {
             it.start()

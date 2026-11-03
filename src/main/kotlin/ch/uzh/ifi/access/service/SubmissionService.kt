@@ -156,8 +156,9 @@ class SubmissionService(
                 logger?.info {"[SubmissionService.createSubmission] execute in pooled submission"}
                 dockerService.executePooledSubmission(course, submission, task, evaluation)}
             else {
-                // TODO: When does this fallback? If the pooled submission fails...
-                logger?.info {"[SubmissionService.createSubmission] falling back into non-pooled submission" }
+                // Pool disabled (docker.pool.enabled=false): one fresh container per submission. Not a fallback:
+                // the pooled path falls back to one-shot by itself if no container is free within the borrow timeout.
+                logger?.info {"[SubmissionService.createSubmission] pool disabled, using one-shot execution" }
                 dockerService.executeSubmission(course, submission, task, evaluation)}
 
         } catch (e: Exception) {

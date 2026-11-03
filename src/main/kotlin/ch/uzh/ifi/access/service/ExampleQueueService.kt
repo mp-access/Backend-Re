@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.ExampleQueueProperties
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.SubmissionWithContext
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
@@ -12,7 +13,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.time.Clock
@@ -24,13 +24,14 @@ import java.util.concurrent.ConcurrentHashMap
  * Queue for GRADE submissions made during the interactive period of an example, built on [GradingQueue].
  *
  * Dispatch rules ([CpuGatedPolicy] wrapped in a [DrainAwarePolicy]):
- *  - During the interactive period: always at least [minConcurrent] submissions run, regardless of CPU load
- *    (progress guarantee). Above that, up to [maxConcurrent] run while CPU usage is below [cpuThreshold].
+ *  - During the interactive period: always at least min-concurrent-submissions run, regardless of CPU load
+ *    (progress guarantee). Above that, up to max-concurrent-submissions run while CPU usage is below cpu-threshold.
  *  - Drain mode (the example of the queue head is no longer interactive, i.e. end + grace period has passed or the
- *    example was terminated): the CPU gate is ignored and up to [drainConcurrent] submissions run until the queue
+ *    example was terminated): the CPU gate is ignored and up to drain-concurrent-submissions run until the queue
  *    is empty. No new entries arrive after the end, so the queue only shrinks.
  *
- * Failed gradings are retried up to [maxRetries] times, except for 4xx rejections (too late, submission lock, ...).
+ * Failed gradings are retried up to max-retries times, except for 4xx rejections (too late, submission lock, ...).
+ * All settings: [ExampleQueueProperties].
  * When the queue is full, [addToQueue] returns false and the caller rejects the submission.
  */
 @Service
@@ -40,12 +41,7 @@ class ExampleQueueService(
     meterRegistry: MeterRegistry,
     cpuUsageProvider: CpuUsageProvider,
     private val clock: Clock,
-    @Value("\${examples.example-queue.cpu-threshold}") cpuThreshold: Double,
-    @Value("\${examples.example-queue.max-concurrent-submissions}") maxConcurrent: Int,
-    @Value("\${examples.example-queue.min-concurrent-submissions}") minConcurrent: Int,
-    @Value("\${examples.example-queue.drain-concurrent-submissions}") drainConcurrent: Int,
-    @Value("\${examples.example-queue.capacity:1000}") private val capacity: Int = 1000,
-    @Value("\${examples.example-queue.max-retries:2}") maxRetries: Int = 2,
+    private val properties: ExampleQueueProperties,
 ) {
     private val logger = KotlinLogging.logger {}
     private val interactiveCacheMillis = 2_000L
@@ -62,13 +58,18 @@ class ExampleQueueService(
 
     private val queue = GradingQueue<SubmissionWithContext>(
         name = "example_queue",
-        capacity = capacity,
+        capacity = properties.capacity,
         policy = DrainAwarePolicy(
-            normal = CpuGatedPolicy(minConcurrent, maxConcurrent, cpuThreshold, cpuUsageProvider),
-            drainConcurrent = drainConcurrent,
+            normal = CpuGatedPolicy(
+                min = properties.minConcurrentSubmissions,
+                max = properties.maxConcurrentSubmissions,
+                cpuThreshold = properties.cpuThreshold,
+                cpuUsageProvider = cpuUsageProvider,
+            ),
+            drainConcurrent = properties.drainConcurrentSubmissions,
             isDraining = ::isDraining,
         ),
-        retryPolicy = RetryPolicy.skipClientErrors(maxRetries),
+        retryPolicy = RetryPolicy.skipClientErrors(properties.maxRetries),
         meterRegistry = meterRegistry,
         handler = ::grade,
         listener = object : GradingQueueListener<SubmissionWithContext> {
@@ -101,7 +102,7 @@ class ExampleQueueService(
         if (accepted) {
             logger.info { "Submission for user ${submission.userId} added to queue for example $exampleSlug." }
         } else {
-            logger.error { "Example queue full (capacity $capacity) - rejecting submission of user ${submission.userId} for example $exampleSlug." }
+            logger.error { "Example queue full (capacity ${properties.capacity}) - rejecting submission of user ${submission.userId} for example $exampleSlug." }
         }
         return accepted
     }
@@ -118,6 +119,10 @@ class ExampleQueueService(
 
     fun areInteractiveExampleSubmissionsFullyProcessed(courseSlug: String, exampleSlug: String): Boolean =
         queue.isIdle { it.belongsTo(courseSlug, exampleSlug) }
+
+    /** Blocks until no submission of the example is waiting or running, at most [timeout]. Returns whether it became idle. */
+    fun awaitIdle(courseSlug: String, exampleSlug: String, timeout: Duration): Boolean =
+        queue.awaitIdle(timeout) { it.belongsTo(courseSlug, exampleSlug) }
 
     fun isSubmissionInTheQueue(courseSlug: String, exampleSlug: String, userId: String?): Boolean =
         userId != null && getPendingSubmissionFromQueue(courseSlug, exampleSlug, userId) != null

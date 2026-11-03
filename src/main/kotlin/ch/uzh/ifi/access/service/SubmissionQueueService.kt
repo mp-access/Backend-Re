@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.SubmissionQueueProperties
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.queue.FixedPolicy
 import ch.uzh.ifi.access.queue.GradingQueue
@@ -10,7 +11,6 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.server.ResponseStatusException
 import java.util.concurrent.CompletableFuture
@@ -31,27 +31,25 @@ private class QueuedSubmission(
  * Tomcat threads, so the endpoint survives well past the servlet thread limit.
  *
  * Built on [GradingQueue]:
- *  - at most [workers] gradings run in parallel (keep roughly equal to docker.pool.size),
+ *  - at most `workers` gradings run in parallel (keep roughly equal to docker.pool.size),
  *  - BOUNDED on purpose (backpressure): when full, [enqueue] returns null and the caller answers 503,
- *  - a failed grading is retried up to [maxRetries] times, except for 4xx rejections (no attempts left,
+ *  - a failed grading is retried up to `max-retries` times, except for 4xx rejections (no attempts left,
  *    unknown task, ...). Safe because createTaskSubmission is transactional: a failed attempt is rolled
  *    back completely and leaves no submission behind.
  */
 @Service
 class SubmissionQueueService(
     private val submissionService: SubmissionService,
-    @Value("\${submission.queue.capacity:2000}") private val capacity: Int,
-    @Value("\${submission.queue.workers:10}") workers: Int,
-    @Value("\${submission.queue.max-retries:2}") maxRetries: Int,
+    private val properties: SubmissionQueueProperties,
     meterRegistry: MeterRegistry,
 ) {
     private val logger = KotlinLogging.logger {}
 
     private val queue = GradingQueue<QueuedSubmission>(
         name = "submission_queue",
-        capacity = capacity,
-        policy = FixedPolicy(workers),
-        retryPolicy = RetryPolicy.skipClientErrors(maxRetries),
+        capacity = properties.capacity,
+        policy = FixedPolicy(properties.workers),
+        retryPolicy = RetryPolicy.skipClientErrors(properties.maxRetries),
         meterRegistry = meterRegistry,
         handler = ::grade,
         listener = object : GradingQueueListener<QueuedSubmission> {
@@ -93,7 +91,7 @@ class SubmissionQueueService(
     ): CompletableFuture<Unit>? {
         val done = CompletableFuture<Unit>()
         if (!queue.offer(QueuedSubmission(courseSlug, assignmentSlug, taskSlug, submission, done))) {
-            logger.warn { "Submission queue full (capacity $capacity) - rejecting submission for user ${submission.userId}" }
+            logger.warn { "Submission queue full (capacity ${properties.capacity}) - rejecting submission for user ${submission.userId}" }
             return null
         }
         return done

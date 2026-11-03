@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.config.SubmissionQueueProperties
 import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.model.dto.*
@@ -8,7 +9,6 @@ import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.core.env.Environment
@@ -89,7 +89,7 @@ class CourseController(
     private val visitQueueService: VisitQueueService,
     private val submissionQueueService: SubmissionQueueService,
     private val env: Environment,
-    @Value("\${submission.queue.requestTimeoutSeconds:120}") private val requestTimeoutSeconds: Long,
+    private val submissionQueueProperties: SubmissionQueueProperties,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -171,7 +171,7 @@ class CourseController(
         // Non-blocking: drop the submission on the queue and free the request thread. A worker grades
         // it and completes the DeferredResult, at which point Spring writes the response -- the same
         // "empty 200 when grading is done" contract as before, minus one parked Tomcat thread per call.
-        val deferred = DeferredResult<ResponseEntity<Void>>(requestTimeoutSeconds * 1000)
+        val deferred = DeferredResult<ResponseEntity<Void>>(submissionQueueProperties.requestTimeoutSeconds * 1000)
         val future = submissionQueueService.enqueue(course, assignment, task, submission)
         if (future == null) {
             // Backpressure: the queue is full -- shed load politely instead of accepting unbounded work.
