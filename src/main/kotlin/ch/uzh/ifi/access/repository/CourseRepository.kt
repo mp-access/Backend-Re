@@ -100,9 +100,16 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     )
     fun getParticipantsWithPoints(courseSlug: String, userIds: Array<String>): List<UserPointsProjection>
 
-    // Bypasses role restrictions, use only if preventing leaks by other means.
+    // The following three queries bypass role restrictions, use only if preventing leaks by other means.
     // Necessary for retrieving user roles upon first login.
-    fun findAllUnrestrictedBy(): List<Course>
+    @Query("SELECT DISTINCT c.slug FROM Course c JOIN c.registeredStudents s WHERE s IN :registrationIDs")
+    fun findSlugsWithStudentsIn(@Param("registrationIDs") registrationIDs: Collection<String>): Set<String>
+
+    @Query("SELECT DISTINCT c.slug FROM Course c JOIN c.assistants a WHERE a IN :registrationIDs")
+    fun findSlugsWithAssistantsIn(@Param("registrationIDs") registrationIDs: Collection<String>): Set<String>
+
+    @Query("SELECT DISTINCT c.slug FROM Course c JOIN c.supervisors s WHERE s IN :registrationIDs")
+    fun findSlugsWithSupervisorsIn(@Param("registrationIDs") registrationIDs: Collection<String>): Set<String>
 
     @Query(
         nativeQuery = true,

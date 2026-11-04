@@ -72,7 +72,7 @@ class RoleAssignmentService(
                     return
                 }
                 // get all possible names that this user might be identified as
-                val searchNames = userIdentity.getRegistrationIDCandidates(user)
+                val searchNames = userIdentity.registrationIDCandidatesOf(user)
                 evictLookupsFor(searchNames)
                 // check all courses if the user has been registered under one of the possible identifiers
                 val roles = authorization.getUserRoles(searchNames)

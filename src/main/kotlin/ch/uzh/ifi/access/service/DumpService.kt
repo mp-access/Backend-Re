@@ -203,7 +203,7 @@ class DumpService(
     }
 
     private fun writeSubmissions(zip: ZipOutputStream, course: Course, assignments: List<AssignmentWorkspace>) {
-        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.resolveUserId(it) }
 
         course.registeredStudents.forEach { registrationId ->
             val participantDir = "participants/${registrationId}"

@@ -20,7 +20,7 @@ class CacheInitService(
             course.registeredStudents.forEach { student ->
                 userIdentityService.findUserByAllCriteria(student)?.let {
                     userIdentityService.getRegistrationIDCandidates(it.username)
-                    userIdentityService.getUserId(it.username)
+                    userIdentityService.resolveUserId(it.username)
                 }
             }
         }
@@ -35,7 +35,7 @@ class CacheInitService(
             it?.registeredStudents?.map { registrationId ->
                 userIdentityService.findUserByAllCriteria(registrationId)?.let { user ->
                     val names = userIdentityService.getRegistrationIDCandidates(user.username).toMutableList()
-                    val userId = userIdentityService.getUserId(user.username)
+                    val userId = userIdentityService.resolveUserId(user.username)
                     if (userId != null) {
                         names.remove(userId)
                         val res = userIdUpdateService.updateID(names, userId)

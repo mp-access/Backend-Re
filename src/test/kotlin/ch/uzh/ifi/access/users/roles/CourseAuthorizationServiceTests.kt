@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.service.UserIdentityService
 import ch.uzh.ifi.access.service.UserNotFoundException
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -29,25 +30,21 @@ class CourseAuthorizationServiceTests {
 
     @Test
     fun `User roles are derived from the course registrations of all given names`() {
-        every { courseRepository.findAllUnrestrictedBy() } returns listOf(
-            course("c1", students = setOf("a@uzh.ch"), supervisors = setOf("b@uzh.ch")),
-            course("c2", assistants = setOf("a@uzh.ch")),
-            course("c3", students = setOf("someone-else@uzh.ch")),
-        )
+        val names = listOf("a@uzh.ch", "b@uzh.ch")
+        every { courseRepository.findSlugsWithStudentsIn(names) } returns setOf("c2", "c1")
+        every { courseRepository.findSlugsWithAssistantsIn(names) } returns setOf("c3")
+        every { courseRepository.findSlugsWithSupervisorsIn(names) } returns emptySet()
 
         assertEquals(
-            setOf("c1-student", "c1-supervisor", "c2-assistant"),
-            authorization.getUserRoles(listOf("a@uzh.ch", "b@uzh.ch")).toSet()
+            listOf("c1-student", "c2-student", "c3-assistant"),
+            authorization.getUserRoles(names)
         )
     }
 
     @Test
-    fun `Courses without slug never produce global roles`() {
-        every { courseRepository.findAllUnrestrictedBy() } returns listOf(
-            course(null, supervisors = setOf("a@uzh.ch")),
-        )
-
-        assertEquals(emptyList<String>(), authorization.getUserRoles(listOf("a@uzh.ch")))
+    fun `User roles of no names are empty without querying the database`() {
+        assertEquals(emptyList<String>(), authorization.getUserRoles(emptyList()))
+        verify(exactly = 0) { courseRepository.findSlugsWithStudentsIn(any()) }
     }
 
     @Test

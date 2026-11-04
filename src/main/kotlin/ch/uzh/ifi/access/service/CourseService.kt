@@ -74,7 +74,7 @@ class CourseService(
         }
         val users = names.associateWith { userIdentityService.findUserByAllCriteria(it) }
         val registrationIDs = course.registeredStudents.associateWith { userIdentityService.getRegistrationIDCandidates(it) }
-        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.resolveUserId(it) }
         val hasPoints =
             courseRepository.getParticipantsWithPoints(courseSlug, userIds.values.filterNotNull().toTypedArray())
                 .filter { it.userId != null && it.totalPoints != null }
@@ -101,7 +101,7 @@ class CourseService(
 
     fun getStudentsWithAssignmentPoints(courseSlug: String): MutableList<List<String?>> {
         val course = getCourseBySlug(courseSlug)
-        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.resolveUserId(it) }
         val userIdsInverse = userIds.entries.associate { (registrationId, userId) -> userId to registrationId }
         val userNames = course.registeredStudents.associateWith { userIdentityService.findUserByAllCriteria(it)?.username }
         val pointsData = courseRepository.getParticipantsAssignmentPoints(
@@ -194,10 +194,10 @@ class CourseService(
         taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
 
     fun getRemainingAttempts(taskId: Long, maxAttempts: Int): Int =
-        evaluationService.getEvaluation(taskId, userIdentityService.getUserId())?.remainingAttempts ?: maxAttempts
+        evaluationService.getEvaluation(taskId, userIdentityService.getCurrentUserId())?.remainingAttempts ?: maxAttempts
 
     fun getNextAttemptAt(taskId: Long, userId: String?): LocalDateTime? {
-        val uid = userId ?: userIdentityService.getUserId()
+        val uid = userId ?: userIdentityService.getCurrentUserId()
         val task = getTaskById(taskId)
         val courseSlug = getCourseSlugByTask(task)
         val taskSlug = task.slug!!
@@ -216,18 +216,18 @@ class CourseService(
         getTaskById(taskId).assignment?.end
 
     fun calculateTaskPoints(taskId: Long, userId: String?): Double {
-        val id = userId ?: userIdentityService.getUserId() ?: return 0.0
+        val id = userId ?: userIdentityService.getCurrentUserId() ?: return 0.0
         return pointsService.calculateTaskPoints(taskId, id)
     }
 
 
     fun calculateAssignmentPoints(tasks: List<Task>): Double {
-        val userId = userIdentityService.getUserId() ?: return 0.0
+        val userId = userIdentityService.getCurrentUserId() ?: return 0.0
         return tasks.sumOf { pointsService.calculateTaskPoints(it.id, userId) }
     }
 
     fun calculateCoursePoints(slug: String): Double {
-        val userId = userIdentityService.getUserId() ?: return 0.0
+        val userId = userIdentityService.getCurrentUserId() ?: return 0.0
         return proxy.calculateCoursePoints(slug, userId)
     }
 

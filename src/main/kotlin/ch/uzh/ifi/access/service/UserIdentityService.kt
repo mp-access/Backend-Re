@@ -30,7 +30,7 @@ class UserIdentityService(
     }
 
     /** All names this user might have been registered under in a course. */
-    fun getRegistrationIDCandidates(user: UserRepresentation): List<String> {
+    fun registrationIDCandidatesOf(user: UserRepresentation): List<String> {
         return buildSet {
             user.username?.let { add(it) }
             user.email?.let { add(it) }
@@ -43,15 +43,16 @@ class UserIdentityService(
     @Cacheable(RoleCaches.REGISTRATION_ID_CANDIDATES, key = "#registrationID")
     fun getRegistrationIDCandidates(registrationID: String): List<String> {
         val user = userDirectory.findUserByAllCriteria(registrationID) ?: return emptyList()
-        return getRegistrationIDCandidates(user)
+        return registrationIDCandidatesOf(user)
     }
 
-    fun getUserId(): String? {
-        return getUserId(getCurrentUsername())
+    /** The userId of the current user. Not cached itself, but the underlying Keycloak lookup is. */
+    fun getCurrentUserId(): String? {
+        return resolveUserId(getCurrentUsername())
     }
 
     @Cacheable(RoleCaches.USER_ID, key = "#registrationID")
-    fun getUserId(registrationID: String): String? {
+    fun resolveUserId(registrationID: String): String? {
         val user = userDirectory.findUserByAllCriteria(registrationID) ?: return null
         // users logging in via eduID have a permanent unique ID, others (e.g., test users) are identified by username
         return user.attributes?.get(KeycloakAttributes.SWISS_EDU_PERSON_UNIQUE_ID)?.firstOrNull() ?: user.username

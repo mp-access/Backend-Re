@@ -6,11 +6,10 @@ package ch.uzh.ifi.access.service
  */
 object RoleCaches {
     const val FIND_USER = "KeycloakUserDirectory.findUserByAllCriteria"
-    const val USER_RESOURCE = "KeycloakUserDirectory.getUserResourceById"
     const val EFFECTIVE_ROLES = "KeycloakUserDirectory.getEffectiveRealmRoleNames"
     const val REGISTRATION_ID_CANDIDATES = "UserIdentityService.getRegistrationIDCandidates"
-    const val USER_ID = "UserIdentityService.getUserId"
+    const val USER_ID = "UserIdentityService.resolveUserId"
     const val USER_ROLES = "CourseAuthorizationService.getUserRoles"
 
-    val ALL = listOf(FIND_USER, USER_RESOURCE, EFFECTIVE_ROLES, REGISTRATION_ID_CANDIDATES, USER_ID, USER_ROLES)
+    val ALL = listOf(FIND_USER, EFFECTIVE_ROLES, REGISTRATION_ID_CANDIDATES, USER_ID, USER_ROLES)
 }

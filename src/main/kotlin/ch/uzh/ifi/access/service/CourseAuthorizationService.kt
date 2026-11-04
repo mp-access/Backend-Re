@@ -1,9 +1,7 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.constants.Role
 import ch.uzh.ifi.access.repository.CourseRepository
-import jakarta.transaction.Transactional
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 
@@ -19,18 +17,13 @@ class CourseAuthorizationService(
 
     /**
      * Course role names (e.g., "course-name-student") the given registrationIDs are registered for,
-     * according to the registrations stored in the Course entities.
+     * according to the registrations stored in the Course entities. Each role is listed once.
      */
-    @Transactional
     @Cacheable(RoleCaches.USER_ROLES, key = "T(java.lang.String).join(',', #usernames)")
     fun getUserRoles(usernames: List<String>): List<String> {
-        return courseRepository.findAllUnrestrictedBy().flatMap { course ->
-            val slug = course.slug ?: return@flatMap emptyList()
-            usernames.flatMap { username ->
-                Role.entries
-                    .filter { role -> username in course.registrationsFor(role) }
-                    .map { role -> role.withCourse(slug) }
-            }
+        if (usernames.isEmpty()) return emptyList()
+        return Role.entries.flatMap { role ->
+            courseSlugsWith(role, usernames).sorted().map { slug -> role.withCourse(slug) }
         }
     }
 
@@ -48,9 +41,9 @@ class CourseAuthorizationService(
         return Role.SUPERVISOR.withCourse(courseSlug) in roles || Role.SUPERVISOR.jsonName in roles
     }
 
-    private fun Course.registrationsFor(role: Role): Set<String> = when (role) {
-        Role.STUDENT -> registeredStudents
-        Role.ASSISTANT -> assistants
-        Role.SUPERVISOR -> supervisors
+    private fun courseSlugsWith(role: Role, registrationIDs: List<String>): Set<String> = when (role) {
+        Role.STUDENT -> courseRepository.findSlugsWithStudentsIn(registrationIDs)
+        Role.ASSISTANT -> courseRepository.findSlugsWithAssistantsIn(registrationIDs)
+        Role.SUPERVISOR -> courseRepository.findSlugsWithSupervisorsIn(registrationIDs)
     }
 }

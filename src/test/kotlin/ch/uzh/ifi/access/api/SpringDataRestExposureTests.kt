@@ -17,7 +17,7 @@ class SpringDataRestExposureTests(@Autowired val mvc: MockMvc) : BaseTest() {
     )
     fun `Repository endpoints are not exported`() {
         listOf(
-            "/courses/search/findAllUnrestrictedBy",
+            "/courses/search/findSlugsWithStudentsIn",
             "/submissions",
             "/evaluations",
             "/tasks",

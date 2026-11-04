@@ -40,7 +40,7 @@ class UserIdentityServiceTests {
 
         assertEquals(
             listOf("student@uzh.ch", "f.l@uzh.ch", "123@eduid.ch"),
-            identity.getRegistrationIDCandidates(user)
+            identity.registrationIDCandidatesOf(user)
         )
     }
 
@@ -56,14 +56,14 @@ class UserIdentityServiceTests {
             attributes = mapOf(KeycloakAttributes.SWISS_EDU_PERSON_UNIQUE_ID to listOf("123@eduid.ch"))
         )
 
-        assertEquals("123@eduid.ch", identity.getUserId("student@uzh.ch"))
+        assertEquals("123@eduid.ch", identity.resolveUserId("student@uzh.ch"))
     }
 
     @Test
     fun `User ID falls back to the username`() {
         every { directory.findUserByAllCriteria("test@uzh.ch") } returns keycloakUser("test@uzh.ch")
 
-        assertEquals("test@uzh.ch", identity.getUserId("test@uzh.ch"))
+        assertEquals("test@uzh.ch", identity.resolveUserId("test@uzh.ch"))
     }
 
     @Test
@@ -73,12 +73,12 @@ class UserIdentityServiceTests {
             attributes = mapOf(KeycloakAttributes.SWISS_EDU_PERSON_UNIQUE_ID to emptyList())
         )
 
-        assertEquals("test@uzh.ch", identity.getUserId("test@uzh.ch"))
+        assertEquals("test@uzh.ch", identity.resolveUserId("test@uzh.ch"))
     }
 
     @Test
     fun `User ID of an unknown user is null`() {
-        assertNull(identity.getUserId("unknown@uzh.ch"))
+        assertNull(identity.resolveUserId("unknown@uzh.ch"))
     }
 
     @Test
@@ -87,6 +87,6 @@ class UserIdentityServiceTests {
         every { directory.findUserByAllCriteria("test@uzh.ch") } returns keycloakUser("test@uzh.ch")
 
         assertEquals("test@uzh.ch", identity.getCurrentUsername())
-        assertEquals("test@uzh.ch", identity.getUserId())
+        assertEquals("test@uzh.ch", identity.getCurrentUserId())
     }
 }

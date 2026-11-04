@@ -125,7 +125,7 @@ class ExampleController(
         authentication: Authentication
     ) {
         val submissionReceivedAt = LocalDateTime.now()
-        val userId = userIdentityService.getUserId(authentication.name)!!
+        val userId = userIdentityService.resolveUserId(authentication.name)!!
         submission.userId = userId
         val usernames = userIdentityService.getRegistrationIDCandidates(userId)
         val userRoles = courseAuthorizationService.getUserRoles(usernames)
@@ -166,11 +166,11 @@ class ExampleController(
         @PathVariable example: String,
         @PathVariable user: String
     ): List<SubmissionDTO> {
-        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, userIdentityService.getUserId(user)!!)
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, userIdentityService.resolveUserId(user)!!)
         if (pendingSubmission != null) {
             return listOf(pendingSubmission)
         }
-        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, userIdentityService.getUserId(user)!!)
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, userIdentityService.resolveUserId(user)!!)
         if (runningSubmission != null) {
             return listOf(runningSubmission)
         }

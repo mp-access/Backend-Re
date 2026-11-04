@@ -22,7 +22,7 @@ class KeycloakUserDirectory(
 
     private val logger = KotlinLogging.logger {}
 
-    @Cacheable(RoleCaches.USER_RESOURCE, key = "#userId")
+    /** A lightweight client proxy for the account, so it is not worth caching. */
     fun getUserResourceById(userId: String): UserResource {
         return accessRealm.users().get(userId)
     }

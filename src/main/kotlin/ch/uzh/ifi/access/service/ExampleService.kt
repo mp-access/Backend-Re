@@ -47,7 +47,7 @@ class ExampleService(
 
     fun getExample(courseSlug: String, exampleSlug: String, user: String): TaskWorkspace {
         val workspace = exampleRepository.findByCourse_SlugAndSlug(courseSlug, exampleSlug) ?: notFound(exampleSlug)
-        workspace.setUserId(userIdentityService.getUserId(user))
+        workspace.setUserId(userIdentityService.resolveUserId(user))
         return workspace
     }
 
