@@ -9,7 +9,7 @@ import java.util.concurrent.Executors
 
 @Service
 class PointDistributionUpdater(
-    private val exampleService: ExampleService
+    private val exampleStatistics: ExampleStatisticsService
 ) {
     private val logger = KotlinLogging.logger {}
     private val executor: ExecutorService = Executors.newFixedThreadPool(2)
@@ -20,7 +20,7 @@ class PointDistributionUpdater(
         if (!active.add(key)) return // already running for this example
         executor.submit {
             try {
-                exampleService.sendPointDistributionUpdates(courseSlug, exampleSlug)
+                exampleStatistics.sendPointDistributionUpdates(courseSlug, exampleSlug)
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
             } catch (e: Exception) {

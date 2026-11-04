@@ -84,7 +84,8 @@ class WebhooksController(
 class CourseController(
     private val courseService: CourseService,
     private val dumpService: DumpService,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
+    private val roleAssignmentService: RoleAssignmentService,
     private val emitterService: EmitterService,
     private val visitQueueService: VisitQueueService,
     private val submissionQueueService: SubmissionQueueService,
@@ -131,7 +132,7 @@ class CourseController(
 
     @GetMapping("")
     fun getCourses(): List<CourseOverview> {
-        val userId = roleService.getUserId()
+        val userId = userIdentityService.getUserId()
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Cannot resolve user ID")
         return courseService.getCoursesOverview(userId)
     }
@@ -165,7 +166,7 @@ class CourseController(
         @RequestBody submission: SubmissionDTO,
         authentication: Authentication,
     ): DeferredResult<ResponseEntity<Void>> {
-        val userId = roleService.getUserId(authentication.name)
+        val userId = userIdentityService.getUserId(authentication.name)
         submission.userId = userId
 
         // Non-blocking: drop the submission on the queue and free the request thread. A worker grades
@@ -276,7 +277,7 @@ class CourseController(
         val (remove, add) = courseService.updateCourseRegistration(course, registrationIDs, role)
         // Grants the correct role to any existing users in usernames.
         // This is one of two ways a keycloak user can receive/lose a role, the other way is on first login.
-        roleService.updateRoleUsers(course, remove, add, role)
+        roleAssignmentService.updateRoleUsers(course, remove, add, role)
     }
 
     @PostMapping("/{course}/supervisors")
@@ -301,7 +302,7 @@ class CourseController(
         updateRoles(course, registrationIDs, Role.STUDENT)
 
     private fun resolveUserId(username: String): String =
-        roleService.getUserId(username)
+        userIdentityService.getUserId(username)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $username")
 
     @GetMapping("/{course}/participants/{username}")

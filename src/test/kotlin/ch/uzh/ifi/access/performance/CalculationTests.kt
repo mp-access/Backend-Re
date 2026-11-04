@@ -159,7 +159,7 @@ class CalculationTests(
 
     // Endpoint: GET /courses -> CourseController.getCourses
     //   Returns List<CourseOverview> = the courses the CURRENTLY AUTHENTICATED user is enrolled in
-    //   (resolves the caller via roleService.getUserId(); no username in the URL).
+    //   (resolves the caller via userIdentityService.getUserId(); no username in the URL).
     //   Auth: the endpoint answers "MY courses", so the request must carry a logged-in student,
     // Frontend: student dashboard (list of my courses). Pattern: benchmarkRepeated (per-course, N reps).
     @Test

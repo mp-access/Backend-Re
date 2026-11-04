@@ -11,10 +11,14 @@ import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.InteractiveSubmissionStats
 import ch.uzh.ifi.access.repository.SubmissionRepository
-import ch.uzh.ifi.access.service.CourseService
 import ch.uzh.ifi.access.service.EmitterService
 import ch.uzh.ifi.access.service.ExampleService
-import ch.uzh.ifi.access.service.RoleService
+import ch.uzh.ifi.access.service.ExampleStatisticsService
+import ch.uzh.ifi.access.service.ExampleSubmissionService
+import ch.uzh.ifi.access.service.ExampleVisibilityService
+import ch.uzh.ifi.access.service.InteractiveSubmissionCounter
+import ch.uzh.ifi.access.service.CourseAuthorizationService
+import ch.uzh.ifi.access.service.UserIdentityService
 import ch.uzh.ifi.access.service.SubmissionService
 import ch.uzh.ifi.access.service.VisitQueueService
 import io.mockk.every
@@ -28,10 +32,10 @@ import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
 /**
- * Characterization tests for [ExampleService] (refactoring plan ExampleService/SubmissionService, step 0).
- *
- * They pin down the CURRENT rules for example submissions and the numbers shown to supervisors, so the
- * class can be split up without changing them unnoticed. Pure unit tests with mocked collaborators.
+ * Tests for the example services: the rules for example submissions ([ExampleSubmissionService]) and the numbers
+ * shown to supervisors ([ExampleStatisticsService]). Written as characterization tests before ExampleService was
+ * split up (refactoring plan ExampleService/SubmissionService, step 0) and kept unchanged through the split.
+ * Pure unit tests: real services, mocked repositories and collaborators.
  *
  * The lookup of a student's earlier submissions is stubbed in one place, [previousSubmissions].
  */
@@ -47,8 +51,9 @@ class ExampleServiceTests {
     }
 
     private val submissionService = mockk<SubmissionService>()
-    private val roleService = mockk<RoleService>()
-    private val courseService = mockk<CourseService>()
+    private val userIdentityService = mockk<UserIdentityService>()
+    private val courseAuthorizationService = mockk<CourseAuthorizationService>()
+    private val courseRepository = mockk<CourseRepository>()
     private val emitterService = mockk<EmitterService>(relaxed = true)
     private val exampleRepository = mockk<ExampleRepository>()
     private val submissionRepository = mockk<SubmissionRepository>()
@@ -65,27 +70,51 @@ class ExampleServiceTests {
         testNames = mutableListOf("t1", "t2", "t3")
     }
 
-    private val service = ExampleService(
-        submissionService = submissionService,
-        roleService = roleService,
-        courseService = courseService,
-        emitterService = emitterService,
+    private val counter = InteractiveSubmissionCounter()
+
+    private val exampleService = ExampleService(
+        userIdentityService = userIdentityService,
+        courseAuthorizationService = courseAuthorizationService,
         exampleRepository = exampleRepository,
         evaluationRepository = mockk<EvaluationRepository>(relaxed = true),
-        submissionRepository = submissionRepository,
-        courseRepository = mockk<CourseRepository>(relaxed = true),
-        visitQueueService = visitQueueService,
-        proxy = mockk<ExampleService>(relaxed = true),
+        courseRepository = courseRepository,
+        visibility = mockk<ExampleVisibilityService>(relaxed = true),
+        submissionCounter = counter,
         gracePeriod = GRACE_SECONDS,
     )
 
+    private val statistics = ExampleStatisticsService(
+        exampleService = exampleService,
+        exampleRepository = exampleRepository,
+        submissionRepository = submissionRepository,
+        courseRepository = courseRepository,
+        visitQueueService = visitQueueService,
+        emitterService = emitterService,
+        submissionCounter = counter,
+        gracePeriod = GRACE_SECONDS,
+    )
+
+    private fun newExampleSubmissionService(lockHours: Long = 2) = ExampleSubmissionService(
+        exampleService = exampleService,
+        submissionService = submissionService,
+        userIdentityService = userIdentityService,
+        courseAuthorizationService = courseAuthorizationService,
+        submissionRepository = submissionRepository,
+        emitterService = emitterService,
+        statistics = statistics,
+        gracePeriod = GRACE_SECONDS,
+        submissionLockHours = lockHours,
+    )
+
+    private val submissions = newExampleSubmissionService()
+
     init {
         every { exampleRepository.getByCourse_SlugAndSlug(COURSE, EXAMPLE) } answers { example }
-        every { roleService.getRegistrationIDCandidates(any<String>()) } returns listOf(USER)
-        every { roleService.getUserRoles(any()) } returns emptyList()
-        every { roleService.isAdmin(any(), any()) } answers { admin }
+        every { userIdentityService.getRegistrationIDCandidates(any<String>()) } returns listOf(USER)
+        every { courseAuthorizationService.getUserRoles(any()) } returns emptyList()
+        every { courseAuthorizationService.isAdmin(any(), any()) } answers { admin }
         previousSubmissions()
-        every { submissionService.createSubmission(any(), any(), any(), any(), any(), any()) } answers {
+        every { submissionService.createSubmission(any(), any(), any(), any(), any()) } answers {
             Submission().apply {
                 id = 42L
                 userId = USER
@@ -145,6 +174,15 @@ class ExampleServiceTests {
     }
 
     @Test
+    fun `the lock duration is configurable`() {
+        val threeHours = newExampleSubmissionService(lockHours = 3)
+        previous = listOf(earlier(Command.GRADE, START))
+        assertRejected("wait for 3 hours") {
+            threeHours.createExampleSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusHours(2).plusMinutes(30))
+        }
+    }
+
+    @Test
     fun `a GRADE exactly two hours after the previous GRADE is accepted`() {
         previous = listOf(earlier(Command.GRADE, START))
         assertAccepted { submit(Command.GRADE, START.plusHours(2)) }
@@ -192,15 +230,28 @@ class ExampleServiceTests {
 
     @Test
     fun `a student's GRADE is pushed to the supervisors`() {
-        service.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10))
+        submissions.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10))
+        verify(exactly = 1) { emitterService.sendPayload(EmitterType.SUPERVISOR, COURSE, "student-submission", any()) }
+    }
+
+    @Test
+    fun `the roles of the student are resolved only once per submission`() {
+        submissions.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10))
+        verify(exactly = 1) { courseAuthorizationService.getUserRoles(any()) }
+    }
+
+    @Test
+    fun `roles passed by the caller are not resolved again`() {
+        submissions.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10), isAdmin = false)
+        verify(exactly = 0) { courseAuthorizationService.getUserRoles(any()) }
         verify(exactly = 1) { emitterService.sendPayload(EmitterType.SUPERVISOR, COURSE, "student-submission", any()) }
     }
 
     @Test
     fun `RUN submissions and admin submissions are not pushed to the supervisors`() {
-        service.processSubmission(COURSE, EXAMPLE, dto(Command.RUN), START.plusMinutes(10))
+        submissions.processSubmission(COURSE, EXAMPLE, dto(Command.RUN), START.plusMinutes(10))
         admin = true
-        service.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10))
+        submissions.processSubmission(COURSE, EXAMPLE, dto(Command.GRADE), START.plusMinutes(10))
         verify(exactly = 0) { emitterService.sendPayload(any(), any(), "student-submission", any()) }
     }
 
@@ -212,7 +263,7 @@ class ExampleServiceTests {
     fun `the point distribution has one bin per test case and ignores unprocessed submissions`() {
         gradedSubmissions(0.0, 0.2, 0.5, 1.0, 1.0, unprocessed = 2)
 
-        val bins = service.computePointDistribution(COURSE, EXAMPLE).pointDistribution
+        val bins = statistics.computePointDistribution(COURSE, EXAMPLE).pointDistribution
 
         assertEquals(3, bins.size)
         assertEquals(listOf(0.0, 0.33, 0.67), bins.map { it["lowerBoundary"] })
@@ -221,11 +272,19 @@ class ExampleServiceTests {
     }
 
     @Test
+    fun `an example without test cases has an empty point distribution`() {
+        example.testNames = mutableListOf()
+        gradedSubmissions(0.0, 1.0)
+
+        assertEquals(0, statistics.computePointDistribution(COURSE, EXAMPLE).pointDistribution.size)
+    }
+
+    @Test
     fun `more than ten test cases are grouped into ten bins`() {
         example.testNames = MutableList(12) { "t$it" }
         gradedSubmissions(0.05, 0.95)
 
-        val bins = service.computePointDistribution(COURSE, EXAMPLE).pointDistribution
+        val bins = statistics.computePointDistribution(COURSE, EXAMPLE).pointDistribution
 
         assertEquals(10, bins.size)
         assertEquals(1.0, bins.first()["numberOfSubmissions"])
@@ -244,9 +303,9 @@ class ExampleServiceTests {
             stats("[]", null, hasEmbedding = false), // received, not graded yet
             stats(null, null, hasEmbedding = false),
         )
-        repeat(5) { service.increaseInteractiveSubmissionCount(COURSE, EXAMPLE) }
+        repeat(5) { counter.increase(COURSE, EXAMPLE) }
 
-        val info = service.computeExampleInformation(COURSE, EXAMPLE)
+        val info = statistics.computeExampleInformation(COURSE, EXAMPLE)
 
         assertEquals(7, info.participantsOnline)
         assertEquals(4L, info.totalParticipants)
@@ -262,7 +321,7 @@ class ExampleServiceTests {
         // e.g. after a restart: the in-memory counter starts at 0, the database still has the gradings
         stubInformationSources(stats("[1,1,1]", 1.0, false), stats("[0,0,0]", 0.0, false))
 
-        val info = service.computeExampleInformation(COURSE, EXAMPLE)
+        val info = statistics.computeExampleInformation(COURSE, EXAMPLE)
 
         assertEquals(2, info.numberOfReceivedSubmissions)
         assertEquals(2, info.numberOfProcessedSubmissions)
@@ -272,7 +331,7 @@ class ExampleServiceTests {
     fun `without processed submissions the rates and average are zero`() {
         stubInformationSources()
 
-        val info = service.computeExampleInformation(COURSE, EXAMPLE)
+        val info = statistics.computeExampleInformation(COURSE, EXAMPLE)
 
         assertEquals(mapOf("t1" to 0.0, "t2" to 0.0, "t3" to 0.0), info.passRatePerTestCase)
         assertEquals(0.0, info.avgPoints)
@@ -285,7 +344,7 @@ class ExampleServiceTests {
     private fun dto(command: Command) = SubmissionDTO(userId = USER, command = command)
 
     private fun submit(command: Command, at: LocalDateTime) =
-        service.createExampleSubmission(COURSE, EXAMPLE, dto(command), at)
+        submissions.createExampleSubmission(COURSE, EXAMPLE, dto(command), at)
 
     private fun earlier(command: Command, at: LocalDateTime) = Submission().apply {
         this.command = command
@@ -295,14 +354,14 @@ class ExampleServiceTests {
 
     private fun assertAccepted(times: Int = 1, block: () -> Unit) {
         block()
-        verify(exactly = times) { submissionService.createSubmission(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = times) { submissionService.createSubmission(any(), any(), any(), any(), any()) }
     }
 
     private fun assertRejected(reasonPart: String, block: () -> Unit) {
         val error = assertThrows(ResponseStatusException::class.java) { block() }
         assertEquals(400, error.statusCode.value())
         assertTrue(error.reason!!.contains(reasonPart), "unexpected reason: ${error.reason}")
-        verify(exactly = 0) { submissionService.createSubmission(any(), any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { submissionService.createSubmission(any(), any(), any(), any(), any()) }
     }
 
     private fun gradedSubmissions(vararg points: Double, unprocessed: Int = 0) {
@@ -315,7 +374,7 @@ class ExampleServiceTests {
 
     private fun stubInformationSources(vararg rows: InteractiveSubmissionStats) {
         every { visitQueueService.getRecentlyActiveCount(COURSE) } returns 7
-        every { courseService.getCourseBySlug(COURSE) } returns Course().apply {
+        every { courseRepository.getBySlug(COURSE) } returns Course().apply {
             registeredStudents = mutableSetOf("a", "b", "c", "d")
         }
         every {

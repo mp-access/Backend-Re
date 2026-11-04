@@ -50,7 +50,7 @@ class SubmissionQueueServiceTests {
     private var service: SubmissionQueueService? = null
 
     init {
-        every { submissionService.createTaskSubmission(any(), any(), any(), any(), any()) } answers {
+        every { submissionService.createTaskSubmission(any(), any(), any(), any()) } answers {
             val user = arg<SubmissionDTO>(3).userId!!
             calls.add(user)
             val now = inParallel.incrementAndGet()
@@ -77,7 +77,7 @@ class SubmissionQueueServiceTests {
 
         future.get(TIMEOUT_MS, TimeUnit.MILLISECONDS)
         verify(exactly = 1) {
-            submissionService.createTaskSubmission("course", "assignment", "task", match { it.userId == "alice" }, any())
+            submissionService.createTaskSubmission("course", "assignment", "task", match { it.userId == "alice" })
         }
     }
 

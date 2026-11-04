@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.config
 
 import ch.uzh.ifi.access.service.CacheInitService
+import ch.uzh.ifi.access.service.RoleCaches
 import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.EnableCaching
@@ -14,13 +15,7 @@ import org.springframework.stereotype.Component
 @EnableCaching
 class CacheConfig {
     companion object {
-        val PERMANENT_CACHES = listOf(
-            "RoleService.getRegistrationIDCandidates",
-            "RoleService.findUserByAllCriteria",
-            "RoleService.getUserResourceById",
-            "RoleService.getUserId",
-            "RoleService.isSupervisor",
-            "RoleService.getUserRoles",
+        val PERMANENT_CACHES = RoleCaches.ALL + listOf(
             "TaskLookupService.resolveTaskId"
         )
 

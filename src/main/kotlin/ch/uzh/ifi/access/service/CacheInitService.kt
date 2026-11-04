@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service
 class CacheInitService(
     private val courseRepository: CourseRepository,
     // private val userIdUpdateService: UserIdUpdateService,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
 ) {
 
     // private val logger = KotlinLogging.logger {}
@@ -18,9 +18,9 @@ class CacheInitService(
     fun initCache() {
         courseRepository.findAll().filterNotNull().forEach { course ->
             course.registeredStudents.forEach { student ->
-                roleService.findUserByAllCriteria(student)?.let {
-                    roleService.getRegistrationIDCandidates(it.username)
-                    roleService.getUserId(it.username)
+                userIdentityService.findUserByAllCriteria(student)?.let {
+                    userIdentityService.getRegistrationIDCandidates(it.username)
+                    userIdentityService.getUserId(it.username)
                 }
             }
         }
@@ -33,9 +33,9 @@ class CacheInitService(
             var evaluationCount = 0
             var submissionCount = 0
             it?.registeredStudents?.map { registrationId ->
-                roleService.findUserByAllCriteria(registrationId)?.let { user ->
-                    val names = roleService.getRegistrationIDCandidates(user.username).toMutableList()
-                    val userId = roleService.getUserId(user.username)
+                userIdentityService.findUserByAllCriteria(registrationId)?.let { user ->
+                    val names = userIdentityService.getRegistrationIDCandidates(user.username).toMutableList()
+                    val userId = userIdentityService.getUserId(user.username)
                     if (userId != null) {
                         names.remove(userId)
                         val res = userIdUpdateService.updateID(names, userId)

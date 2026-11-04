@@ -7,6 +7,7 @@ import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.ExampleService
+import ch.uzh.ifi.access.service.ExampleSubmissionService
 import ch.uzh.ifi.access.service.SubmissionService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -19,7 +20,7 @@ import java.time.LocalDateTime
  * Regression tests for a bug found in step 0 of the ExampleService/SubmissionService refactoring.
  *
  * SubmissionService.getSubmissions masks the output of submissions for display by modifying them (for students,
- * RUN / TEST show their logs instead of the output). ExampleService.createExampleSubmission used it to check the
+ * RUN / TEST show their logs instead of the output). createExampleSubmission (then in ExampleService) used it to check the
  * submission lock, inside the transaction of processSubmission, so Hibernate wrote the masked values back to the
  * database: every example GRADE replaced the output of the student's earlier RUN / TEST submissions by their logs.
  *
@@ -27,6 +28,7 @@ import java.time.LocalDateTime
  */
 class ExampleSubmissionPersistenceTests(
     @Autowired val exampleService: ExampleService,
+    @Autowired val exampleSubmissionService: ExampleSubmissionService,
     @Autowired val submissionService: SubmissionService,
     @Autowired val submissionRepository: SubmissionRepository,
     @Autowired val transactionManager: PlatformTransactionManager,
@@ -41,7 +43,7 @@ class ExampleSubmissionPersistenceTests(
         val run = earlierRun(example, files, user)
 
         // The GRADE checks the submission lock, inside the transaction of processSubmission.
-        exampleService.processSubmission(
+        exampleSubmissionService.processSubmission(
             course, example, SubmissionDTO(userId = user, command = Command.GRADE, files = files), LocalDateTime.now()
         )
 
@@ -84,7 +86,7 @@ class ExampleSubmissionPersistenceTests(
 
     /** An earlier RUN of the student, with distinct output and logs (as a run that printed logs has). */
     private fun earlierRun(example: String, files: List<SubmissionFileDTO>, user: String): Submission {
-        val run = exampleService.processSubmission(
+        val run = exampleSubmissionService.processSubmission(
             course, example, SubmissionDTO(userId = user, command = Command.RUN, files = files), LocalDateTime.now()
         )
         tx.execute {

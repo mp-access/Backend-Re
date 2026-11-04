@@ -46,6 +46,8 @@ llm:
 
 examples:
   grace-period: ${GRACE_PERIOD:5}
+  # Hours a student has to wait after a graded example submission before submitting again.
+  submission-lock-hours: ${SUBMISSION_LOCK_HOURS:2}
   example-queue:
     # Soft brake during the interactive period; the concurrency limits below are the actual protection.
     cpu-threshold: ${CPU_THRESHOLD:0.90}

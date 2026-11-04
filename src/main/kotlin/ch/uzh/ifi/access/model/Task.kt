@@ -148,4 +148,18 @@ class Task {
             }
         }
     }
+
+    /** True if [time] lies in the interactive period of this example: after start and before end + grace period. */
+    fun isInteractiveAt(time: LocalDateTime, gracePeriodSeconds: Long): Boolean =
+        isInteractivePeriod(start, end, time, gracePeriodSeconds)
+
+    companion object {
+        /** The interactive period of an example: after [start] and before [end] + grace period. */
+        fun isInteractivePeriod(
+            start: LocalDateTime?,
+            end: LocalDateTime?,
+            time: LocalDateTime,
+            gracePeriodSeconds: Long,
+        ): Boolean = start != null && end != null && start.isBefore(time) && end.plusSeconds(gracePeriodSeconds).isAfter(time)
+    }
 }

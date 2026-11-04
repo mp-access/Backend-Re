@@ -12,7 +12,7 @@ import ch.uzh.ifi.access.import.ImportAssignmentTests
 import ch.uzh.ifi.access.import.ImportCourseTests
 import ch.uzh.ifi.access.import.ImportRepoTests
 import ch.uzh.ifi.access.import.ImportTaskTests
-import ch.uzh.ifi.access.users.RoleServiceTests
+import ch.uzh.ifi.access.users.RoleIntegrationTests
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.junit.jupiter.api.ClassOrderer
 import org.junit.jupiter.api.TestClassOrder
@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit
     SubmissionTests::class,
     AfterSubmissionTests::class,
     ExampleSubmissionPersistenceTests::class,
-    RoleServiceTests::class,
+    RoleIntegrationTests::class,
     PerformanceTests::class,
 )
 

@@ -6,7 +6,6 @@ import ch.uzh.ifi.access.model.constants.TaskStatus
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
-import io.github.oshai.kotlinlogging.KLogger
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
@@ -25,10 +24,10 @@ class SubmissionService(
     private val submissionRepository: SubmissionRepository,
     private val evaluationRepository: EvaluationRepository,
     private val pointsService: PointsService,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
+    private val courseAuthorizationService: CourseAuthorizationService,
     private val dockerService: ExecutionService,
     private val evaluationService: EvaluationService,
-    private val dockerPoolService: DockerPoolService,
     private val taskLookupService: TaskLookupService,
 ) {
     fun getSubmissions(taskId: Long?, userId: String?): List<Submission> {
@@ -42,9 +41,9 @@ class SubmissionService(
         } else {
             task.assignment!!.course!!.slug
         }
-        val usernames = roleService.getRegistrationIDCandidates(userId)
-        val userRoles = roleService.getUserRoles(usernames)
-        val isAdmin = roleService.isAdmin(userRoles, courseSlug!!)
+        val usernames = userIdentityService.getRegistrationIDCandidates(userId)
+        val userRoles = courseAuthorizationService.getUserRoles(usernames)
+        val isAdmin = courseAuthorizationService.isAdmin(userRoles, courseSlug!!)
 
         val submissions = submissionRepository.findByEvaluation_Task_IdAndUserIdOrderByCreatedAtDesc(taskId, userId)
         // The output is masked for DISPLAY only. The managed entities must never be modified for that: inside a
@@ -69,15 +68,21 @@ class SubmissionService(
     }
 
     // @Transactional so grading works when invoked from a SubmissionQueueService worker thread
-    // (no open-session-in-view off the request thread); still reached cross-bean, so @CacheEvict fires.
+    // (no open-session-in-view off the request thread); still reached cross-bean, so the evictions fire.
+    // calculateAvgTaskPoints is evicted here as well: the annotation on createSubmission does not fire for
+    // this internal call (self-invocation bypasses the Spring proxy).
     @Transactional
-    @CacheEvict(value = ["CourseService.getCoursesOverview"], key = "#submissionDTO.userId")
+    @Caching(
+        evict = [
+            CacheEvict("CourseService.getCoursesOverview", key = "#submissionDTO.userId"),
+            CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
+        ]
+    )
     fun createTaskSubmission(
         courseSlug: String,
         assignmentSlug: String,
         taskSlug: String,
         submissionDTO: SubmissionDTO,
-        logger: KLogger? = null,
     ): Submission {
         return createSubmission(
             courseSlug,
@@ -85,23 +90,21 @@ class SubmissionService(
             getTaskBySlug(courseSlug, assignmentSlug, taskSlug),
             submissionDTO,
             null,
-            logger,
         )
     }
 
+    /** Creates and grades a submission for a task or an example (examples: via ExampleService, cross-bean). */
     @Caching(
         evict = [
             CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
         ]
     )
-    // It only accepts assignment tasks, not examples
     fun createSubmission(
         courseSlug: String,
         taskSlug: String,
         task: Task,
         submissionDTO: SubmissionDTO,
         submissionReceivedAt: LocalDateTime?,
-        logger: KLogger? = null,
     ): Submission {
         submissionDTO.command?.let {
             if (!task.hasCommand(it)) throw ResponseStatusException(
@@ -116,8 +119,6 @@ class SubmissionService(
                 "Submission rejected - missing userId"
             )
         }
-        pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
-        pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         val eval = evaluationService.getEvaluation(task.id, submissionDTO.userId)
             ?: task.createEvaluation(submissionDTO.userId)
         evaluationRepository.saveAndFlush(eval)
@@ -135,45 +136,35 @@ class SubmissionService(
         val sub = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
         if (submissionReceivedAt != null) sub.createdAt = submissionReceivedAt
         submissionRepository.saveAndFlush(sub)
-        submissionDTO.files.stream().filter { fileDTO -> fileDTO.content != null }
-            .forEach { fileDTO: SubmissionFileDTO -> createSubmissionFile(sub, fileDTO) }
+        submissionDTO.files.filter { fileDTO -> fileDTO.content != null }
+            .forEach { fileDTO -> sub.files.add(createSubmissionFile(sub, fileDTO)) }
+        submissionRepository.saveAndFlush(sub)
         val submission = sub
         // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
         submission.valid = !submission.isGraded
         val course = getCourseBySlug(courseSlug)
         // execute the submission
         try {
-            // A/B switch: pooled path when docker.pool.enabled=true, else the one-shot
-            // baseline. Roll back by deleting this if/else (keep the executeSubmission call).
-            if (dockerPoolService.enabled) {
-                logger?.info {"[SubmissionService.createSubmission] execute in pooled submission"}
-                dockerService.executePooledSubmission(course, submission, task, evaluation)}
-            else {
-                // Pool disabled (docker.pool.enabled=false): one fresh container per submission. Not a fallback:
-                // the pooled path falls back to one-shot by itself if no container is free within the borrow timeout.
-                logger?.info {"[SubmissionService.createSubmission] pool disabled, using one-shot execution" }
-                dockerService.executeSubmission(course, submission, task, evaluation)}
-
+            dockerService.execute(course, submission, task, evaluation)
         } catch (e: Exception) {
             submission.output =
                 "Uncaught ${e::class.simpleName}: ${e.message}. Please report this as a bug and provide as much detail as possible."
         } finally {
             submissionRepository.save(submission)
             evaluationRepository.save(evaluation)
+            // Points only change through the grading above, so evicting once afterwards is enough.
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
             pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
         }
         return submission
     }
 
-    private fun createSubmissionFile(submission: Submission, fileDTO: SubmissionFileDTO) {
-        val newSubmissionFile = SubmissionFile()
-        newSubmissionFile.submission = submission
-        newSubmissionFile.content = fileDTO.content
-        newSubmissionFile.taskFile = getTaskFileById(fileDTO.taskFileId!!)
-        submission.files.add(newSubmissionFile)
-        submissionRepository.saveAndFlush(submission)
-    }
+    private fun createSubmissionFile(submission: Submission, fileDTO: SubmissionFileDTO): SubmissionFile =
+        SubmissionFile().apply {
+            this.submission = submission
+            content = fileDTO.content
+            taskFile = getTaskFileById(fileDTO.taskFileId!!)
+        }
 
     // TODO: Speed influence?
     fun getCourseBySlug(courseSlug: String): Course {
@@ -194,18 +185,6 @@ class SubmissionService(
             HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
         )
     }
-    /*
-    Original Function:
-    fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
-        return taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(
-            courseSlug,
-            assignmentSlug,
-            taskSlug
-        ) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
-        )
-    }
-    */
 
     fun getTaskFileById(fileId: Long): TaskFile {
         return taskFileRepository.findById(fileId).get()

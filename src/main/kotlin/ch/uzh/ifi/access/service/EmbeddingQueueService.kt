@@ -18,7 +18,8 @@ import java.util.concurrent.TimeUnit
 @Service
 class EmbeddingQueueService(
     private val submissionRepository: SubmissionRepository,
-    private val exampleService: ExampleService,
+    private val exampleStatistics: ExampleStatisticsService,
+    private val submissionCounter: InteractiveSubmissionCounter,
     private val webClient: WebClient,
     @Value("\${llm.service.batch-size}") private val batchSize: Int,
     @Value("\${llm.service.url}") private val llmServiceUrl: String
@@ -149,10 +150,10 @@ class EmbeddingQueueService(
     }
 
     private fun checkExampleCompleted(courseSlug: String, exampleSlug: String, forced: Boolean) {
-        val interactiveSubmissions = exampleService.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
-        if (interactiveSubmissions.size != exampleService.getExampleSubmissionCount(courseSlug, exampleSlug)) return
+        val interactiveSubmissions = exampleStatistics.getInteractiveExampleSubmissions(courseSlug, exampleSlug)
+        if (interactiveSubmissions.size != submissionCounter.get(courseSlug, exampleSlug)) return
 
-        exampleService.requestExampleInformationUpdate(courseSlug, exampleSlug)
+        exampleStatistics.requestExampleInformationUpdate(courseSlug, exampleSlug)
         if (forced) return
 
         val submissionsWithoutEmbeddings = interactiveSubmissions.filter { it.embedding.isEmpty() }

@@ -4,6 +4,7 @@ import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
+import ch.uzh.ifi.access.repository.SubmissionRepository
 import ch.uzh.ifi.access.service.ExampleQueueService
 import ch.uzh.ifi.access.service.ExampleService
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -49,6 +50,7 @@ import java.util.concurrent.TimeUnit
 class ExampleLoadTest(
     @Autowired val exampleQueueService: ExampleQueueService,
     @Autowired val exampleService: ExampleService,
+    @Autowired val submissionRepository: SubmissionRepository,
     @Autowired val meterRegistry: MeterRegistry,
     @Autowired val transactionManager: PlatformTransactionManager,
 ) : BaseTest() {
@@ -121,8 +123,11 @@ class ExampleLoadTest(
         val totalMs = (System.nanoTime() - start) / 1e6
         val idle = exampleQueueService.areInteractiveExampleSubmissionsFullyProcessed(course, example)
 
-        val graded = exampleService.getInteractiveExampleSubmissions(course, example)
-            .count { it.userId in enqueuedAt.keys }
+        // Via the repository (not a service) so the test compiles against the baseline as well.
+        val period = exampleService.getExampleBySlug(course, example)
+        val graded = submissionRepository.findInteractiveExampleSubmissions(
+            period.id, Command.GRADE, period.start!!, period.end!!.plusSeconds(60)
+        ).count { it.testsPassed.isNotEmpty() && it.userId in enqueuedAt.keys }
         val latencies = doneAt.map { (user, at) -> (at - enqueuedAt.getValue(user)) / 1e6 }.sorted()
 
         val result = linkedMapOf<String, Any?>(

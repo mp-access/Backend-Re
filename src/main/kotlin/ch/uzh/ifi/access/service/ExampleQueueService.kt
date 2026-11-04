@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class ExampleQueueService(
     private val exampleService: ExampleService,
+    private val exampleSubmissionService: ExampleSubmissionService,
     private val embeddingQueueService: EmbeddingQueueService,
     meterRegistry: MeterRegistry,
     cpuUsageProvider: CpuUsageProvider,
@@ -141,7 +142,7 @@ class ExampleQueueService(
     // ---------------------------------------------------------------------------------------------
 
     private fun grade(item: SubmissionWithContext) {
-        val submission = exampleService.processSubmission(
+        val submission = exampleSubmissionService.processSubmission(
             item.courseSlug,
             item.exampleSlug,
             item.submissionDTO,

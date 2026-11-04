@@ -27,7 +27,7 @@ class DumpService(
     private val courseLifecycle: CourseLifecycle,
     private val assignmentRepository: AssignmentRepository,
     private val taskRepository: TaskRepository,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
     private val evaluationService: EvaluationService,
     private val mapper: ObjectMapper,
     private val exampleRepository: ExampleRepository,
@@ -203,7 +203,7 @@ class DumpService(
     }
 
     private fun writeSubmissions(zip: ZipOutputStream, course: Course, assignments: List<AssignmentWorkspace>) {
-        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
 
         course.registeredStudents.forEach { registrationId ->
             val participantDir = "participants/${registrationId}"

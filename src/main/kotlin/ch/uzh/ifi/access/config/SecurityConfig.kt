@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.config
 
-import ch.uzh.ifi.access.service.RoleService
+import ch.uzh.ifi.access.model.constants.KeycloakAttributes
+import ch.uzh.ifi.access.service.RoleAssignmentService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
 import org.keycloak.admin.client.Keycloak
@@ -151,7 +152,7 @@ class SecurityConfig(private val env: Environment) {
 
     @Component
     class AuthenticationSuccessListener(
-        val roleService: RoleService,
+        val roleAssignmentService: RoleAssignmentService,
     ) : ApplicationListener<AuthenticationSuccessEvent> {
         private val logger = KotlinLogging.logger {}
         private val initializedAt = ConcurrentHashMap<String, Long>()
@@ -161,7 +162,7 @@ class SecurityConfig(private val env: Environment) {
             // This ensures the necessary roles are added to the Keycloak account when the user first logs in
             // because at that point, the roles_initialized_at attribute will yet be missing
             val token = (event.authentication as? JwtAuthenticationToken)?.token ?: return
-            if (token.getClaimAsString("roles_initialized_at") != null) return
+            if (token.getClaimAsString(KeycloakAttributes.ROLES_INITIALIZED_AT) != null) return
             val username = event.authentication.name
             val previous = initializedAt[username]
             if (previous != null) {
@@ -174,7 +175,7 @@ class SecurityConfig(private val env: Environment) {
                 }
                 return
             }
-            roleService.initializeUserRoles(username)
+            roleAssignmentService.initializeUserRoles(username)
             initializedAt[username] = System.currentTimeMillis()
         }
 

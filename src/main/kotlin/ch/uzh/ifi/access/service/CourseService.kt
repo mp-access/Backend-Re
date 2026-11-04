@@ -36,7 +36,7 @@ class CourseService(
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
     private val courseLifecycle: CourseLifecycle,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
     private val proxy: CourseService,
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
@@ -50,7 +50,7 @@ class CourseService(
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
         return course.registeredStudents.map {
-            val user = roleService.findUserByAllCriteria(it)
+            val user = userIdentityService.findUserByAllCriteria(it)
             if (user != null) {
                 StudentDTO(
                     firstName = user.firstName,
@@ -72,9 +72,9 @@ class CourseService(
         } else {
             course.registeredStudents
         }
-        val users = names.associateWith { roleService.findUserByAllCriteria(it) }
-        val registrationIDs = course.registeredStudents.associateWith { roleService.getRegistrationIDCandidates(it) }
-        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+        val users = names.associateWith { userIdentityService.findUserByAllCriteria(it) }
+        val registrationIDs = course.registeredStudents.associateWith { userIdentityService.getRegistrationIDCandidates(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
         val hasPoints =
             courseRepository.getParticipantsWithPoints(courseSlug, userIds.values.filterNotNull().toTypedArray())
                 .filter { it.userId != null && it.totalPoints != null }
@@ -101,9 +101,9 @@ class CourseService(
 
     fun getStudentsWithAssignmentPoints(courseSlug: String): MutableList<List<String?>> {
         val course = getCourseBySlug(courseSlug)
-        val userIds = course.registeredStudents.associateWith { roleService.getUserId(it) }
+        val userIds = course.registeredStudents.associateWith { userIdentityService.getUserId(it) }
         val userIdsInverse = userIds.entries.associate { (registrationId, userId) -> userId to registrationId }
-        val userNames = course.registeredStudents.associateWith { roleService.findUserByAllCriteria(it)?.username }
+        val userNames = course.registeredStudents.associateWith { userIdentityService.findUserByAllCriteria(it)?.username }
         val pointsData = courseRepository.getParticipantsAssignmentPoints(
             courseSlug,
             userIds.values.filterNotNull().toTypedArray()
@@ -129,7 +129,7 @@ class CourseService(
             val row = mutableListOf(
                 userId,
                 registrationID,
-                roleService.getRegistrationIDCandidates(userId).minus(setOf(userId, registrationID)).joinToString(" ")
+                userIdentityService.getRegistrationIDCandidates(userId).minus(setOf(userId, registrationID)).joinToString(" ")
             )
             assignments.forEach { ordinalNum ->
                 val points = userAssignmentPoints
@@ -161,7 +161,7 @@ class CourseService(
 
     @Cacheable("CourseService.getCoursesOverview", key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
-        val candidates = roleService.getRegistrationIDCandidates(userId)
+        val candidates = userIdentityService.getRegistrationIDCandidates(userId)
         return courseRepository.findCoursesForUser(candidates).toList()
     }
 
@@ -194,10 +194,10 @@ class CourseService(
         taskFileRepository.findByTask_IdAndEnabledTrueOrderByIdAscPathAsc(taskId)
 
     fun getRemainingAttempts(taskId: Long, maxAttempts: Int): Int =
-        evaluationService.getEvaluation(taskId, roleService.getUserId())?.remainingAttempts ?: maxAttempts
+        evaluationService.getEvaluation(taskId, userIdentityService.getUserId())?.remainingAttempts ?: maxAttempts
 
     fun getNextAttemptAt(taskId: Long, userId: String?): LocalDateTime? {
-        val uid = userId ?: roleService.getUserId()
+        val uid = userId ?: userIdentityService.getUserId()
         val task = getTaskById(taskId)
         val courseSlug = getCourseSlugByTask(task)
         val taskSlug = task.slug!!
@@ -216,18 +216,18 @@ class CourseService(
         getTaskById(taskId).assignment?.end
 
     fun calculateTaskPoints(taskId: Long, userId: String?): Double {
-        val id = userId ?: roleService.getUserId() ?: return 0.0
+        val id = userId ?: userIdentityService.getUserId() ?: return 0.0
         return pointsService.calculateTaskPoints(taskId, id)
     }
 
 
     fun calculateAssignmentPoints(tasks: List<Task>): Double {
-        val userId = roleService.getUserId() ?: return 0.0
+        val userId = userIdentityService.getUserId() ?: return 0.0
         return tasks.sumOf { pointsService.calculateTaskPoints(it.id, userId) }
     }
 
     fun calculateCoursePoints(slug: String): Double {
-        val userId = roleService.getUserId() ?: return 0.0
+        val userId = userIdentityService.getUserId() ?: return 0.0
         return proxy.calculateCoursePoints(slug, userId)
     }
 
@@ -316,7 +316,7 @@ class CourseService(
     }
 
     @Transactional
-    @CacheEvict("RoleService.getUserRoles", allEntries = true)
+    @CacheEvict(RoleCaches.USER_ROLES, allEntries = true)
     fun updateCourseRegistration(
         course: Course,
         registrationIDs: List<String>,

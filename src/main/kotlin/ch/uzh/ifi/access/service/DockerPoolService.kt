@@ -50,13 +50,11 @@ class DockerPoolService(
 
     /**
      * Modify the pool size if necessary. Default will be 10
-     * TODO: Maybe higher?
      */
     @Value("\${docker.pool.size:10}") private val poolSize: Int,
 
     /**
      * For container health and simple security measure.
-     * TODO: Maybe lower?
      */
     @Value("\${docker.pool.maxReuse:100}") private val maxReuse: Int,
 

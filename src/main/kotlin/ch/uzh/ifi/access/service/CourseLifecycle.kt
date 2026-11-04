@@ -29,7 +29,8 @@ import java.time.Duration
 @Service
 class CourseLifecycle(
     private val workingDir: Path,
-    private val roleService: RoleService,
+    private val roleAssignmentService: RoleAssignmentService,
+    private val courseRoleProvisioningService: CourseRoleProvisioningService,
     private val courseRepository: CourseRepository,
     private val modelMapper: ModelMapper,
     private val dockerClient: DockerClient,
@@ -37,7 +38,6 @@ class CourseLifecycle(
     private val fileService: FileService,
     private val executionService: ExecutionService,
     private val vacuumService: VacuumService,
-    private val courseInformationRepository: CourseInformationRepository,
     private val assignmentInformationRepository: AssignmentInformationRepository,
     private val taskInformationRepository: TaskInformationRepository,
 ) {
@@ -136,8 +136,8 @@ class CourseLifecycle(
         modelMapper.map(courseDTO, course)
         course.slug = existingSlug ?: courseDTO.slug
         course.information.forEach { it.value.course = course }
-        course.studentRole = roleService.createCourseRoles(course.slug!!)
-        val supervisorRegistrationID = roleService.setCourseSupervisor(course.slug)
+        course.studentRole = courseRoleProvisioningService.createCourseRoles(course.slug!!)
+        val supervisorRegistrationID = roleAssignmentService.setCourseSupervisor(course.slug!!)
         course.supervisors.add(supervisorRegistrationID)
 
         // Disable all global files, re-enable the relevant ones later
@@ -269,7 +269,6 @@ class CourseLifecycle(
     fun delete(courseSlug: String) {
         val course = courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
         logger.debug { "Deleting '${course.slug}' orphaned information..." }
-        courseInformationRepository.deleteAllByCourseId(course.id!!)
         course.assignments.forEach {
             assignmentInformationRepository.deleteAllByAssignmentId(it.id!!)
         }
@@ -295,7 +294,7 @@ class CourseLifecycle(
                 logger.debug { "Deleting '$slug' (vacuuming)..." }
                 vacuumService.vacuumAllTables()
                 logger.debug { "Deleting '$slug' roles..." }
-                roleService.deleteRoles(slug)
+                courseRoleProvisioningService.deleteRoles(slug)
                 logger.debug { "Deleting '$slug' course: done" }
             }
         })
@@ -311,15 +310,6 @@ class CourseLifecycle(
         }
         return course
     }
-}
-
-// due to a bug, course/assignment/task information is left in the database on each update, leading to
-// duplicate rows, but Spring only ever sees two entries for de/en, because it's a map.
-// This here is necessary to clean up these orphaned information entries when deleting a course
-// TODO: delete once the bug has been fixed in updateFromDirectory and the DB is fully cleaned up
-interface CourseInformationRepository : JpaRepository<CourseInformation, Long> {
-    @Modifying
-    fun deleteAllByCourseId(courseId: Long)
 }
 
 interface AssignmentInformationRepository : JpaRepository<AssignmentInformation, Long> {

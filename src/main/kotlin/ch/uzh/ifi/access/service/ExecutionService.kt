@@ -36,6 +36,18 @@ class ExecutionService(
 ) {
     private val logger = KotlinLogging.logger {}
 
+    /**
+     * Runs a submission: in a pooled container when docker.pool.enabled=true, otherwise in a fresh one-shot
+     * container (the baseline). The pooled path itself falls back to one-shot if no container becomes free
+     * within the borrow timeout.
+     */
+    fun execute(course: Course, submission: Submission, task: Task, evaluation: Evaluation): Pair<Submission, Results> =
+        if (dockerPoolService.enabled) {
+            executePooledSubmission(course, submission, task, evaluation)
+        } else {
+            executeSubmission(course, submission, task, evaluation)
+        }
+
     fun executeTemplate(task: Task): Pair<Submission, Results> {
         val course = task.assignment?.course ?: task.course!!
         val submission = Submission()

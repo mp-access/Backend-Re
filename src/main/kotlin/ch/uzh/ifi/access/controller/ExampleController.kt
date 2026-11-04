@@ -27,9 +27,14 @@ import java.util.*
 @EnableAsync
 class ExampleController(
     private val exampleService: ExampleService,
+    private val exampleSubmissionService: ExampleSubmissionService,
+    private val exampleStatisticsService: ExampleStatisticsService,
+    private val exampleVisibilityService: ExampleVisibilityService,
+    private val submissionCounter: InteractiveSubmissionCounter,
     private val exampleQueueService: ExampleQueueService,
     private val embeddingQueueService: EmbeddingQueueService,
-    private val roleService: RoleService,
+    private val userIdentityService: UserIdentityService,
+    private val courseAuthorizationService: CourseAuthorizationService,
     private val emitterService: EmitterService,
     private val clusteringService: ClusteringService,
     private val submissionRepository: SubmissionRepository,
@@ -52,7 +57,7 @@ class ExampleController(
         @PathVariable course: String,
         authentication: Authentication
     ): ExampleSubmissionsCountDTO {
-        return exampleService.computeSubmissionsCount(course)
+        return exampleStatisticsService.computeSubmissionsCount(course)
     }
 
     // TODO: This one returns a lot of 401's
@@ -62,7 +67,7 @@ class ExampleController(
         @PathVariable course: String,
         authentication: Authentication
     ): InteractiveExampleDTO {
-        return exampleService.getInteractiveExampleSlug(course)
+        return exampleVisibilityService.getInteractiveExampleSlug(course)
     }
 
     @GetMapping("/{example}/information")
@@ -72,7 +77,7 @@ class ExampleController(
         @PathVariable example: String,
         authentication: Authentication
     ): ExampleInformationDTO {
-        return exampleService.computeExampleInformation(course, example)
+        return exampleStatisticsService.computeExampleInformation(course, example)
     }
 
     @GetMapping("/{example}/submissions")
@@ -83,7 +88,7 @@ class ExampleController(
         authentication: Authentication
     ): ExampleSubmissionsDTO {
 
-        val processedSubmissions = exampleService.getInteractiveExampleSubmissions(course, example)
+        val processedSubmissions = exampleStatisticsService.getInteractiveExampleSubmissions(course, example)
         val submissionsDTO = processedSubmissions.map {
             SubmissionSseDTO(
                 it.id!!,
@@ -97,7 +102,7 @@ class ExampleController(
             )
         }
 
-        val exampleInformationDTO = exampleService.computeExampleInformation(course, example)
+        val exampleInformationDTO = exampleStatisticsService.computeExampleInformation(course, example)
         return ExampleSubmissionsDTO(
             exampleInformationDTO.participantsOnline,
             exampleInformationDTO.totalParticipants,
@@ -120,11 +125,11 @@ class ExampleController(
         authentication: Authentication
     ) {
         val submissionReceivedAt = LocalDateTime.now()
-        val userId = roleService.getUserId(authentication.name)!!
+        val userId = userIdentityService.getUserId(authentication.name)!!
         submission.userId = userId
-        val usernames = roleService.getRegistrationIDCandidates(userId)
-        val userRoles = roleService.getUserRoles(usernames)
-        val isAdmin = roleService.isAdmin(userRoles, course)
+        val usernames = userIdentityService.getRegistrationIDCandidates(userId)
+        val userRoles = courseAuthorizationService.getUserRoles(usernames)
+        val isAdmin = courseAuthorizationService.isAdmin(userRoles, course)
         if (exampleService.isSubmittedDuringInteractivePeriod(
                 course,
                 example,
@@ -138,9 +143,9 @@ class ExampleController(
                     "Too many submissions are being processed right now. Please submit again in a moment."
                 )
             }
-            exampleService.increaseInteractiveSubmissionCount(course, example)
+            submissionCounter.increase(course, example)
         } else {
-            exampleService.processSubmission(course, example, submission, submissionReceivedAt, logger)
+            exampleSubmissionService.processSubmission(course, example, submission, submissionReceivedAt, isAdmin)
         }
     }
 
@@ -161,11 +166,11 @@ class ExampleController(
         @PathVariable example: String,
         @PathVariable user: String
     ): List<SubmissionDTO> {
-        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, roleService.getUserId(user)!!)
+        val pendingSubmission = exampleQueueService.getPendingSubmissionFromQueue(course, example, userIdentityService.getUserId(user)!!)
         if (pendingSubmission != null) {
             return listOf(pendingSubmission)
         }
-        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, roleService.getUserId(user)!!)
+        val runningSubmission = exampleQueueService.getRunningSubmission(course, example, userIdentityService.getUserId(user)!!)
         if (runningSubmission != null) {
             return listOf(runningSubmission)
         }
@@ -350,6 +355,6 @@ class ExampleController(
         if (exampleService.isExampleInteractive(course, example)) {
             pointDistributionUpdater.ensureRunning(course, example)
         }
-        return exampleService.computePointDistribution(course, example)
+        return exampleStatisticsService.computePointDistribution(course, example)
     }
 }

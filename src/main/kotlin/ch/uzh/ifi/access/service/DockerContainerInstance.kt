@@ -75,7 +75,8 @@ class DockerContainerInstance(
     override fun isHealthy(): Boolean = try {
         dockerClient.inspectContainerCmd(id).exec().state?.running == true
     } catch (e: Exception) {
-        // TODO: Log this?
+        // This is nice for the statistic if you want to make docker containers more stable.
+        logger.debug(e) { "Error while inspecting container: ${e.message}" }
         false
     }
 

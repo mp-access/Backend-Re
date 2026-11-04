@@ -13,6 +13,7 @@ import ch.uzh.ifi.access.service.CpuUsageProvider
 import ch.uzh.ifi.access.service.EmbeddingQueueService
 import ch.uzh.ifi.access.service.ExampleQueueService
 import ch.uzh.ifi.access.service.ExampleService
+import ch.uzh.ifi.access.service.ExampleSubmissionService
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
@@ -64,6 +65,7 @@ class ExampleQueueServiceTests {
     }
 
     private val exampleService = mockk<ExampleService>()
+    private val exampleSubmissionService = mockk<ExampleSubmissionService>()
     private val embeddingQueueService = mockk<EmbeddingQueueService>(relaxed = true)
     private val meterRegistry = SimpleMeterRegistry()
     private val cpuUsage = AtomicReference<Double?>(CPU_IDLE)
@@ -95,7 +97,7 @@ class ExampleQueueServiceTests {
             interactiveLookups.incrementAndGet()
             interactive[secondArg<String>()] ?: true
         }
-        every { exampleService.processSubmission(any(), any(), any(), any(), any()) } answers {
+        every { exampleSubmissionService.processSubmission(any(), any(), any(), any(), any()) } answers {
             val user = thirdArg<SubmissionDTO>().userId!!
             attempts.add(user)
             gates[user]?.await(TIMEOUT_MS, TimeUnit.MILLISECONDS)
@@ -440,6 +442,7 @@ class ExampleQueueServiceTests {
     private fun startQueue(min: Int = 2, max: Int = 4, drain: Int = 4): ExampleQueueService =
         ExampleQueueService(
             exampleService = exampleService,
+            exampleSubmissionService = exampleSubmissionService,
             embeddingQueueService = embeddingQueueService,
             meterRegistry = meterRegistry,
             cpuUsageProvider = CpuUsageProvider { cpuUsage.get() },
