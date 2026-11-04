@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.repository.requireBySlug
 import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.constants.Command
@@ -12,12 +13,10 @@ import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.cache.annotation.Cacheable
-import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import org.springframework.web.server.ResponseStatusException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -79,8 +78,7 @@ class ExampleStatisticsService(
 
     fun computeExampleInformation(courseSlug: String, exampleSlug: String): ExampleInformationDTO {
         val participantsOnline = visitQueueService.getRecentlyActiveCount(courseSlug)
-        val totalParticipants = (courseRepository.getBySlug(courseSlug)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")).participantCount
+        val totalParticipants = courseRepository.requireBySlug(courseSlug).participantCount
         val example = exampleService.getExampleBySlug(courseSlug, exampleSlug)
         val stats = if (example.start == null || example.end == null) emptyList() else
             submissionRepository.findInteractiveExampleSubmissionStats(example.id!!, example.start!!, example.interactiveEnd(exampleProperties.gracePeriod)!!)

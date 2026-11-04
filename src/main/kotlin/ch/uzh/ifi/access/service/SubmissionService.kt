@@ -1,5 +1,8 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.error.ResourceNotFoundException
+import ch.uzh.ifi.access.error.ForbiddenException
+import ch.uzh.ifi.access.error.BadRequestException
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
@@ -8,10 +11,8 @@ import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
 @Service
@@ -85,17 +86,13 @@ class SubmissionService(
         submissionReceivedAt: LocalDateTime?,
     ): Submission {
         submissionDTO.command?.let {
-            if (!task.hasCommand(it)) throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
+            if (!task.hasCommand(it)) throw ForbiddenException(
                 "Submission rejected - task does not support ${submissionDTO.command} command"
             )
         }
         // retrieve existing evaluation or if there is none, create a new one
         if (submissionDTO.userId == null) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Submission rejected - missing userId"
-            )
+            throw BadRequestException("Submission rejected - missing userId")
         }
         val evaluation = evaluationService.getEvaluation(task.id, submissionDTO.userId)
             ?: task.createEvaluation(submissionDTO.userId)
@@ -104,10 +101,7 @@ class SubmissionService(
         // meaning for regular users, restricted is always true
         if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !task.isExample) {
             if (evaluation.remainingAttempts == null || evaluation.remainingAttempts!! <= 0)
-                throw ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Submission rejected - no remaining attempts"
-                )
+                throw ForbiddenException("Submission rejected - no remaining attempts")
         }
         // at this point, all restrictions have passed, and we can create the submission
         val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
@@ -151,9 +145,7 @@ class SubmissionService(
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task {
         val taskId = taskLookupService.resolveTaskId(courseSlug, assignmentSlug, taskSlug)
         val task = taskId?.let { taskRepository.findById(it).orElse(null) }
-        return task ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND, "No task found with the URL $taskSlug"
-        )
+        return task ?: throw ResourceNotFoundException("No task found with the URL $taskSlug")
     }
 
     fun getTaskFileById(fileId: Long): TaskFile {

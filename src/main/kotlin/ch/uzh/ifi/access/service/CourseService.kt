@@ -1,5 +1,8 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.repository.requireBySlug
+import ch.uzh.ifi.access.error.ResourceNotFoundException
+import ch.uzh.ifi.access.error.ForbiddenException
 import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
@@ -18,9 +21,7 @@ import org.springframework.cache.annotation.Cacheable
 import org.springframework.cache.annotation.Caching
 import org.springframework.context.annotation.Scope
 import org.springframework.context.annotation.ScopedProxyMode
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
-import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.LocalDateTime
@@ -146,20 +147,16 @@ class CourseService(
         return rows
     }
 
-    private fun notFound(message: String): Nothing =
-        throw ResponseStatusException(HttpStatus.NOT_FOUND, message)
-
-    fun getCourseBySlug(courseSlug: String): Course =
-        courseRepository.getBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
+    fun getCourseBySlug(courseSlug: String): Course = courseRepository.requireBySlug(courseSlug)
 
     fun getCourseSlugByTask(task: Task): String =
         task.owningCourse!!.slug!!
 
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace =
-        courseRepository.findBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
+        courseRepository.findBySlug(courseSlug) ?: throw ResourceNotFoundException("No course found with the URL $courseSlug")
 
     fun getTaskById(taskId: Long): Task =
-        taskRepository.findById(taskId).orElse(null) ?: notFound("No task found with the id $taskId")
+        taskRepository.findById(taskId).orElse(null) ?: throw ResourceNotFoundException("No task found with the id $taskId")
 
     @Cacheable(CacheNames.COURSES_OVERVIEW, key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
@@ -168,7 +165,7 @@ class CourseService(
     }
 
     fun getCourseSummary(courseSlug: String): CourseSummary =
-        courseRepository.findCourseBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
+        courseRepository.findCourseBySlug(courseSlug) ?: throw ResourceNotFoundException("No course found with the URL $courseSlug")
 
     fun enabledTasksOnly(tasks: List<Task>): List<Task> = tasks.filter { it.enabled }
 
@@ -177,16 +174,16 @@ class CourseService(
 
     fun getAssignmentWorkspaceBySlug(courseSlug: String, assignmentSlug: String): AssignmentWorkspace =
         assignmentRepository.findByCourse_SlugAndSlug(courseSlug, assignmentSlug)
-            ?: notFound("No assignment found with the URL $assignmentSlug")
+            ?: throw ResourceNotFoundException("No assignment found with the URL $assignmentSlug")
 
     fun getAssignmentBySlug(courseSlug: String, assignmentSlug: String): Assignment =
         assignmentRepository.getByCourse_SlugAndSlug(courseSlug, assignmentSlug)
-            ?: notFound("No assignment found with the URL $assignmentSlug")
+            ?: throw ResourceNotFoundException("No assignment found with the URL $assignmentSlug")
 
     fun getTask(courseSlug: String, assignmentSlug: String, taskSlug: String, userId: String): TaskWorkspace {
         val workspace =
             taskRepository.findByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
-                ?: notFound("No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug")
+                ?: throw ResourceNotFoundException("No task found with the URL: $courseSlug/$assignmentSlug/$taskSlug")
         // userId (not username): the projections pass it on to evaluation and points lookups
         workspace.setUserId(userId)
         return workspace
@@ -244,7 +241,7 @@ class CourseService(
 
     fun getTaskBySlug(courseSlug: String, assignmentSlug: String, taskSlug: String): Task =
         taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
-            ?: notFound("No task found with the URL $taskSlug")
+            ?: throw ResourceNotFoundException("No task found with the URL $taskSlug")
 
     @CacheEvict(value = [CacheNames.COURSES_OVERVIEW], allEntries = true)
     fun createCourse(course: CourseDTO): Course {
@@ -287,7 +284,7 @@ class CourseService(
     private fun requireValidWebhook(courseSlug: String, valid: Boolean) {
         if (!valid) {
             logger.debug { "Provided webhook secret/signature does not match secret of course $courseSlug" }
-            throw ResponseStatusException(HttpStatus.FORBIDDEN)
+            throw ForbiddenException()
         }
     }
 

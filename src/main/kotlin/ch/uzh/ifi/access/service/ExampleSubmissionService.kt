@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.error.BadRequestException
 import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.constants.Command
@@ -7,10 +8,8 @@ import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.dto.SubmissionDTO
 import ch.uzh.ifi.access.model.dto.SubmissionSseDTO
 import ch.uzh.ifi.access.repository.SubmissionRepository
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
 /**
@@ -74,21 +73,21 @@ class ExampleSubmissionService(
 
         // Admins are not subject to any of the checks below.
         if (!(isAdmin ?: resolveIsAdmin(courseSlug, submissionDTO.userId!!))) {
-            if (example.start == null || example.end == null) throw badRequest("Example not published yet")
+            if (example.start == null || example.end == null) throw BadRequestException("Example not published yet")
             if (submissionDTO.command == Command.GRADE) {
                 // A plain query on purpose: loading the submissions as entities here (inside the transaction of
                 // processSubmission) once caused their display masking to be written back to the database.
                 val lastSubmissionDate =
                     submissionRepository.findLatestCreatedAt(example.id!!, submissionDTO.userId!!, Command.GRADE)
                 if (lastSubmissionDate != null && submissionReceivedAt.isBefore(lastSubmissionDate.plusHours(exampleProperties.submissionLockHours))) {
-                    throw badRequest("You must wait for ${exampleProperties.submissionLockHours} hours before submitting a solution again")
+                    throw BadRequestException("You must wait for ${exampleProperties.submissionLockHours} hours before submitting a solution again")
                 }
                 // A first GRADE after the interactive period (end + grace) is too late, until the lock window
                 // after the end has passed; from then on the example can be graded like an exercise.
                 val tooLateFrom = example.interactiveEnd(exampleProperties.gracePeriod)!!
                 val tooLateUntil = example.end!!.plusHours(exampleProperties.submissionLockHours)
                 if (lastSubmissionDate == null && submissionReceivedAt.isAfter(tooLateFrom) && submissionReceivedAt.isBefore(tooLateUntil)) {
-                    throw badRequest("Your submission was processed too late. Therefore, it cannot be considered.")
+                    throw BadRequestException("Your submission was processed too late. Therefore, it cannot be considered.")
                 }
             }
         }
@@ -98,6 +97,4 @@ class ExampleSubmissionService(
 
     private fun resolveIsAdmin(courseSlug: String, userId: String): Boolean =
         courseAuthorizationService.isAdmin(courseAuthorizationService.getUserRoles(userIdentityService.getRegistrationIDCandidates(userId)), courseSlug)
-
-    private fun badRequest(message: String) = ResponseStatusException(HttpStatus.BAD_REQUEST, message)
 }

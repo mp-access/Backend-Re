@@ -30,7 +30,8 @@ class FileData(
 
 }
 
-class InvalidFileException : Throwable()
+// a RuntimeException (not a bare Throwable), so the usual catch (e: Exception) blocks handle it
+class InvalidFileException : RuntimeException("Invalid file: path, name, MIME type and exactly one kind of content are required")
 
 // Abstracts away much of the hassle of dealing with various file types
 @Service

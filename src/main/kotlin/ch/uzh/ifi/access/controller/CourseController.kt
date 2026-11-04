@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.error.ResourceNotFoundException
 import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.config.SubmissionQueueProperties
 import ch.uzh.ifi.access.model.constants.EmitterType
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.context.request.async.DeferredResult
 import org.springframework.web.context.request.async.StandardServletAsyncWebRequest
 import org.springframework.web.context.request.async.WebAsyncUtils
-import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.io.OutputStream
@@ -122,7 +122,7 @@ class CourseController(
         val expected = env.getProperty("DELETION_KEY")
         val valid = !expected.isNullOrEmpty() && safety != null &&
         MessageDigest.isEqual(expected.toByteArray(), safety.toByteArray())
-        if (!valid) throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        if (!valid) throw ResourceNotFoundException()
         courseService.deleteCourse(course)
     }
 
@@ -134,7 +134,7 @@ class CourseController(
     @GetMapping("")
     fun getCourses(): List<CourseOverview> {
         val userId = userIdentityService.getCurrentUserId()
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Cannot resolve user ID")
+            ?: throw ResourceNotFoundException("Cannot resolve user ID")
         return courseService.getCoursesOverview(userId)
     }
 
@@ -304,7 +304,7 @@ class CourseController(
 
     private fun resolveUserId(username: String): String =
         userIdentityService.resolveUserId(username)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No participant $username")
+            ?: throw ResourceNotFoundException("No participant $username")
 
     @GetMapping("/{course}/participants/{username}")
     fun getCourseProgress(

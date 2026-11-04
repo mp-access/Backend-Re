@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.repository
 
+import ch.uzh.ifi.access.error.ResourceNotFoundException
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.projections.CourseOverview
 import ch.uzh.ifi.access.projections.CourseSummary
@@ -140,3 +141,7 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     ): List<UserAssignmentPointsProjection>
 
 }
+
+/** The course with this slug; throws a 404 [ResourceNotFoundException] if there is none. */
+fun CourseRepository.requireBySlug(courseSlug: String): Course =
+    getBySlug(courseSlug) ?: throw ResourceNotFoundException("No course found with the URL $courseSlug")

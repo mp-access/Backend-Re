@@ -1,5 +1,8 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.error.ServiceUnavailableException
+import ch.uzh.ifi.access.error.ConflictException
+import ch.uzh.ifi.access.error.BadRequestException
 import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Command
@@ -12,12 +15,10 @@ import ch.uzh.ifi.access.service.*
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
-import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.*
-import org.springframework.web.server.ResponseStatusException
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
@@ -139,8 +140,7 @@ class ExampleController(
         ) {
             if (!exampleQueueService.addToQueue(course, example, submission, submissionReceivedAt)) {
                 // Backpressure: the example queue is full. Reject instead of silently dropping the submission.
-                throw ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
+                throw ServiceUnavailableException(
                     "Too many submissions are being processed right now. Please submit again in a moment."
                 )
             }
@@ -191,10 +191,7 @@ class ExampleController(
         }
 
         if (activeExample != null) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "An interactive example already exists."
-            )
+            throw ConflictException("An interactive example already exists.")
         }
 
         val updatedExample = exampleService.publishExampleBySlug(course, example, body.duration)
@@ -203,10 +200,8 @@ class ExampleController(
         val end = updatedExample.end
 
         if (start == null || end == null) {
-            throw ResponseStatusException(
-                HttpStatus.INTERNAL_SERVER_ERROR,
-                "Published example is missing required start or end time."
-            )
+            // an invariant violation, not a user error: logged and answered as 500 by UnexpectedErrorResolver
+            throw IllegalStateException("Published example $course/$example is missing its start or end time.")
         }
 
         logger.info { "Example $course/$example published: $start -> $end" }
@@ -334,8 +329,7 @@ class ExampleController(
     ): CategorizationDTO {
         val numberOfClusters = 5
         if (body.submissionIds.size < numberOfClusters) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
+            throw BadRequestException(
                 "For categorization to work, at least $numberOfClusters submissions are required"
             )
         }

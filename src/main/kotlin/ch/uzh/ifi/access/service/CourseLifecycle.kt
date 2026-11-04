@@ -1,5 +1,8 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.repository.requireBySlug
+import ch.uzh.ifi.access.error.BadRequestException
+import ch.uzh.ifi.access.error.AccessException
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.dto.CourseDTO
 import ch.uzh.ifi.access.model.dto.TaskDTO
@@ -16,11 +19,9 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
-import org.springframework.web.server.ResponseStatusException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
@@ -65,7 +66,15 @@ class CourseLifecycle(
     fun updateFromRepository(existingCourse: Course): Course =
         withClonedRepository(existingCourse) { path -> updateFromDirectory(existingCourse, path) }
 
-    private fun badRequest(msg: String) = ResponseStatusException(HttpStatus.BAD_REQUEST, msg)
+    /** Reads a config.toml; a broken one becomes a 400 that names the directory and the problem. */
+    private fun <T> readConfig(path: Path, read: (Path) -> T): T =
+        try {
+            read(path)
+        } catch (e: AccessException) {
+            throw e
+        } catch (e: Exception) {
+            throw BadRequestException("Invalid config.toml in '${path.fileName}': ${e.message ?: e::class.simpleName}", e)
+        }
 
     private fun applyTaskConfig(
         task: Task,
@@ -76,13 +85,13 @@ class CourseLifecycle(
         runCommandRequired: Boolean,
     ) {
         val evaluator = taskDTO.evaluator
-            ?: throw badRequest("Evaluator configuration is missing for $kind ${taskDTO.slug}")
+            ?: throw BadRequestException("Evaluator configuration is missing for $kind ${taskDTO.slug}")
         val dockerImage = evaluator.dockerImage
-            ?: throw badRequest("Docker image is missing for $kind ${taskDTO.slug}")
+            ?: throw BadRequestException("Docker image is missing for $kind ${taskDTO.slug}")
         val gradeCommand = evaluator.gradeCommand
-            ?: throw badRequest("Grade command is missing for $kind ${taskDTO.slug}")
+            ?: throw BadRequestException("Grade command is missing for $kind ${taskDTO.slug}")
         if (runCommandRequired && evaluator.runCommand == null)
-            throw badRequest("Run command is missing for $kind ${taskDTO.slug}")
+            throw BadRequestException("Run command is missing for $kind ${taskDTO.slug}")
 
         dockerClient.ensureImage(dockerImage)
         task.information.clear()
@@ -132,7 +141,7 @@ class CourseLifecycle(
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
         logger.debug { "Updating course ${course.slug} from $coursePath" }
         val existingSlug = course.slug
-        val courseDTO = cci.readCourseConfig(coursePath)
+        val courseDTO = readConfig(coursePath, cci::readCourseConfig)
         course.information.clear()
         modelMapper.map(courseDTO, course)
         course.slug = existingSlug ?: courseDTO.slug
@@ -157,7 +166,7 @@ class CourseLifecycle(
         }
         courseDTO.assignments.forEachIndexed { index, assignmentDir ->
             val assignmentPath = coursePath.resolve(assignmentDir)
-            val assignmentDTO = cci.readAssignmentConfig(assignmentPath)
+            val assignmentDTO = readConfig(assignmentPath, cci::readAssignmentConfig)
             val assignment = course.assignments.firstOrNull { it.slug == assignmentDTO.slug }
                 ?: course.createAssignment()
             assignment.ordinalNum = index + 1
@@ -168,7 +177,7 @@ class CourseLifecycle(
 
             assignmentDTO.tasks.forEachIndexed { taskIndex, taskDir ->
                 val taskPath = assignmentPath.resolve(taskDir)
-                val taskDTO = cci.readTaskConfig(taskPath)
+                val taskDTO = readConfig(taskPath, cci::readTaskConfig)
                 val task = assignment.tasks.firstOrNull { it.slug == taskDTO.slug }
                     ?: assignment.createTask()
                 applyTaskConfig(task, taskDTO, taskPath, taskIndex + 1, "task", runCommandRequired = true)
@@ -177,7 +186,7 @@ class CourseLifecycle(
 
         courseDTO.examples.forEachIndexed { index, exampleDir ->
             val examplePath = coursePath.resolve(exampleDir)
-            val exampleDTO = cci.readExampleConfig(examplePath)
+            val exampleDTO = readConfig(examplePath, cci::readExampleConfig)
             val example = course.examples.firstOrNull { it.slug == exampleDTO.slug }
                 ?: course.createExample()
             if (example.start == null) {
@@ -249,13 +258,13 @@ class CourseLifecycle(
         } catch (e: GitAPIException) {
             coursePath.toFile().deleteRecursively()
             logger.warn(e) { "Failed to clone ${course.repository} (branch ${course.repositoryBranch})" }
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to clone repository", e)
+            throw BadRequestException("Failed to clone repository", e)
         }
     }
 
     @Transactional
     fun delete(courseSlug: String) {
-        val course = courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(HttpStatus.NOT_FOUND)
+        val course = courseRepository.requireBySlug(courseSlug)
         logger.debug { "Deleting '${course.slug}' orphaned information..." }
         course.assignments.forEach {
             assignmentInformationRepository.deleteAllByAssignmentId(it.id!!)

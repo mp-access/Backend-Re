@@ -1,5 +1,8 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.repository.requireBySlug
+import ch.uzh.ifi.access.error.ResourceNotFoundException
+import ch.uzh.ifi.access.error.BadRequestException
 import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.projections.TaskOverview
@@ -10,10 +13,8 @@ import ch.uzh.ifi.access.repository.ExampleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import java.time.LocalDateTime
 
 /**
@@ -74,8 +75,8 @@ class ExampleService(
     )
     fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = getExampleBySlug(courseSlug, exampleSlug)
-        if (duration <= 0) throw badRequest("Duration must be a positive value")
-        if (example.start != null) throw badRequest("Example already published")
+        if (duration <= 0) throw BadRequestException("Duration must be a positive value")
+        if (example.start != null) throw BadRequestException("Example already published")
 
         val now = LocalDateTime.now()
         example.start = now
@@ -86,11 +87,11 @@ class ExampleService(
 
     fun extendExampleDeadlineBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
         val example = getExampleBySlug(courseSlug, exampleSlug)
-        if (duration <= 0) throw badRequest("Duration must be a positive value")
+        if (duration <= 0) throw BadRequestException("Duration must be a positive value")
 
         val now = LocalDateTime.now()
-        if (example.start == null || example.start!!.isAfter(now)) throw badRequest("$exampleSlug has not been published")
-        if (example.end!!.isBefore(now)) throw badRequest("$exampleSlug is past due")
+        if (example.start == null || example.start!!.isAfter(now)) throw BadRequestException("$exampleSlug has not been published")
+        if (example.end!!.isBefore(now)) throw BadRequestException("$exampleSlug is past due")
 
         val previousEnd = example.end
         example.end = example.end!!.plusSeconds(duration.toLong())
@@ -104,7 +105,7 @@ class ExampleService(
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
         val now = LocalDateTime.now()
-        if (example.start == null || example.start!!.isAfter(now)) throw badRequest("$exampleSlug has not been published")
+        if (example.start == null || example.start!!.isAfter(now)) throw BadRequestException("$exampleSlug has not been published")
         if (example.end!!.isBefore(now)) return example
 
         example.end = now
@@ -117,7 +118,7 @@ class ExampleService(
     fun resetExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
-        val students = courseRepository.getBySlug(courseSlug)!!.registeredStudents
+        val students = courseRepository.requireBySlug(courseSlug).registeredStudents
         val evaluations = evaluationRepository.findAllByTask_IdAndUserIdIn(example.id, students)
         if (!evaluations.isNullOrEmpty()) evaluationRepository.deleteAll(evaluations.toList())
 
@@ -129,10 +130,6 @@ class ExampleService(
         return example
     }
 
-    // ---------------------------------------------------------------------------------------------
-
     private fun notFound(exampleSlug: String): Nothing =
-        throw ResponseStatusException(HttpStatus.NOT_FOUND, "No example found with the Slug $exampleSlug")
-
-    private fun badRequest(message: String) = ResponseStatusException(HttpStatus.BAD_REQUEST, message)
+        throw ResourceNotFoundException("No example found with the Slug $exampleSlug")
 }
