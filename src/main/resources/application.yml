@@ -62,6 +62,12 @@ examples:
     # Retries of a failed grading (not for 4xx rejections such as the submission lock).
     max-retries: ${EXAMPLE_QUEUE_MAX_RETRIES:2}
 
+tasks:
+  # Also record test names (on import) and passed tests (per graded submission) for regular tasks,
+  # not only for examples. Off by default: every enabled task template is then graded once in Docker
+  # on each course import, which makes imports noticeably slower.
+  record-test-results: ${RECORD_TEST_RESULTS:false}
+
 logging:
   level:
     org.springframework:

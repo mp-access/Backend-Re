@@ -25,7 +25,7 @@ interface TaskOverview {
     @get:Value("#{target.status}")
     val status: TaskStatus?
 
-    @get:Value("#{@pointsService.calculateAvgTaskPoints(target.slug)}")
+    @get:Value("#{@pointsService.calculateAvgTaskPoints(target.id)}")
     val avgPoints: Double?
 
     @get:Value("#{@courseService.calculateTaskPoints(target.id, target.userId)}")

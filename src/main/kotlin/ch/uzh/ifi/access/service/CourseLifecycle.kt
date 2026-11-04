@@ -13,6 +13,7 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.modelmapper.ModelMapper
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Modifying
@@ -40,6 +41,7 @@ class CourseLifecycle(
     private val vacuumService: VacuumService,
     private val assignmentInformationRepository: AssignmentInformationRepository,
     private val taskInformationRepository: TaskInformationRepository,
+    @Value("\${tasks.record-test-results:false}") private val recordTestResults: Boolean = false,
 ) {
 
     private val logger = KotlinLogging.logger {}
@@ -184,7 +186,7 @@ class CourseLifecycle(
             }
         }
         val storedCourse = courseRepository.save(course)
-        val updatedCourse = runExamplesOnceToRetrieveTestNames(storedCourse)
+        val updatedCourse = runTemplatesToRetrieveTestNames(storedCourse)
         return courseRepository.save(updatedCourse)
     }
 
@@ -300,12 +302,20 @@ class CourseLifecycle(
         })
     }
 
-    fun runExamplesOnceToRetrieveTestNames(course: Course): Course {
-        // TODO: record test names for all tasks, not just examples
-        course.examples.forEach { example ->
-            if (example.start == null) {
-                val result = executionService.executeTemplate(example)
-                example.testNames = result.second.tests
+    fun runTemplatesToRetrieveTestNames(course: Course): Course {
+        // Examples: only while unpublished, so the test names never change during or after the interactive period.
+        course.examples.filter { it.start == null }.forEach { example ->
+            example.testNames = executionService.executeTemplate(example).second.tests
+        }
+        // Regular tasks: only with tasks.record-test-results=true, because every task template is graded once in Docker.
+        // A failing template must not break the whole import; the task then keeps its previous test names.
+        if (recordTestResults) {
+            course.assignments.filter { it.enabled }.flatMap { it.tasks }.filter { it.enabled }.forEach { task ->
+                try {
+                    task.testNames = executionService.executeTemplate(task).second.tests
+                } catch (e: Exception) {
+                    logger.warn(e) { "Could not retrieve test names for task ${task.slug} of course ${course.slug}" }
+                }
             }
         }
         return course

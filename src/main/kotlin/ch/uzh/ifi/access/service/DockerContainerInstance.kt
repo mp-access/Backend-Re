@@ -20,14 +20,12 @@ class DockerContainerInstance(
     private val dockerClient: DockerClient,
     override val id: String,
     override val hostWorkDir: Path,
-    val image: String,
     /** Non-root user the student workload runs as (docker `--user` syntax, e.g. "1000:1000"). */
     private val execUser: String,
 ) : DockerContainer {
 
     private val logger = KotlinLogging.logger {}
 
-    override var state: ContainerState = ContainerState.IDLE
     override var reuseCount: Int = 0
 
     override fun exec(script: String, timeoutSeconds: Long): ExecResult {

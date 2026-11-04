@@ -11,19 +11,12 @@ import org.springframework.stereotype.Service
 class EvaluationService(
     private val evaluationRepository: EvaluationRepository,
 ) {
-    fun getEvaluation(taskId: Long?, userId: String?): Evaluation? {
-        val res = evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
-        // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)
-        res?.submissions?.forEach { it.files }
-        res?.submissions?.forEach { it.persistentResultFiles }
-        return res
-    }
+    // Submission files are NOT preloaded: they are lazy collections that are fetched when actually read
+    // (within the transaction or the open session of the request). The submissions themselves are loaded
+    // anyway by Evaluation.updateRemainingAttempts (@PostLoad).
+    fun getEvaluation(taskId: Long?, userId: String?): Evaluation? =
+        evaluationRepository.getTopByTask_IdAndUserIdOrderById(taskId, userId)
 
-    fun getEvaluationSummary(task: Task, userId: String): EvaluationSummary? {
-        val res = evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
-        // TODO: this brute-force approach loads all files. Takes long when loading a course (i.e. all evaluations)
-        res?.submissions?.forEach { it.files }
-        res?.submissions?.forEach { it.persistentResultFiles }
-        return res
-    }
+    fun getEvaluationSummary(task: Task, userId: String): EvaluationSummary? =
+        evaluationRepository.findTopByTask_IdAndUserIdOrderById(task.id, userId)
 }

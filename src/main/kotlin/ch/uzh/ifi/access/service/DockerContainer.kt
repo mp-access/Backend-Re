@@ -2,8 +2,6 @@ package ch.uzh.ifi.access.service
 
 import java.nio.file.Path
 
-enum class ContainerState { IDLE, BUSY, DEAD }
-
 /**
  * Result of running a submission inside a pooled container.
  * [timedOut] lets the caller distinguish a timeout kill (137) from a cgroup OOM kill (137),
@@ -27,9 +25,6 @@ interface DockerContainer {
 
     /** Host directory bound into the container (at /submission). Per-submission files go here. */
     val hostWorkDir: Path
-
-    /** IDLE = free in the pool, BUSY = currently serving a submission, DEAD = being recycled. */
-    var state: ContainerState
 
     /** How many submissions this container has served (drives max-reuse recycling). */
     var reuseCount: Int

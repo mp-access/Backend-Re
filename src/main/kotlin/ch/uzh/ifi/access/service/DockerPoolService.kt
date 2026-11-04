@@ -169,13 +169,6 @@ class DockerPoolService(
         idle.clear()
     }
 
-    /** Drain then re-fill — a clean slate between benchmark runs. */
-    @Synchronized
-    fun reinit() {
-        drain()
-        fill()
-    }
-
     /** Current pool counts, for observability / benchmarking. */
     fun status(): Map<String, Any> = mapOf(
         "enabled" to enabled,
@@ -213,7 +206,6 @@ class DockerPoolService(
                 return null
             }
             if (c.isHealthy()) {
-                c.state = ContainerState.BUSY
                 borrowWaitTimer?.record(System.nanoTime() - startNanos, TimeUnit.NANOSECONDS)
                 return c
             }
@@ -235,7 +227,6 @@ class DockerPoolService(
                 return
             }
             container.reset()
-            container.state = ContainerState.IDLE
             idle.add(container)
         } catch (e: Exception) {
             logger.warn(e) { "release() failed for ${container.id}, recycling" }
@@ -259,7 +250,6 @@ class DockerPoolService(
                 survivors.add(c)
             } else {
                 logger.warn { "reaper removing dead idle container ${c.id}" }
-                c.state = ContainerState.DEAD
                 all.remove(c)
                 runCatching { c.destroy() }
             }
@@ -271,7 +261,6 @@ class DockerPoolService(
     /** Destroy a spent/broken container and replace it, keeping the pool at [poolSize]. */
     private fun recycle(container: DockerContainer) {
         recycleCounter?.increment()
-        container.state = ContainerState.DEAD
         all.remove(container)
         runCatching { container.destroy() }
         if (shuttingDown) return
@@ -336,7 +325,7 @@ class DockerPoolService(
                 .id
         }
         dockerClient.startContainerCmd(id).exec()
-        val container = DockerContainerInstance(dockerClient, id, hostWorkDir, image, execUser)
+        val container = DockerContainerInstance(dockerClient, id, hostWorkDir, execUser)
 
         // SECURITY sanity check (fail-closed): never serve a container whose workload is root.
         val uid = try {

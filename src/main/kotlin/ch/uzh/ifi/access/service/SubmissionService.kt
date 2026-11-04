@@ -8,7 +8,6 @@ import ch.uzh.ifi.access.model.dto.SubmissionFileDTO
 import ch.uzh.ifi.access.repository.*
 import org.modelmapper.ModelMapper
 import org.springframework.cache.annotation.CacheEvict
-import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +17,6 @@ import java.time.LocalDateTime
 @Service
 class SubmissionService(
     private val modelMapper: ModelMapper,
-    private val courseRepository: CourseRepository,
     private val taskRepository: TaskRepository,
     private val taskFileRepository: TaskFileRepository,
     private val submissionRepository: SubmissionRepository,
@@ -68,16 +66,9 @@ class SubmissionService(
     }
 
     // @Transactional so grading works when invoked from a SubmissionQueueService worker thread
-    // (no open-session-in-view off the request thread); still reached cross-bean, so the evictions fire.
-    // calculateAvgTaskPoints is evicted here as well: the annotation on createSubmission does not fire for
-    // this internal call (self-invocation bypasses the Spring proxy).
+    // (no open-session-in-view off the request thread); still reached cross-bean, so the eviction fires.
     @Transactional
-    @Caching(
-        evict = [
-            CacheEvict("CourseService.getCoursesOverview", key = "#submissionDTO.userId"),
-            CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
-        ]
-    )
+    @CacheEvict("CourseService.getCoursesOverview", key = "#submissionDTO.userId")
     fun createTaskSubmission(
         courseSlug: String,
         assignmentSlug: String,
@@ -94,11 +85,6 @@ class SubmissionService(
     }
 
     /** Creates and grades a submission for a task or an example (examples: via ExampleService, cross-bean). */
-    @Caching(
-        evict = [
-            CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskSlug"),
-        ]
-    )
     fun createSubmission(
         courseSlug: String,
         taskSlug: String,
@@ -119,10 +105,9 @@ class SubmissionService(
                 "Submission rejected - missing userId"
             )
         }
-        val eval = evaluationService.getEvaluation(task.id, submissionDTO.userId)
+        val evaluation = evaluationService.getEvaluation(task.id, submissionDTO.userId)
             ?: task.createEvaluation(submissionDTO.userId)
-        evaluationRepository.saveAndFlush(eval)
-        val evaluation = eval
+        evaluationRepository.saveAndFlush(evaluation)
         // the controller prevents regular users from even submitting with restricted = false
         // meaning for regular users, restricted is always true
         if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !isExample(task)) {
@@ -133,16 +118,16 @@ class SubmissionService(
                 )
         }
         // at this point, all restrictions have passed, and we can create the submission
-        val sub = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
-        if (submissionReceivedAt != null) sub.createdAt = submissionReceivedAt
-        submissionRepository.saveAndFlush(sub)
+        val submission = evaluation.addSubmission(modelMapper.map(submissionDTO, Submission::class.java))
+        if (submissionReceivedAt != null) submission.createdAt = submissionReceivedAt
+        submissionRepository.saveAndFlush(submission)
         submissionDTO.files.filter { fileDTO -> fileDTO.content != null }
-            .forEach { fileDTO -> sub.files.add(createSubmissionFile(sub, fileDTO)) }
-        submissionRepository.saveAndFlush(sub)
-        val submission = sub
+            .forEach { fileDTO -> submission.files.add(createSubmissionFile(submission, fileDTO)) }
+        submissionRepository.saveAndFlush(submission)
         // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
         submission.valid = !submission.isGraded
-        val course = getCourseBySlug(courseSlug)
+        // the course is reachable via the task, no extra lookup by slug needed
+        val course = task.assignment?.course ?: task.course!!
         // execute the submission
         try {
             dockerService.execute(course, submission, task, evaluation)
@@ -155,6 +140,7 @@ class SubmissionService(
             // Points only change through the grading above, so evicting once afterwards is enough.
             pointsService.evictTaskPoints(task.id!!, submissionDTO.userId!!)
             pointsService.evictCoursePoints(courseSlug, submissionDTO.userId!!)
+            pointsService.evictAvgTaskPoints(task.id!!)
         }
         return submission
     }
@@ -165,14 +151,6 @@ class SubmissionService(
             content = fileDTO.content
             taskFile = getTaskFileById(fileDTO.taskFileId!!)
         }
-
-    // TODO: Speed influence?
-    fun getCourseBySlug(courseSlug: String): Course {
-        return courseRepository.getBySlug(courseSlug) ?: throw ResponseStatusException(
-            HttpStatus.NOT_FOUND,
-            "No course found with the URL $courseSlug"
-        )
-    }
 
     // The slug -> id resolution is cached in TaskLookupService (a separate bean so Spring's caching
     // proxy actually engages). We then load a FRESH managed entity by primary key: caching the Task

@@ -20,9 +20,7 @@ class CacheConfig {
         )
 
         val TEMPORARY_CACHES = listOf(
-            "studentWithPoints",
             "PointsService.calculateTaskPoints",
-            "PointsService.calculateAssignmentPoints",
             "PointsService.getMaxPoints",
             "PointsService.calculateAvgTaskPoints",
             "PointsService.calculateAssignmentMaxPoints",
@@ -52,6 +50,5 @@ class CacheConfig {
 class CacheInitListener(val cacheInitService: CacheInitService) : ApplicationListener<ApplicationReadyEvent> {
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         cacheInitService.initCache()
-        //cacheInitService.renameIDs()
     }
 }

@@ -32,7 +32,8 @@ class ExecutionService(
     private val taskFileRepository: TaskFileRepository,
     private val jsonMapper: JsonMapper,
     private val dockerPoolService: DockerPoolService,
-    @Value("\${docker.timeoutLimit:10}") private val timeOutLimit: Int
+    @Value("\${docker.timeoutLimit:10}") private val timeOutLimit: Int,
+    @Value("\${tasks.record-test-results:false}") private val recordTestResults: Boolean = false,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -52,7 +53,6 @@ class ExecutionService(
         val course = task.assignment?.course ?: task.course!!
         val submission = Submission()
         submission.command = Command.GRADE
-        val visible = getVisibleFiles(task.id)
         submission.files = getVisibleFiles(task.id).map { it ->
             val file = SubmissionFile()
             file.content = it.template
@@ -83,7 +83,7 @@ class ExecutionService(
                 .exec(PullImageResultCallback())
                 .awaitCompletion()
         }
-        val folderId = submission.id.toString() ?: java.util.UUID.randomUUID().toString()
+        val folderId = submission.id?.toString() ?: java.util.UUID.randomUUID().toString()
 
         dockerClient.createContainerCmd(image).use { containerCmd ->
             val submissionDir = workingDir.resolve("submissions").resolve(folderId)
@@ -202,7 +202,6 @@ class ExecutionService(
                     persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
                 }
             }
-            val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
             if (submission.isGraded) {
                 results = when (statusCode) {
                     // out of memory
@@ -276,8 +275,7 @@ class ExecutionService(
                 if (results.points != null) {
                     // only relevant for GRADE submissions (RUN and TEST are always valid)
                     submission.valid = true
-                    // TODO: record passed tests for all submissions, not just examples
-                    if (isExample(task)) {
+                    if (recordsTestResults(task)) {
                         if (task.testNames.size == results.hints.size) {
                             submission.testsPassed = results.hints.map { hint ->
                                 if (hint == null) 1 else 0
@@ -292,7 +290,6 @@ class ExecutionService(
                     evaluation.update(submission.points)
                 }
             }
-            evalMark.elapsedNow().inWholeMicroseconds
             FileUtils.deleteQuietly(submissionDir.toFile())
         }
         return Pair(submission, results)
@@ -385,7 +382,6 @@ class ExecutionService(
                     persistentResultFileErrors.add("A file '$path' should have been created, but wasn't.")
                 }
             }
-            val evalMark = kotlin.time.TimeSource.Monotonic.markNow()
             if (submission.isGraded) {
                 results = when (statusCode) {
                     // out of memory OR timeout (both surface as 137); exec.timedOut disambiguates
@@ -432,7 +428,7 @@ class ExecutionService(
                 submission.output = results.hints.filterNotNull().firstOrNull()
                 if (results.points != null) {
                     submission.valid = true
-                    if (isExample(task)) {
+                    if (recordsTestResults(task)) {
                         if (task.testNames.size == results.hints.size) {
                             submission.testsPassed = results.hints.map { hint -> if (hint == null) 1 else 0 }
                         } else {
@@ -443,7 +439,6 @@ class ExecutionService(
                     evaluation.update(submission.points)
                 }
             }
-            evalMark.elapsedNow().inWholeMicroseconds
             return Pair(submission, results)
         } finally {
             // reset() inside release() wipes /workspace + /submission — no manual cleanup here
@@ -504,6 +499,9 @@ class ExecutionService(
     fun isExample(task: Task): Boolean {
         return task.course != null
     }
+
+    /** Examples always record which tests passed; regular tasks only with tasks.record-test-results=true. */
+    private fun recordsTestResults(task: Task): Boolean = isExample(task) || recordTestResults
 
     private fun readLogsFile(path: Path): String {
         val logsFile = path.resolve("logs.txt").toFile()
