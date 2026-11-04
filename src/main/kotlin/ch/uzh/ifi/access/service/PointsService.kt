@@ -15,38 +15,38 @@ class PointsService(
     private val evaluationRepository: EvaluationRepository,
 ) {
     // Keyed by task id: task slugs are only unique within an assignment, not across courses.
-    @Cacheable(value = ["PointsService.calculateAvgTaskPoints"], key = "#taskId")
+    @Cacheable(value = [CacheNames.AVG_TASK_POINTS], key = "#taskId")
     fun calculateAvgTaskPoints(taskId: Long): Double =
         evaluationRepository.getAverageBestScore(taskId) ?: 0.0
 
-    @Cacheable(value = ["PointsService.calculateTaskPoints"], key = "#taskId + '-' + #userId")
+    @Cacheable(value = [CacheNames.TASK_POINTS], key = "#taskId + '-' + #userId")
     fun calculateTaskPoints(taskId: Long?, userId: String): Double {
         return evaluationService.getEvaluation(taskId, userId)?.bestScore ?: 0.0
     }
 
-    @Cacheable("PointsService.calculateAssignmentMaxPoints")
+    @Cacheable(CacheNames.ASSIGNMENT_MAX_POINTS)
     fun calculateAssignmentMaxPoints(tasks: List<Task>): Double {
         return tasks.stream().filter { it.enabled }.mapToDouble { it.maxPoints!! }.sum()
     }
 
-    @Cacheable("PointsService.getMaxPoints", key = "#courseSlug")
+    @Cacheable(CacheNames.COURSE_MAX_POINTS, key = "#courseSlug")
     fun getMaxPoints(courseSlug: String?): Double {
         return assignmentRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug).sumOf { it.maxPoints!! }
     }
 
     @Caching(
         evict = [
-            CacheEvict("PointsService.calculateTaskPoints", key = "#taskId + '-' + #userId"),
+            CacheEvict(CacheNames.TASK_POINTS, key = "#taskId + '-' + #userId"),
         ]
     )
     fun evictTaskPoints(taskId: Long, userId: String) {}
 
-    @CacheEvict("PointsService.calculateAvgTaskPoints", key = "#taskId")
+    @CacheEvict(CacheNames.AVG_TASK_POINTS, key = "#taskId")
     fun evictAvgTaskPoints(taskId: Long) {}
 
     @Caching(
         evict = [
-            CacheEvict("CourseService.calculateCoursePoints", key = "#courseSlug + '-' + #userId"),
+            CacheEvict(CacheNames.COURSE_POINTS, key = "#courseSlug + '-' + #userId"),
         ]
     )
     fun evictCoursePoints(courseSlug: String?, userId: String) {}

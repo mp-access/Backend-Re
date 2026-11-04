@@ -34,11 +34,7 @@ class SubmissionService(
         }
 
         val task = taskRepository.findById(taskId!!).get()
-        val courseSlug = if (isExample(task)) {
-            task.course!!.slug
-        } else {
-            task.assignment!!.course!!.slug
-        }
+        val courseSlug = task.owningCourse!!.slug
         val usernames = userIdentityService.getRegistrationIDCandidates(userId)
         val userRoles = courseAuthorizationService.getUserRoles(usernames)
         val isAdmin = courseAuthorizationService.isAdmin(userRoles, courseSlug!!)
@@ -52,7 +48,7 @@ class SubmissionService(
             val displayedOutput = when {
                 isAdmin && submission.command == Command.GRADE -> "Logs:\n$logs\n\nHint:\n${submission.output}"
                 isAdmin -> logs
-                isExample(task) && submission.evaluation!!.task!!.status == TaskStatus.Interactive &&
+                task.isExample && submission.evaluation!!.task!!.status == TaskStatus.Interactive &&
                     submission.command == Command.GRADE -> ""
                 submission.command != Command.GRADE -> logs
                 else -> return@map submission
@@ -61,14 +57,10 @@ class SubmissionService(
         }
     }
 
-    private fun isExample(task: Task): Boolean {
-        return task.course != null
-    }
-
     // @Transactional so grading works when invoked from a SubmissionQueueService worker thread
     // (no open-session-in-view off the request thread); still reached cross-bean, so the eviction fires.
     @Transactional
-    @CacheEvict("CourseService.getCoursesOverview", key = "#submissionDTO.userId")
+    @CacheEvict(CacheNames.COURSES_OVERVIEW, key = "#submissionDTO.userId")
     fun createTaskSubmission(
         courseSlug: String,
         assignmentSlug: String,
@@ -110,7 +102,7 @@ class SubmissionService(
         evaluationRepository.saveAndFlush(evaluation)
         // the controller prevents regular users from even submitting with restricted = false
         // meaning for regular users, restricted is always true
-        if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !isExample(task)) {
+        if (submissionDTO.restricted && submissionDTO.command == Command.GRADE && !task.isExample) {
             if (evaluation.remainingAttempts == null || evaluation.remainingAttempts!! <= 0)
                 throw ResponseStatusException(
                     HttpStatus.FORBIDDEN,
@@ -127,7 +119,7 @@ class SubmissionService(
         // RUN and TEST submissions are always valid, GRADE submissions will be validated during execution
         submission.valid = !submission.isGraded
         // the course is reachable via the task, no extra lookup by slug needed
-        val course = task.assignment?.course ?: task.course!!
+        val course = task.owningCourse!!
         // execute the submission
         try {
             dockerService.execute(course, submission, task, evaluation)

@@ -83,6 +83,14 @@ class Task {
 
     @Transient
     var userId: String? = null
+    /** Examples belong directly to a course, regular tasks to an assignment (see the @Check constraint). */
+    val isExample: Boolean
+        get() = course != null
+
+    /** The course this task or example belongs to. */
+    val owningCourse: Course?
+        get() = assignment?.course ?: course
+
     val instructions: String?
         get() = files.first { taskFile -> taskFile.enabled && taskFile.instruction }.template
     val attemptRefill: Int?
@@ -150,6 +158,9 @@ class Task {
     }
 
     /** True if [time] lies in the interactive period of this example: after start and before end + grace period. */
+    /** End of the interactive period (end + grace period), or null while the example is not published. */
+    fun interactiveEnd(gracePeriodSeconds: Long): LocalDateTime? = end?.plusSeconds(gracePeriodSeconds)
+
     fun isInteractiveAt(time: LocalDateTime, gracePeriodSeconds: Long): Boolean =
         isInteractivePeriod(start, end, time, gracePeriodSeconds)
 

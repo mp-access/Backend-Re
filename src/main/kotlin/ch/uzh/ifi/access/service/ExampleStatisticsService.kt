@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.EmitterType
@@ -10,7 +11,6 @@ import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import ch.uzh.ifi.access.repository.SubmissionRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.http.HttpStatus
 import org.springframework.scheduling.annotation.Scheduled
@@ -34,7 +34,7 @@ class ExampleStatisticsService(
     private val visitQueueService: VisitQueueService,
     private val emitterService: EmitterService,
     private val submissionCounter: InteractiveSubmissionCounter,
-    @Value("\${examples.grace-period}") private val gracePeriod: Long,
+    private val exampleProperties: ExampleProperties,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -83,7 +83,7 @@ class ExampleStatisticsService(
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No course found with the URL $courseSlug")).participantCount
         val example = exampleService.getExampleBySlug(courseSlug, exampleSlug)
         val stats = if (example.start == null || example.end == null) emptyList() else
-            submissionRepository.findInteractiveExampleSubmissionStats(example.id!!, example.start!!, example.end!!.plusSeconds(gracePeriod))
+            submissionRepository.findInteractiveExampleSubmissionStats(example.id!!, example.start!!, example.interactiveEnd(exampleProperties.gracePeriod)!!)
         val processed = stats.map { row ->
             Triple(parseTestsPassed(row.getTestsPassed()), row.getPoints(), row.getHasEmbedding())
         }.filter { it.first.isNotEmpty() }
@@ -120,7 +120,7 @@ class ExampleStatisticsService(
 
         // Note: For performance reasons, we decided to not check anymore if the interactive example submissions come from students.
         return submissionRepository.findInteractiveExampleSubmissions(
-            example.id, Command.GRADE, example.start!!, example.end!!.plusSeconds(gracePeriod)
+            example.id, Command.GRADE, example.start!!, example.interactiveEnd(exampleProperties.gracePeriod)!!
         ).filter { submission -> submission.testsPassed.isNotEmpty() }
     }
 
@@ -185,9 +185,9 @@ class ExampleStatisticsService(
     // Submission counts per student
     // ---------------------------------------------------------------------------------------------
 
-    @Cacheable(value = ["ExampleService.computeSubmissionsCount"], key = "#courseSlug")
+    @Cacheable(value = [CacheNames.EXAMPLE_SUBMISSIONS_COUNT], key = "#courseSlug")
     fun computeSubmissionsCount(courseSlug: String): ExampleSubmissionsCountDTO {
-        val submissionsCount: Map<String, Int> = exampleRepository.getSubmissionsCount(courseSlug, gracePeriod).associate { row ->
+        val submissionsCount: Map<String, Int> = exampleRepository.getSubmissionsCount(courseSlug, exampleProperties.gracePeriod).associate { row ->
             (row["user_id"] as String) to (row["entry_count"] as Number).toInt()
         }
         return ExampleSubmissionsCountDTO(submissionsCount = submissionsCount.toMutableMap())

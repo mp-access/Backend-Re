@@ -54,11 +54,7 @@ class EmitterService : DisposableBean, SmartLifecycle {
         emitters.computeIfAbsent(type) { ConcurrentHashMap() }
             .computeIfAbsent(slug) { ConcurrentHashMap() }[id] = emitter
         scheduler.schedule({
-            try {
-                emitter.send(SseEmitter.event().name("emitter-id").data(id))
-            } catch (_: Exception) {
-                discard(type, slug, id, emitter)
-            }
+            trySend(type, slug, id, emitter) { SseEmitter.event().name("emitter-id").data(id) }
         }, 1, TimeUnit.SECONDS)
 
         return emitter
@@ -67,27 +63,10 @@ class EmitterService : DisposableBean, SmartLifecycle {
     fun sendPayload(type: EmitterType, courseSlug: String, name: String, message: Any) {
         var delivered = 0
         var failed = 0
-        if (EmitterType.SUPERVISOR == type || EmitterType.EVERYONE == type) {
-            emitters[EmitterType.SUPERVISOR]?.get(courseSlug)?.forEach {
-                try {
-                    it.value.send(SseEmitter.event().name(name).data(message))
-                    delivered++
-                } catch (_: Exception) {
-                    discard(EmitterType.SUPERVISOR, courseSlug, it.key, it.value)
-                    failed++
-                }
-            }
-        }
-
-        if (EmitterType.STUDENT == type || EmitterType.EVERYONE == type) {
-            emitters[EmitterType.STUDENT]?.get(courseSlug)?.forEach {
-                try {
-                    it.value.send(SseEmitter.event().name(name).data(message))
-                    delivered++
-                } catch (_: Exception) {
-                    discard(EmitterType.STUDENT, courseSlug, it.key, it.value)
-                    failed++
-                }
+        recipientsOf(type).forEach { recipient ->
+            emitters[recipient]?.get(courseSlug)?.forEach { (id, emitter) ->
+                if (trySend(recipient, courseSlug, id, emitter) { SseEmitter.event().name(name).data(message) }) delivered++
+                else failed++
             }
         }
         logger.info { "SSE '$name' in $courseSlug: delivered=$delivered failed=$failed" }
@@ -96,6 +75,23 @@ class EmitterService : DisposableBean, SmartLifecycle {
     fun keepAliveEmitter(type: EmitterType, slug: String, emitterId: String) {
         emitters[type]?.get(slug)?.get(emitterId)?.lastHeartbeat = ZonedDateTime.now()
     }
+
+    /** EVERYONE addresses supervisors and students; emitters are only ever registered under those two. */
+    private fun recipientsOf(type: EmitterType): List<EmitterType> =
+        if (type == EmitterType.EVERYONE) listOf(EmitterType.SUPERVISOR, EmitterType.STUDENT) else listOf(type)
+
+    /** Sends an event; a failing emitter (client gone) is discarded. Returns whether the event was sent. */
+    private fun trySend(
+        type: EmitterType, slug: String, id: String, emitter: PerishableSseEmitter,
+        event: () -> SseEmitter.SseEventBuilder,
+    ): Boolean =
+        try {
+            emitter.send(event())
+            true
+        } catch (_: Exception) {
+            discard(type, slug, id, emitter)
+            false
+        }
 
     private fun discard(type: EmitterType, slug: String, id: String, emitter: PerishableSseEmitter) {
         emitters[type]?.get(slug)?.remove(id)
@@ -106,37 +102,28 @@ class EmitterService : DisposableBean, SmartLifecycle {
         }
     }
 
-    @Scheduled(fixedRate = 20 * 1000)
-    fun pingEmitters() {
+    private inline fun forEachEmitter(action: (EmitterType, String, String, PerishableSseEmitter) -> Unit) {
         emitters.forEach { (type, slugMap) ->
             slugMap.forEach { (slug, emitterMap) ->
-                emitterMap.forEach { (id, emitter) ->
-                    try {
-                        emitter.send(SseEmitter.event().comment("ping"))
-                    } catch (_: Exception) {
-                        discard(type, slug, id, emitter)
-                    }
-                }
+                emitterMap.forEach { (id, emitter) -> action(type, slug, id, emitter) }
             }
+        }
+    }
+
+    @Scheduled(fixedRate = 20 * 1000)
+    fun pingEmitters() {
+        forEachEmitter { type, slug, id, emitter ->
+            trySend(type, slug, id, emitter) { SseEmitter.event().comment("ping") }
         }
     }
 
     @Scheduled(fixedRate = 30 * 1000)
     fun cleanupEmitters() {
-        emitters.forEach { (type, slugMap) ->
-            slugMap.forEach { (slug, emitterMap) ->
-                emitterMap.forEach { (id, emitter) ->
-                    val age = Duration.between(emitter.lastHeartbeat, ZonedDateTime.now()).abs().seconds
-                    if (age > 60) {
-                        logger.debug { "Emitter ${emitter.id} died of old age $age" }
-                        try {
-                            emitter.complete()
-                        } catch (e: IllegalStateException) {
-                            logger.debug { "emitter completion failed: $e" }
-                        }
-                        emitters[type]?.get(slug)?.remove(id)
-                    }
-                }
+        forEachEmitter { type, slug, id, emitter ->
+            val age = Duration.between(emitter.lastHeartbeat, ZonedDateTime.now()).abs().seconds
+            if (age > 60) {
+                logger.debug { "Emitter ${emitter.id} died of old age $age" }
+                discard(type, slug, id, emitter)
             }
         }
     }

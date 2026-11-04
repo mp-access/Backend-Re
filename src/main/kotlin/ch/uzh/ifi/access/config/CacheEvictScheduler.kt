@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.config
 
+import ch.uzh.ifi.access.service.CacheNames
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.cache.CacheManager
 import org.springframework.cache.annotation.CacheEvict
@@ -11,7 +12,7 @@ class CacheEvictScheduler(private val cacheManager: CacheManager) {
     private val logger = KotlinLogging.logger {}
 
     @CacheEvict(
-        value = ["ExampleService.getInteractiveExampleSlug"],
+        value = [CacheNames.INTERACTIVE_EXAMPLE],
         allEntries = true
     )
     @Scheduled(fixedRateString = "15s")
@@ -19,7 +20,7 @@ class CacheEvictScheduler(private val cacheManager: CacheManager) {
         //logger.debug { "Scheduled cache eviction of ExampleService.getInteractiveExampleSlug" }
     }
 
-    @CacheEvict("VisitQueueService.getRecentlyActiveCount", allEntries = true)
+    @CacheEvict(CacheNames.RECENTLY_ACTIVE_COUNT, allEntries = true)
     @Scheduled(fixedRateString = "15s")
     fun evictRecentlyActiveCountCache() {
         //logger.debug { "Scheduled cache eviction of VisitQueueService.getRecentlyActiveCount" }

@@ -33,7 +33,7 @@ class VisitQueueService {
         }
     }
 
-    @Cacheable("VisitQueueService.getRecentlyActiveCount", key = "#slug")
+    @Cacheable(CacheNames.RECENTLY_ACTIVE_COUNT, key = "#slug")
     fun getRecentlyActiveCount(slug: String): Int {
         val q = queues[slug] ?: return 0
 

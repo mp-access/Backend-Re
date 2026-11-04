@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.config.SubmissionQueueProperties
 import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Role
@@ -292,10 +293,10 @@ class CourseController(
     @Caching(
         evict = [
             CacheEvict(
-                value = ["CourseService.getStudents", "ExampleService.computeSubmissionsCount"],
+                value = [CacheNames.STUDENTS, CacheNames.EXAMPLE_SUBMISSIONS_COUNT],
                 key = "#course"
             ),
-            CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+            CacheEvict(value = [CacheNames.COURSES_OVERVIEW], allEntries = true)
         ]
     )
     fun registerParticipants(@PathVariable course: String, @RequestBody registrationIDs: List<String>) =

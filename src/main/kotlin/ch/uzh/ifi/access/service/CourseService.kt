@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.*
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.Role
@@ -41,12 +42,13 @@ class CourseService(
     private val evaluationService: EvaluationService,
     private val pointsService: PointsService,
     private val exampleQueueService: ExampleQueueService,
+    private val exampleProperties: ExampleProperties,
 ) {
 
     private val logger = KotlinLogging.logger {}
 
 
-    @Cacheable("CourseService.getStudents", key = "#courseSlug")
+    @Cacheable(CacheNames.STUDENTS, key = "#courseSlug")
     fun getStudents(courseSlug: String): List<StudentDTO> {
         val course = getCourseBySlug(courseSlug)
         return course.registeredStudents.map {
@@ -151,7 +153,7 @@ class CourseService(
         courseRepository.getBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
 
     fun getCourseSlugByTask(task: Task): String =
-        (task.assignment?.course ?: task.course)!!.slug!!
+        task.owningCourse!!.slug!!
 
     fun getCourseWorkspaceBySlug(courseSlug: String): CourseWorkspace =
         courseRepository.findBySlug(courseSlug) ?: notFound("No course found with the URL $courseSlug")
@@ -159,7 +161,7 @@ class CourseService(
     fun getTaskById(taskId: Long): Task =
         taskRepository.findById(taskId).orElse(null) ?: notFound("No task found with the id $taskId")
 
-    @Cacheable("CourseService.getCoursesOverview", key = "#userId")
+    @Cacheable(CacheNames.COURSES_OVERVIEW, key = "#userId")
     fun getCoursesOverview(userId: String): List<CourseOverview> {
         val candidates = userIdentityService.getRegistrationIDCandidates(userId)
         return courseRepository.findCoursesForUser(candidates).toList()
@@ -209,7 +211,7 @@ class CourseService(
             exampleQueueService.isSubmissionCurrentlyProcessed(courseSlug, taskSlug, uid) ||
             (nextAttemptAt == null && task.assignment == null && task.status == TaskStatus.Active && task.end != null)
 
-        return if (exampleBlocked) task.end?.plusHours(2) else nextAttemptAt
+        return if (exampleBlocked) task.end?.plusHours(exampleProperties.submissionLockHours) else nextAttemptAt
     }
 
     fun getAssignmentDeadlineForTask(taskId: Long): LocalDateTime? =
@@ -231,7 +233,7 @@ class CourseService(
         return proxy.calculateCoursePoints(slug, userId)
     }
 
-    @Cacheable(value = ["CourseService.calculateCoursePoints"], key = "#slug + '-' + #userId")
+    @Cacheable(value = [CacheNames.COURSE_POINTS], key = "#slug + '-' + #userId")
     fun calculateCoursePoints(slug: String, userId: String): Double =
         courseRepository.getTotalPoints(slug, userId) ?: 0.0
 
@@ -244,7 +246,7 @@ class CourseService(
         taskRepository.getByAssignment_Course_SlugAndAssignment_SlugAndSlug(courseSlug, assignmentSlug, taskSlug)
             ?: notFound("No task found with the URL $taskSlug")
 
-    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+    @CacheEvict(value = [CacheNames.COURSES_OVERVIEW], allEntries = true)
     fun createCourse(course: CourseDTO): Course {
         return courseLifecycle.createFromRepository(course)
     }
@@ -292,11 +294,11 @@ class CourseService(
     @Transactional
     @Caching(
         evict = [
-            CacheEvict(value = ["PointsService.getMaxPoints"], key = "#courseSlug"),
-            CacheEvict(value = ["PointsService.calculateAssignmentMaxPoints"], allEntries = true),
-            CacheEvict(value = ["CourseService.calculateCoursePoints"], allEntries = true),
-            CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug"),
-            CacheEvict(value = ["ExampleService.supervisorHasVisibleExamples"], key = "#courseSlug")
+            CacheEvict(value = [CacheNames.COURSE_MAX_POINTS], key = "#courseSlug"),
+            CacheEvict(value = [CacheNames.ASSIGNMENT_MAX_POINTS], allEntries = true),
+            CacheEvict(value = [CacheNames.COURSE_POINTS], allEntries = true),
+            CacheEvict(value = [CacheNames.STUDENT_HAS_VISIBLE_EXAMPLES], key = "#courseSlug"),
+            CacheEvict(value = [CacheNames.SUPERVISOR_HAS_VISIBLE_EXAMPLES], key = "#courseSlug")
         ]
     )
     fun updateCourse(courseSlug: String): Course {
@@ -310,7 +312,7 @@ class CourseService(
         return courseLifecycle.updateFromDirectory(existingCourse, directory)
     }
 
-    @CacheEvict(value = ["CourseService.getCoursesOverview"], allEntries = true)
+    @CacheEvict(value = [CacheNames.COURSES_OVERVIEW], allEntries = true)
     fun deleteCourse(courseSlug: String) {
         courseLifecycle.delete(courseSlug)
     }

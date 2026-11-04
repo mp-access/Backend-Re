@@ -163,10 +163,9 @@ class ExampleQueueService(
                 logger.error { "Cannot enqueue embedding for submission $submissionId: course, example or id missing." }
                 return
             }
-            val concatenatedSubmissionContent = newSubmission.files
-                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
-            embeddingQueueService.addToQueue(courseSlug, exampleSlug, submissionId, concatenatedSubmissionContent)
+            embeddingQueueService.addToQueue(
+                courseSlug, exampleSlug, submissionId, EmbeddingQueueService.embeddingInput(newSubmission)
+            )
         } catch (e: Exception) {
             logger.error(e) { "Failed to enqueue embedding for submission ${newSubmission.id}. Grading is saved." }
         }

@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.config
 
+import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.service.CacheInitService
 import ch.uzh.ifi.access.service.RoleCaches
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -16,25 +17,25 @@ import org.springframework.stereotype.Component
 class CacheConfig {
     companion object {
         val PERMANENT_CACHES = RoleCaches.ALL + listOf(
-            "TaskLookupService.resolveTaskId"
+            CacheNames.TASK_ID
         )
 
         val TEMPORARY_CACHES = listOf(
-            "PointsService.calculateTaskPoints",
-            "PointsService.getMaxPoints",
-            "PointsService.calculateAvgTaskPoints",
-            "PointsService.calculateAssignmentMaxPoints",
-            "CourseService.getStudents",
-            "CourseService.calculateCoursePoints",
-            "CourseService.getCoursesOverview",
-            "ExampleService.studentHasVisibleExamples",
-            "ExampleService.supervisorHasVisibleExamples",
-            "ExampleService.computeSubmissionsCount"
+            CacheNames.TASK_POINTS,
+            CacheNames.COURSE_MAX_POINTS,
+            CacheNames.AVG_TASK_POINTS,
+            CacheNames.ASSIGNMENT_MAX_POINTS,
+            CacheNames.STUDENTS,
+            CacheNames.COURSE_POINTS,
+            CacheNames.COURSES_OVERVIEW,
+            CacheNames.STUDENT_HAS_VISIBLE_EXAMPLES,
+            CacheNames.SUPERVISOR_HAS_VISIBLE_EXAMPLES,
+            CacheNames.EXAMPLE_SUBMISSIONS_COUNT
         )
 
         val INDIVIDUAL_EVICTION_CACHES = listOf(
-            "ExampleService.getInteractiveExampleSlug",
-            "VisitQueueService.getRecentlyActiveCount"
+            CacheNames.INTERACTIVE_EXAMPLE,
+            CacheNames.RECENTLY_ACTIVE_COUNT
         )
     }
 

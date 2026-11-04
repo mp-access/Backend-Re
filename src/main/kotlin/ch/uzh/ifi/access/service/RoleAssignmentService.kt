@@ -79,7 +79,6 @@ class RoleAssignmentService(
                 logger.info { "Initializing roles for $username (a.k.a. $searchNames): $roles" }
                 val userResource = userDirectory.getUserResourceById(user.id)
                 // add the corresponding Keycloak roles
-                // TODO: Ask Carol if this is okay...
                 userResource.roles().realmLevel().add(resolveExistingRoles(roles, username))
                 markRolesInitialized(user, userResource)
                 evict(RoleCaches.EFFECTIVE_ROLES, user.id)

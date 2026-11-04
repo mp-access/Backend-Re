@@ -59,5 +59,5 @@ data class SubmissionQueueProperties(
 }
 
 @Configuration
-@EnableConfigurationProperties(ExampleQueueProperties::class, SubmissionQueueProperties::class)
+@EnableConfigurationProperties(ExampleQueueProperties::class, SubmissionQueueProperties::class, ExampleProperties::class)
 class QueuePropertiesConfig

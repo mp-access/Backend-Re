@@ -1,9 +1,9 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.model.dto.InteractiveExampleDTO
 import ch.uzh.ifi.access.repository.ExampleRepository
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
@@ -18,22 +18,22 @@ import java.time.LocalDateTime
 @Service
 class ExampleVisibilityService(
     private val exampleRepository: ExampleRepository,
-    @Value("\${examples.grace-period}") private val gracePeriod: Long,
+    private val exampleProperties: ExampleProperties,
 ) {
-    @Cacheable(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
+    @Cacheable(value = [CacheNames.INTERACTIVE_EXAMPLE], key = "#courseSlug")
     fun getInteractiveExampleSlug(courseSlug: String): InteractiveExampleDTO {
         val now = LocalDateTime.now()
         val interactiveExampleSlug = exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug)
-            .firstOrNull { Task.isInteractivePeriod(it.start, it.end, now, gracePeriod) }
+            .firstOrNull { Task.isInteractivePeriod(it.start, it.end, now, exampleProperties.gracePeriod) }
             ?.slug
         return InteractiveExampleDTO(interactiveExampleSlug)
     }
 
-    @Cacheable(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
+    @Cacheable(value = [CacheNames.STUDENT_HAS_VISIBLE_EXAMPLES], key = "#courseSlug")
     fun studentHasVisibleExamples(courseSlug: String): Boolean =
         exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug).any { it.start != null }
 
-    @Cacheable(value = ["ExampleService.supervisorHasVisibleExamples"], key = "#courseSlug")
+    @Cacheable(value = [CacheNames.SUPERVISOR_HAS_VISIBLE_EXAMPLES], key = "#courseSlug")
     fun supervisorHasVisibleExamples(courseSlug: String): Boolean =
         exampleRepository.findByCourse_SlugOrderByOrdinalNumDesc(courseSlug).isNotEmpty()
 }

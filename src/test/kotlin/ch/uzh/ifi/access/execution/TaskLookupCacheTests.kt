@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.execution
 
+import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.service.TaskLookupService
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -30,7 +31,7 @@ class TaskLookupCacheTests(
         val assignment = "classes"
         val task = "carpark-multiple-inheritance"
         val cacheKey = "$course/$assignment/$task"
-        val cache = cacheManager.getCache("TaskLookupService.resolveTaskId")!!
+        val cache = cacheManager.getCache(CacheNames.TASK_ID)!!
 
         // Start from a clean slot so we can prove THIS call is what populated it.
         cache.evict(cacheKey)

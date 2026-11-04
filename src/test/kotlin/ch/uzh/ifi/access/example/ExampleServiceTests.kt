@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.example
 
+import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Course
 import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.Task
@@ -80,7 +81,7 @@ class ExampleServiceTests {
         courseRepository = courseRepository,
         visibility = mockk<ExampleVisibilityService>(relaxed = true),
         submissionCounter = counter,
-        gracePeriod = GRACE_SECONDS,
+        exampleProperties = ExampleProperties(gracePeriod = GRACE_SECONDS),
     )
 
     private val statistics = ExampleStatisticsService(
@@ -91,7 +92,7 @@ class ExampleServiceTests {
         visitQueueService = visitQueueService,
         emitterService = emitterService,
         submissionCounter = counter,
-        gracePeriod = GRACE_SECONDS,
+        exampleProperties = ExampleProperties(gracePeriod = GRACE_SECONDS),
     )
 
     private fun newExampleSubmissionService(lockHours: Long = 2) = ExampleSubmissionService(
@@ -102,8 +103,7 @@ class ExampleServiceTests {
         submissionRepository = submissionRepository,
         emitterService = emitterService,
         statistics = statistics,
-        gracePeriod = GRACE_SECONDS,
-        submissionLockHours = lockHours,
+        exampleProperties = ExampleProperties(gracePeriod = GRACE_SECONDS, submissionLockHours = lockHours),
     )
 
     private val submissions = newExampleSubmissionService()

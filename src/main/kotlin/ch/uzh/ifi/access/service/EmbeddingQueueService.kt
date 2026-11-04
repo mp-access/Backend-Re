@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.service
 
 import ch.uzh.ifi.access.model.EmbeddingWithContext
+import ch.uzh.ifi.access.model.Submission
 import ch.uzh.ifi.access.model.dto.EmbeddingRequestBodyDTO
 import ch.uzh.ifi.access.model.dto.EmbeddingResponseBodyDTO
 import ch.uzh.ifi.access.repository.SubmissionRepository
@@ -27,6 +28,12 @@ class EmbeddingQueueService(
     companion object {
         private const val MAX_RETRIES = 2
         private const val BATCH_TIMEOUT_MILLIS = 2000L
+
+        /** The text an embedding is computed from: the content of all editable files of the submission. */
+        fun embeddingInput(submission: Submission): String =
+            submission.files
+                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
+                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
     }
 
     private val logger = KotlinLogging.logger {}
@@ -51,9 +58,7 @@ class EmbeddingQueueService(
         val submissionsById = submissionRepository.findAllById(submissionIds).filterNotNull().associateBy { it.id }
         submissionIds.forEach { submissionId ->
             val submission = submissionsById[submissionId] ?: return@forEach
-            val submissionContent = submission.files
-                .filter { submissionFile -> submissionFile.taskFile?.editable == true }
-                .joinToString(separator = "\n") { submissionFile -> submissionFile.content ?: "" }
+            val submissionContent = embeddingInput(submission)
             embeddingQueue.offer(
                 EmbeddingWithContext(
                     courseSlug = courseSlug,

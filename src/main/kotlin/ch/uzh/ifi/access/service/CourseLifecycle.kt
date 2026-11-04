@@ -6,7 +6,6 @@ import ch.uzh.ifi.access.model.dto.TaskDTO
 import ch.uzh.ifi.access.model.dto.TaskFilesDTO
 import ch.uzh.ifi.access.repository.CourseRepository
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.exception.NotFoundException
 import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.transaction.Transactional
 import org.eclipse.jgit.api.Git
@@ -47,7 +46,7 @@ class CourseLifecycle(
     private val logger = KotlinLogging.logger {}
 
     @Transactional
-    @CacheEvict(value = ["CourseService.getCoursesOverview", "TaskLookupService.resolveTaskId"], allEntries = true)
+    @CacheEvict(value = [CacheNames.COURSES_OVERVIEW, CacheNames.TASK_ID], allEntries = true)
     fun createFromRepository(courseDTO: CourseDTO): Course {
         val course = Course()
         if (courseDTO.slug != "") {
@@ -62,7 +61,7 @@ class CourseLifecycle(
     }
 
     @Transactional
-    @CacheEvict(value = ["CourseService.getCoursesOverview", "TaskLookupService.resolveTaskId"], allEntries = true)
+    @CacheEvict(value = [CacheNames.COURSES_OVERVIEW, CacheNames.TASK_ID], allEntries = true)
     fun updateFromRepository(existingCourse: Course): Course =
         withClonedRepository(existingCourse) { path -> updateFromDirectory(existingCourse, path) }
 
@@ -85,7 +84,7 @@ class CourseLifecycle(
         if (runCommandRequired && evaluator.runCommand == null)
             throw badRequest("Run command is missing for $kind ${taskDTO.slug}")
 
-        pullDockerImage(dockerImage)
+        dockerClient.ensureImage(dockerImage)
         task.information.clear()
         modelMapper.map(taskDTO, task)
         task.information.forEach { it.value.task = task }
@@ -129,7 +128,7 @@ class CourseLifecycle(
     // Note: annotations only take effect when called from outside this class (Spring proxy).
     // Internal callers (createFromRepository, updateFromRepository) declare their own.
     @Transactional
-    @CacheEvict(value = ["CourseService.getCoursesOverview", "TaskLookupService.resolveTaskId"], allEntries = true)
+    @CacheEvict(value = [CacheNames.COURSES_OVERVIEW, CacheNames.TASK_ID], allEntries = true)
     fun updateFromDirectory(course: Course, coursePath: Path): Course {
         logger.debug { "Updating course ${course.slug} from $coursePath" }
         val existingSlug = course.slug
@@ -251,19 +250,6 @@ class CourseLifecycle(
             coursePath.toFile().deleteRecursively()
             logger.warn(e) { "Failed to clone ${course.repository} (branch ${course.repositoryBranch})" }
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to clone repository", e)
-        }
-    }
-
-    private fun pullDockerImage(imageName: String) {
-        val exists = try {
-            dockerClient.inspectImageCmd(imageName).exec()
-            true
-        } catch (e: NotFoundException) {
-            false
-        }
-        if (!exists) {
-            logger.debug { "Pulling docker image $imageName" }
-            dockerClient.pullImageCmd(imageName).start().awaitCompletion()
         }
     }
 

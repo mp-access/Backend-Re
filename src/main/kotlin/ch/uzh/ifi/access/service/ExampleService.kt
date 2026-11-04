@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.service
 
+import ch.uzh.ifi.access.config.ExampleProperties
 import ch.uzh.ifi.access.model.Task
 import ch.uzh.ifi.access.projections.TaskOverview
 import ch.uzh.ifi.access.projections.TaskWorkspace
@@ -7,7 +8,6 @@ import ch.uzh.ifi.access.repository.CourseRepository
 import ch.uzh.ifi.access.repository.EvaluationRepository
 import ch.uzh.ifi.access.repository.ExampleRepository
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
 import org.springframework.cache.annotation.Caching
 import org.springframework.http.HttpStatus
@@ -31,7 +31,7 @@ class ExampleService(
     private val courseRepository: CourseRepository,
     private val visibility: ExampleVisibilityService,
     private val submissionCounter: InteractiveSubmissionCounter,
-    @Value("\${examples.grace-period}") private val gracePeriod: Long,
+    private val exampleProperties: ExampleProperties,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -57,10 +57,10 @@ class ExampleService(
         else visibility.studentHasVisibleExamples(courseSlug)
 
     fun isSubmittedDuringInteractivePeriod(courseSlug: String, exampleSlug: String, submissionReceivedAt: LocalDateTime): Boolean =
-        getExampleBySlug(courseSlug, exampleSlug).isInteractiveAt(submissionReceivedAt, gracePeriod)
+        getExampleBySlug(courseSlug, exampleSlug).isInteractiveAt(submissionReceivedAt, exampleProperties.gracePeriod)
 
     fun isExampleInteractive(courseSlug: String, exampleSlug: String): Boolean =
-        getExampleBySlug(courseSlug, exampleSlug).isInteractiveAt(LocalDateTime.now(), gracePeriod)
+        getExampleBySlug(courseSlug, exampleSlug).isInteractiveAt(LocalDateTime.now(), exampleProperties.gracePeriod)
 
     // ---------------------------------------------------------------------------------------------
     // Life cycle
@@ -68,8 +68,8 @@ class ExampleService(
 
     @Caching(
         evict = [
-            CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug"),
-            CacheEvict(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
+            CacheEvict(value = [CacheNames.STUDENT_HAS_VISIBLE_EXAMPLES], key = "#courseSlug"),
+            CacheEvict(value = [CacheNames.INTERACTIVE_EXAMPLE], key = "#courseSlug")
         ]
     )
     fun publishExampleBySlug(courseSlug: String, exampleSlug: String, duration: Int): Task {
@@ -99,7 +99,7 @@ class ExampleService(
         return example
     }
 
-    @CacheEvict(value = ["ExampleService.getInteractiveExampleSlug"], key = "#courseSlug")
+    @CacheEvict(value = [CacheNames.INTERACTIVE_EXAMPLE], key = "#courseSlug")
     fun terminateExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = getExampleBySlug(courseSlug, exampleSlug)
 
@@ -113,7 +113,7 @@ class ExampleService(
     }
 
     @Transactional
-    @CacheEvict(value = ["ExampleService.studentHasVisibleExamples"], key = "#courseSlug")
+    @CacheEvict(value = [CacheNames.STUDENT_HAS_VISIBLE_EXAMPLES], key = "#courseSlug")
     fun resetExampleBySlug(courseSlug: String, exampleSlug: String): Task {
         val example = getExampleBySlug(courseSlug, exampleSlug)
 

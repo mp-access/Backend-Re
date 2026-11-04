@@ -1,5 +1,6 @@
 package ch.uzh.ifi.access.controller
 
+import ch.uzh.ifi.access.service.CacheNames
 import ch.uzh.ifi.access.model.constants.EmitterType
 import ch.uzh.ifi.access.model.constants.Command
 import ch.uzh.ifi.access.model.constants.TaskStatus
@@ -117,7 +118,7 @@ class ExampleController(
 
     @PostMapping("/{example}/submit")
     @PreAuthorize("hasRole(#course) and (#submission.restricted or hasRole(#course + '-assistant'))")
-    @CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
+    @CacheEvict(value = [CacheNames.EXAMPLE_SUBMISSIONS_COUNT], key = "#course")
     fun evaluateExampleSubmission(
         @PathVariable course: String,
         @PathVariable example: String,
@@ -298,8 +299,8 @@ class ExampleController(
     @PreAuthorize("hasRole(#course+'-supervisor')")
     @Caching(
         evict = [
-            CacheEvict(value = ["PointsService.calculateTaskPoints"], allEntries = true),
-            CacheEvict(value = ["ExampleService.computeSubmissionsCount"], key = "#course")
+            CacheEvict(value = [CacheNames.TASK_POINTS], allEntries = true),
+            CacheEvict(value = [CacheNames.EXAMPLE_SUBMISSIONS_COUNT], key = "#course")
         ]
     )
     fun resetExample(

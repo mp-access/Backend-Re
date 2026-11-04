@@ -1,9 +1,6 @@
 package ch.uzh.ifi.access.service
 
-import ch.uzh.ifi.access.Util
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.command.PullImageResultCallback
-import com.github.dockerjava.api.exception.NotFoundException
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.Capability
 import com.github.dockerjava.api.model.HostConfig
@@ -144,7 +141,7 @@ class DockerPoolService(
             logger.error { "docker.pool.enabled=true but docker.pool.image is empty — pool NOT started" }
             return
         }
-        ensureImage(image)
+        dockerClient.ensureImage(image)
         val missing = (poolSize - all.size).coerceAtLeast(0)
         if (missing > 0) logger.info { "Filling docker pool: +$missing (target=$poolSize, image=$image)" }
         repeat(missing) {
@@ -314,11 +311,11 @@ class DockerPoolService(
                         // images expect to be writable even with a read-only root fs.
                         .withTmpFs(
                             mapOf(
-                                "/workspace" to "size=50M,mode=1777",
+                                "/workspace" to "size=${ExecutionLimits.WORKSPACE_TMPFS_SIZE},mode=1777",
                                 "/tmp" to "size=50M,mode=1777",
                             )
                         )
-                        .withMemory(250 * Util.MEGABYTE)
+                        .withMemory(ExecutionLimits.MEMORY_LIMIT)
                         .withBinds(Bind.parse("$hostWorkDir:/submission"))
                 )
                 .exec()
@@ -343,16 +340,6 @@ class DockerPoolService(
 
         logger.debug { "Created pooled container $id (workdir=$hostWorkDir, user=$execUser -> uid $uid)" }
         return container
-    }
-
-    /** Pull the image once if it isn't present locally (mirrors the one-shot inspect/pull). */
-    private fun ensureImage(image: String) {
-        try {
-            dockerClient.inspectImageCmd(image).exec()
-        } catch (e: NotFoundException) {
-            logger.info { "Pulling pool image $image ..." }
-            dockerClient.pullImageCmd(image).exec(PullImageResultCallback()).awaitCompletion()
-        }
     }
 
     @PreDestroy

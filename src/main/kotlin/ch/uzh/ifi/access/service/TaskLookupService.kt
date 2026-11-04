@@ -21,7 +21,7 @@ class TaskLookupService(
     private val taskRepository: TaskRepository,
 ) {
     @Cacheable(
-        "TaskLookupService.resolveTaskId",
+        CacheNames.TASK_ID,
         key = "#courseSlug + '/' + #assignmentSlug + '/' + #taskSlug",
         unless = "#result == null",
     )
