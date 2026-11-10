@@ -163,10 +163,11 @@ class ManagementAPITests(
 
     @Test
     @Order(6)
+    // anonymous requests with a key that is not valid for the course are rejected with 401 (no authentication)
     fun `API key of one course is rejected for another course`() {
         courseApiKeyService.setApiKey("access-mock-course-public", "5678")
-        summaryWithKey("access-mock-course", "5678").andExpect(status().isForbidden)
-        summaryWithKey("access-mock-course-public", "1234").andExpect(status().isForbidden)
+        summaryWithKey("access-mock-course", "5678").andExpect(status().isUnauthorized)
+        summaryWithKey("access-mock-course-public", "1234").andExpect(status().isUnauthorized)
         summaryWithKey("access-mock-course-public", "5678").andExpect(status().isOk)
         mvc.perform(
             post("/courses/access-mock-course/participants")
@@ -175,7 +176,7 @@ class ManagementAPITests(
                 .with(csrf())
                 .content("""[]""")
         )
-            .andExpect(status().isForbidden)
+            .andExpect(status().isUnauthorized)
     }
 
     @Test
