@@ -3,23 +3,36 @@
 The Docker container pool now starts **by default** (image `python:latest`, size 10), so the command below boots the backend with pools enabled — no extra env vars needed.
 
 ```bash
-JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
+JAVA_HOME=$(/usr/libexec/java_home -v 21) WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 ```
 
 To override the pool (change image/size, or turn it off), set the env vars — the
 defaults are `DOCKER_POOL_ENABLED=true`, `DOCKER_POOL_IMAGE=python:latest`, `DOCKER_POOL_SIZE=10`:
 ```bash
 # different image / size
-DOCKER_POOL_IMAGE=python:3.12 DOCKER_POOL_SIZE=20 JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
+DOCKER_POOL_IMAGE=python:3.12 DOCKER_POOL_SIZE=20 JAVA_HOME=$(/usr/libexec/java_home -v 21) WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 
 # disable the pool (fall back to the one-shot execution path)
-DOCKER_POOL_ENABLED=false JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
+DOCKER_POOL_ENABLED=false JAVA_HOME=$(/usr/libexec/java_home -v 21) WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew bootRun
 ```
 
 Running all the Tests (`DELETION_KEY=9876` is the key the course-deletion tests send)
 ```bash
-DELETION_KEY=9876 JAVA_HOME=$(/usr/libexec/java_home -v 21) API_KEY=1234 WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew cleanTest test
+DELETION_KEY=9876 JAVA_HOME=$(/usr/libexec/java_home -v 21) WORKING_DIR="$HOME/Documents/UZH/Master/master_project/access/data" AUTH_SERVER_URL=http://localhost:8080 ./gradlew cleanTest test
 ```
+
+## Course API keys (X-API-Key)
+
+The management endpoints (`/courses/{course}/participants|assistants|supervisors/**`, `/courses/{course}/summary`,
+`/courses/{course}/delete`) are authenticated with a **course-specific** API key in the `X-API-Key` header.
+A key is only valid for the course it was issued for; there is no global key anymore (the `API_KEY` env var is unused).
+
+A supervisor of the course (logged in, JWT) creates or rotates the key; it is returned once, only its SHA-256 hash is stored:
+```bash
+curl -X POST   -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # create / rotate
+curl -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # revoke
+```
+The tests set the key `1234` for the mock courses via `CourseApiKeyService.setApiKey`.
 
 ## Docker Engine update
 

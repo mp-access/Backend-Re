@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.config
 
 import ch.uzh.ifi.access.model.constants.KeycloakAttributes
+import ch.uzh.ifi.access.service.CourseApiKeyService
 import ch.uzh.ifi.access.service.RoleAssignmentService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import lombok.AllArgsConstructor
@@ -9,6 +10,7 @@ import org.keycloak.admin.client.resource.RealmResource
 import org.springframework.context.ApplicationListener
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Lazy
 import org.springframework.core.env.Environment
 import org.springframework.security.authentication.event.AuthenticationSuccessEvent
 import org.springframework.security.authorization.AuthorityAuthorizationDecision
@@ -47,18 +49,33 @@ class SecurityConfig(private val env: Environment) {
         return token.getClaimAsStringList("enrollments").map { role -> SimpleGrantedAuthority(role) }
     }
 
-    private fun isAuthorizedAPIKey(context: RequestAuthorizationContext): Boolean {
-        val apiKey = env.getProperty("API_KEY") ?: return false
+    /**
+     * The X-API-Key is bound to a single course: it is only accepted for the course
+     * given by the {course} path variable of the matched route.
+     */
+    private fun isAuthorizedCourseAPIKey(
+        context: RequestAuthorizationContext,
+        courseApiKeys: CourseApiKeyService,
+    ): Boolean {
+        val course = context.variables["course"]
         val headerKey = context.request.getHeader("X-API-Key")?.lines()?.joinToString("")
         if (headerKey == null) {
             logger.debug { "${context.request.requestURI}: Missing X-API-Key" }
+            return false
         }
-        return apiKey == headerKey
+        val valid = courseApiKeys.isValid(course, headerKey)
+        if (!valid) {
+            logger.debug { "${context.request.requestURI}: X-API-Key is not valid for course $course" }
+        }
+        return valid
     }
 
 
     @Bean
-    fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun securityFilterChain(
+        http: HttpSecurity,
+        @Lazy courseApiKeys: CourseApiKeyService,
+    ): SecurityFilterChain {
         http.sessionManagement {
             it.sessionConcurrency {
                 it.maximumSessions(1)
@@ -66,22 +83,17 @@ class SecurityConfig(private val env: Environment) {
         }
             .csrf {
                 it.ignoringRequestMatchers(
-                    "/courses/contact/**",
-                    "/courses/{course}/summary",
                     "/courses/{course}/participants/**",
                     "/courses/{course}/assistants/**",
                     "/courses/{course}/supervisors/**",
-                    "/webhooks/**",
-                    "/courses/pool/**"
+                    "/courses/{course}/delete",
+                    "/webhooks/**"
                 )
             }
             .authorizeHttpRequests { authorize ->
                 authorize
                     .requestMatchers(
                         "/error",
-                        "/v3/api-docs/**",
-                        "/swagger-ui/**",
-                        "/courses/contact/**",
                         "/webhooks/**"
                     ).permitAll()
                     .requestMatchers(
@@ -89,11 +101,10 @@ class SecurityConfig(private val env: Environment) {
                         "/courses/{course}/assistants/**",
                         "/courses/{course}/supervisors/**",
                         "/courses/{course}/summary",
-                        "/courses/{course}/delete",
-                        "/courses/pool/**"
+                        "/courses/{course}/delete"
                     ).access { _, context ->
                         AuthorityAuthorizationDecision(
-                            isAuthorizedAPIKey(context),
+                            isAuthorizedCourseAPIKey(context, courseApiKeys),
                             parseAuthorities(listOf("supervisor"))
                         )
                     }

@@ -1,6 +1,7 @@
 package ch.uzh.ifi.access.model
 
 import ch.uzh.ifi.access.model.constants.Visibility
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -34,6 +35,11 @@ class Course {
 
     @Column(nullable = true)
     var webhookSecret: String? = null
+
+    // SHA-256 hex digest of the course-specific API key (X-API-Key), see CourseApiKeyService
+    @JsonIgnore
+    @Column(nullable = true, length = 64)
+    var apiKeyHash: String? = null
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)

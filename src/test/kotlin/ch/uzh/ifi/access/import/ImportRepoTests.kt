@@ -2,6 +2,7 @@ package ch.uzh.ifi.access.import
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.model.Course
+import ch.uzh.ifi.access.service.CourseApiKeyService
 import ch.uzh.ifi.access.service.CourseLifecycle
 import ch.uzh.ifi.access.service.CourseService
 import org.eclipse.jgit.api.Git
@@ -28,6 +29,7 @@ import java.nio.file.Paths
 class ImportRepoTests(
     @Autowired val courseLifecycle: CourseLifecycle,
     @Autowired val courseService: CourseService,
+    @Autowired val courseApiKeyService: CourseApiKeyService,
     @Autowired val mvc: MockMvc,
 ) : BaseTest() {
 
@@ -76,6 +78,7 @@ class ImportRepoTests(
         val absolutePath = Paths.get(file.absolutePath)
         val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
+        courseApiKeyService.setApiKey(course.slug!!, "1234")
     }
 
     @Test
@@ -153,6 +156,7 @@ class ImportRepoTests(
         val absolutePath = Paths.get(file.absolutePath)
         val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
+        courseApiKeyService.setApiKey(course.slug!!, "1234")
     }
 
     @Test
@@ -176,6 +180,7 @@ class ImportRepoTests(
         val absolutePath = Paths.get(file.absolutePath)
         val createdCourse = courseLifecycle.updateFromDirectory(course, absolutePath)
         assertThat(createdCourse.supervisors, hasItem("supervisor@uzh.ch"))
+        courseApiKeyService.setApiKey(course.slug!!, "1234")
     }
 
     @Test

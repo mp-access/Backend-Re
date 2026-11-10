@@ -40,6 +40,9 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getBySlug(courseSlug: String?): Course?
     fun findBySlug(courseSlug: String?): CourseWorkspace?
 
+    @Query("SELECT c.apiKeyHash FROM Course c WHERE c.slug = :slug")
+    fun findApiKeyHashBySlug(@Param("slug") courseSlug: String): String?
+
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesBy(): List<CourseOverview>
 

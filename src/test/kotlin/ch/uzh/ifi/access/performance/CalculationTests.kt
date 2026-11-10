@@ -3,6 +3,7 @@ package ch.uzh.ifi.access.performance
 import ch.uzh.ifi.access.AccessTestExecutionCondition
 import ch.uzh.ifi.access.AccessUser
 import ch.uzh.ifi.access.BaseTest
+import ch.uzh.ifi.access.service.CourseApiKeyService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.*
@@ -54,6 +55,7 @@ class CalculationTests(
     @Autowired val mvc: MockMvc,
     @Autowired val entityManagerFactory: EntityManagerFactory,
     @Autowired val cacheManager: CacheManager,
+    @Autowired val courseApiKeyService: CourseApiKeyService,
 ) : BaseTest() {
 
     private val logger = KotlinLogging.logger {}
@@ -66,6 +68,11 @@ class CalculationTests(
         // Samples per per-student pass AND repetitions per per-course pass. Kept low so the whole
         // benchmark suite finishes in reasonable time on the ~3GB dump.
         private const val BENCHMARK_SAMPLE_SIZE = 5
+    }
+
+    @BeforeAll
+    fun setCourseApiKey() {
+        courseApiKeyService.setApiKey(COURSE_SLUG, API_KEY)
     }
 
     @Test

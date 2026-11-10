@@ -42,8 +42,9 @@ class CourseRootController(
         return courseService.createCourse(courseDTO).slug
     }
 
+    // every course supervisor also holds the global 'supervisor' role, so editing must be bound to the course
     @PostMapping("/edit")
-    @PreAuthorize("hasRole('supervisor')")
+    @PreAuthorize("hasRole(#courseDTO.slug + '-supervisor')")
     fun editCourse(@RequestBody courseDTO: CourseDTO): String? {
         return courseService.editCourse(courseDTO).slug
     }
@@ -92,6 +93,7 @@ class CourseController(
     private val submissionQueueService: SubmissionQueueService,
     private val env: Environment,
     private val submissionQueueProperties: SubmissionQueueProperties,
+    private val courseApiKeyService: CourseApiKeyService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -125,6 +127,17 @@ class CourseController(
         if (!valid) throw ResourceNotFoundException()
         courseService.deleteCourse(course)
     }
+
+    /** Generates (or rotates) the API key of this course. The key is returned once and only its hash is stored. */
+    @PostMapping("/{course}/api-key")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
+    fun generateApiKey(@PathVariable course: String): String =
+        courseApiKeyService.generate(course)
+
+    @DeleteMapping("/{course}/api-key")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
+    fun revokeApiKey(@PathVariable course: String) =
+        courseApiKeyService.revoke(course)
 
     @PostMapping("/{course}/pull")
     @PreAuthorize("hasRole(#course+'-supervisor')")

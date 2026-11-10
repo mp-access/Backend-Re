@@ -2,12 +2,15 @@ package ch.uzh.ifi.access.api
 
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.JsonReference
+import ch.uzh.ifi.access.service.CourseApiKeyService
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf
 import org.springframework.test.context.junit.jupiter.SpringExtension
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
@@ -17,7 +20,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 @ExtendWith(SpringExtension::class, BaseTest.CurlCommandListener::class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
-class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
+class ManagementAPITests(
+    @Autowired val mvc: MockMvc,
+    @Autowired val courseApiKeyService: CourseApiKeyService,
+) : BaseTest() {
 
     @Test
     @Order(0)
@@ -145,6 +151,76 @@ class ManagementAPITests(@Autowired val mvc: MockMvc) : BaseTest() {
                 .content(payload)
         )
             .andExpect(status().isOk)
+    }
+
+    private fun summaryWithKey(course: String, key: String) =
+        mvc.perform(
+            get("/courses/$course/summary")
+                .contentType("application/json")
+                .header("X-API-Key", key)
+                .with(csrf())
+        )
+
+    @Test
+    @Order(6)
+    fun `API key of one course is rejected for another course`() {
+        courseApiKeyService.setApiKey("access-mock-course-public", "5678")
+        summaryWithKey("access-mock-course", "5678").andExpect(status().isForbidden)
+        summaryWithKey("access-mock-course-public", "1234").andExpect(status().isForbidden)
+        summaryWithKey("access-mock-course-public", "5678").andExpect(status().isOk)
+        mvc.perform(
+            post("/courses/access-mock-course/participants")
+                .contentType("application/json")
+                .header("X-API-Key", "5678")
+                .with(csrf())
+                .content("""[]""")
+        )
+            .andExpect(status().isForbidden)
+    }
+
+    @Test
+    @Order(7)
+    @WithMockUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
+    )
+    fun `Supervisor can rotate the API key of their own course`() {
+        val newKey = mvc.perform(post("/courses/access-mock-course-public/api-key").with(csrf()))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        Assertions.assertTrue(newKey.length >= 32)
+        summaryWithKey("access-mock-course-public", newKey).andExpect(status().isOk)
+        summaryWithKey("access-mock-course-public", "5678").andExpect(status().isForbidden)
+        summaryWithKey("access-mock-course", newKey).andExpect(status().isForbidden)
+    }
+
+    @Test
+    @Order(7)
+    @WithMockUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
+    )
+    fun `Supervisor cannot generate or revoke the API key of another course`() {
+        mvc.perform(post("/courses/access-mock-course/api-key").with(csrf()))
+            .andExpect(status().isForbidden)
+        mvc.perform(delete("/courses/access-mock-course/api-key").with(csrf()))
+            .andExpect(status().isForbidden)
+        summaryWithKey("access-mock-course", "1234").andExpect(status().isOk)
+    }
+
+    @Test
+    @Order(8)
+    @WithMockUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
+    )
+    fun `Revoked API key is rejected`() {
+        val key = mvc.perform(post("/courses/access-mock-course-public/api-key").with(csrf()))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        mvc.perform(delete("/courses/access-mock-course-public/api-key").with(csrf()))
+            .andExpect(status().isOk)
+        summaryWithKey("access-mock-course-public", key).andExpect(status().isForbidden)
     }
 
 }
