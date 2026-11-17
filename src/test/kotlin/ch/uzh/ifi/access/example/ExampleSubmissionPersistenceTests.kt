@@ -35,6 +35,10 @@ class ExampleSubmissionPersistenceTests(
 ) : BaseTest() {
 
     private val course = "access-mock-course-lecture-examples"
+
+    // A fixed example that supports RUN (needed for the earlier submission), TEST and GRADE. Not "the first
+    // example of the course": which one that is depends on the local lecture-examples branch of Mock-Course-Re.
+    private val example = "circle-square-rect"
     private val tx by lazy { TransactionTemplate(transactionManager) }
 
     @Test
@@ -68,7 +72,6 @@ class ExampleSubmissionPersistenceTests(
     // ---------------------------------------------------------------------------------------------
 
     private fun withPublishedExample(test: (example: String, files: List<SubmissionFileDTO>) -> Unit) {
-        val example = exampleService.getExamples(course).firstNotNullOf { it.slug }
         exampleService.resetExampleBySlug(course, example)
         exampleService.publishExampleBySlug(course, example, 3600)
         Thread.sleep(100) // the interactive period starts strictly after "start"
