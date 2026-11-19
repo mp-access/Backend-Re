@@ -3,6 +3,8 @@ package ch.uzh.ifi.access.api
 import ch.uzh.ifi.access.BaseTest
 import ch.uzh.ifi.access.JsonReference
 import ch.uzh.ifi.access.service.CourseApiKeyService
+import com.fasterxml.jackson.databind.ObjectMapper
+import java.time.LocalDateTime
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
@@ -153,6 +155,18 @@ class ManagementAPITests(
             .andExpect(status().isOk)
     }
 
+    /** Creates / regenerates the key of [course] via the API and returns the plain key. */
+    private fun generateKey(course: String): String {
+        val body = mvc.perform(post("/courses/$course/api-key").with(csrf()))
+            .andExpect(status().isOk)
+            .andReturn().response.contentAsString
+        val json = ObjectMapper().readTree(body)
+        val createdAt = LocalDateTime.parse(json["createdAt"].asText())
+        val expiresAt = LocalDateTime.parse(json["expiresAt"].asText())
+        Assertions.assertEquals(createdAt.plusMonths(12), expiresAt)
+        return json["key"].asText()
+    }
+
     private fun summaryWithKey(course: String, key: String) =
         mvc.perform(
             get("/courses/$course/summary")
@@ -186,9 +200,7 @@ class ManagementAPITests(
         authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
     )
     fun `Supervisor can rotate the API key of their own course`() {
-        val newKey = mvc.perform(post("/courses/access-mock-course-public/api-key").with(csrf()))
-            .andExpect(status().isOk)
-            .andReturn().response.contentAsString
+        val newKey = generateKey("access-mock-course-public")
         Assertions.assertTrue(newKey.length >= 32)
         summaryWithKey("access-mock-course-public", newKey).andExpect(status().isOk)
         summaryWithKey("access-mock-course-public", "5678").andExpect(status().isForbidden)
@@ -216,12 +228,36 @@ class ManagementAPITests(
         authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
     )
     fun `Revoked API key is rejected`() {
-        val key = mvc.perform(post("/courses/access-mock-course-public/api-key").with(csrf()))
-            .andExpect(status().isOk)
-            .andReturn().response.contentAsString
+        val key = generateKey("access-mock-course-public")
         mvc.perform(delete("/courses/access-mock-course-public/api-key").with(csrf()))
             .andExpect(status().isOk)
         summaryWithKey("access-mock-course-public", key).andExpect(status().isForbidden)
+    }
+
+    @Test
+    @Order(9)
+    @WithMockUser(
+        username = "supervisor@uzh.ch",
+        authorities = ["supervisor", "access-mock-course-public-supervisor", "access-mock-course-public"]
+    )
+    fun `API key status reports existence and expiry`() {
+        mvc.perform(get("/courses/access-mock-course-public/api-key").with(csrf()))
+            .andExpect(status().isOk)
+            .andExpect(content().json("""{"exists":false,"expired":false,"createdAt":null,"expiresAt":null}"""))
+        generateKey("access-mock-course-public")
+        mvc.perform(get("/courses/access-mock-course-public/api-key").with(csrf()))
+            .andExpect(status().isOk)
+            .andExpect(content().json("""{"exists":true,"expired":false}"""))
+    }
+
+    @Test
+    @Order(10)
+    fun `Expired API key is rejected`() {
+        courseApiKeyService.setApiKey("access-mock-course-public", "9999", LocalDateTime.now().minusMinutes(1))
+        summaryWithKey("access-mock-course-public", "9999").andExpect(status().isUnauthorized)
+        Assertions.assertTrue(courseApiKeyService.status("access-mock-course-public").expired)
+        courseApiKeyService.setApiKey("access-mock-course-public", "9999")
+        summaryWithKey("access-mock-course-public", "9999").andExpect(status().isOk)
     }
 
 }

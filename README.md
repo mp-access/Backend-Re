@@ -27,9 +27,12 @@ The management endpoints (`/courses/{course}/participants|assistants|supervisors
 `/courses/{course}/delete`) are authenticated with a **course-specific** API key in the `X-API-Key` header.
 A key is only valid for the course it was issued for; there is no global key anymore (the `API_KEY` env var is unused).
 
-A supervisor of the course (logged in, JWT) creates or rotates the key; it is returned once, only its SHA-256 hash is stored:
+A supervisor of the course (logged in, JWT) creates or regenerates the key, in the frontend via the course page
+(*API key* button) or directly via the API. The key is returned once, only its SHA-256 hash is stored.
+Every key **expires 12 months** after it was created; an expired key is rejected and has to be regenerated.
 ```bash
-curl -X POST   -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # create / rotate
+curl -X GET    -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # status: {exists, expired, createdAt, expiresAt}
+curl -X POST   -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # create / regenerate: {key, createdAt, expiresAt}
 curl -X DELETE -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/courses/<course>/api-key   # revoke
 ```
 The tests set the key `1234` for the mock courses via `CourseApiKeyService.setApiKey`.

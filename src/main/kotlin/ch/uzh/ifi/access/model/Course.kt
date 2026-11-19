@@ -41,6 +41,13 @@ class Course {
     @Column(nullable = true, length = 64)
     var apiKeyHash: String? = null
 
+    // the API key is rejected from this point on (12 months after it was created), see CourseApiKeyService
+    @JsonIgnore
+    var apiKeyCreatedAt: LocalDateTime? = null
+
+    @JsonIgnore
+    var apiKeyExpiresAt: LocalDateTime? = null
+
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     var defaultVisibility: Visibility? = null

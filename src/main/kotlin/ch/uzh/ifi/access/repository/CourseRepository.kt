@@ -40,8 +40,12 @@ interface CourseRepository : JpaRepository<Course?, Long?> {
     fun getBySlug(courseSlug: String?): Course?
     fun findBySlug(courseSlug: String?): CourseWorkspace?
 
-    @Query("SELECT c.apiKeyHash FROM Course c WHERE c.slug = :slug")
-    fun findApiKeyHashBySlug(@Param("slug") courseSlug: String): String?
+    /** Hash of the course API key, only if the key has not expired at [now]. */
+    @Query("SELECT c.apiKeyHash FROM Course c WHERE c.slug = :slug AND c.apiKeyExpiresAt > :now")
+    fun findValidApiKeyHashBySlug(
+        @Param("slug") courseSlug: String,
+        @Param("now") now: java.time.LocalDateTime,
+    ): String?
 
     @PostFilter("hasRole(filterObject.slug)")
     fun findCoursesBy(): List<CourseOverview>

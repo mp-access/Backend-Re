@@ -128,10 +128,19 @@ class CourseController(
         courseService.deleteCourse(course)
     }
 
-    /** Generates (or rotates) the API key of this course. The key is returned once and only its hash is stored. */
+    /** Whether this course has an API key and when it expires (the key itself is never returned here). */
+    @GetMapping("/{course}/api-key")
+    @PreAuthorize("hasRole(#course+'-supervisor')")
+    fun getApiKeyStatus(@PathVariable course: String): CourseApiKeyStatusDTO =
+        courseApiKeyService.status(course)
+
+    /**
+     * Creates or regenerates the API key of this course. The key is valid for 12 months,
+     * returned once and only its hash is stored; a previous key stops working immediately.
+     */
     @PostMapping("/{course}/api-key")
     @PreAuthorize("hasRole(#course+'-supervisor')")
-    fun generateApiKey(@PathVariable course: String): String =
+    fun generateApiKey(@PathVariable course: String): CourseApiKeyDTO =
         courseApiKeyService.generate(course)
 
     @DeleteMapping("/{course}/api-key")
